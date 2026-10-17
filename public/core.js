@@ -144,7 +144,7 @@ function log(room, entry) {
 }
 // essentials (HP/TP changes, cards played, variation switches) also appear in the digest tab (メイン)
 function isImportant(l) {
-  if (l.type === 'play' || l.type === 'variation') return true;
+  if (l.type === 'play' || l.type === 'variation' || l.type === 'weapon') return true;
   if (l.type === 'value') return l.key === 'HP' || l.key === 'TP' || /の(HP|TP)：/.test(l.text || '');
   return false;
 }
@@ -331,6 +331,23 @@ function apply(room, a, by) {
       room.cards.hands[seat] = hand.filter(c => !a.cards.includes(c));
       (room.cards.hands[a.to] = room.cards.hands[a.to] || []).push(...a.cards);
       log(room, { tab: opsTab(room), type: 'give', by, seat, to: a.to, toName: seatName(room, a.to), cards: a.cards });
+      return;
+    }
+    case 'useWeapons': { // declare one or more weapons at once, discarding any cards (suits are not enforced)
+      need(ch && canControlChar(room, by, a.cid), 'このキャラクターは操作できません');
+      const seat = ch.side === 'pc' ? ch.id : 'gm';
+      const hand = room.cards.hands[seat] || [];
+      const cards = Array.isArray(a.cards) ? a.cards : [];
+      need(cards.every(x => hand.includes(x)) && new Set(cards).size === cards.length, '手札にないカードが含まれています');
+      const pool = { c: ch.data.weapons.common, s: currentSlots(ch) };
+      const ws = (Array.isArray(a.weapons) ? a.weapons : []).map(k => pool[String(k)[0]]?.[+String(k).slice(1)]).filter(w => w && w.name);
+      need(ws.length, '武装を選んでください');
+      room.cards.hands[seat] = hand.filter(x => !cards.includes(x));
+      room.cards.discard.push(...cards);
+      const keep = ['威力', '射程', '回避'];
+      log(room, { tab: opsTab(room), type: 'weapon', by, seat, cid: ch.id, charName: ch.data.name,
+        weapons: ws.map(w => ({ name: w.name, suit: w.suit || null, attrs: Object.fromEntries(keep.filter(k => w.attrs && w.attrs[k] != null).map(k => [k, w.attrs[k]])) })),
+        cards, targets: (Array.isArray(a.targets) ? a.targets : []).map(id => room.chars[id]?.data.name).filter(Boolean), memo: String(a.memo || '').trim() });
       return;
     }
     case 'shuffleBack': {

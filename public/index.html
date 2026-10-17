@@ -147,7 +147,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pink)}
 .oitem:hover{background:var(--mist)}
 .oitem.now::after{content:"手番";position:absolute;top:-7px;right:8px;font-size:.66rem;font-weight:800;color:#4A3000;background:var(--gold);border-radius:999px;padding:0 8px;line-height:1.6}
 .oitem.sel{outline:2px dashed var(--gold);outline-offset:1px}
-@media (max-width:720px), (min-width:960px) and (max-width:1180px){
+@media (max-width:0px){
   .mapwrap{grid-template-columns:1fr}
   .order{flex-direction:row;overflow-x:auto;max-height:none;padding-bottom:4px}
   .oitem{min-width:160px}
@@ -442,6 +442,177 @@ dialog.mapDlg{max-width:min(760px,calc(100vw - 24px))}
 .mchip[aria-pressed="true"]{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold)}
 .mchip.now{background:var(--pink-soft)}
 @media (max-width:640px){ dialog.mapDlg{max-height:96dvh} .board.big{max-width:100%} }
+
+/* ===== fit-to-screen room layout (wide screens): no page scrolling ===== */
+@media (min-width:960px){
+  #app:has(#roomShell){padding-bottom:10px}
+  #roomShell{height:calc(100dvh - 20px);grid-template-rows:auto minmax(0,1fr)}
+  .chatPane{position:static;height:auto;grid-row:1 / span 2;min-height:0}
+  .chatPane .chat{height:100%}
+  .mainPane{min-height:0;display:flex;flex-direction:column;gap:10px}
+  #mapP{flex:1;min-height:0;display:flex;flex-direction:column;padding:0}
+  #mapP .mapwrap{flex:1;min-height:0;grid-template-columns:200px minmax(0,1fr)}
+  #mapP .order{max-height:none;height:100%;overflow:auto}
+  .boardCol{display:flex;flex-direction:column;min-height:0;height:100%}
+  .boardBox{flex:1;min-height:0;container-type:size;display:flex;justify-content:center;align-items:center}
+  .boardBox .board{width:min(100cqw,100cqh);height:auto;max-width:none;margin:0}
+  .top{padding:2px 0 8px}
+}
+.maphead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.maphead .grow{flex:1}
+.mapbar{margin-top:6px}
+
+/* turn order list that is also the character list */
+.oitem{display:block;cursor:pointer;padding:6px 8px 6px 11px;border-radius:12px;background:var(--cloud);position:relative}
+.oitem:focus-visible{outline:2px solid var(--pink)}
+.ohead{display:flex;align-items:center;gap:6px;min-width:0}
+.ohead .pt{width:26px;height:26px;border-radius:50%;flex:none}
+.ohead .oname{font-weight:800;font-size:.84rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+.oitem .ometa{font-family:var(--num);font-size:.7rem;font-weight:600;color:var(--ink-2);margin:2px 0 3px 32px}
+.oitem .oset{position:static;border:none;background:none;color:var(--ink-2);font-size:.75rem;padding:0 4px;border-radius:6px;cursor:pointer}
+.oitem .oset:hover{background:var(--pink-soft);color:var(--pink)}
+.ostat{display:grid;grid-template-columns:18px 18px auto auto 18px 1fr;align-items:center;column-gap:3px;font-size:.72rem;margin-top:2px}
+.ostat:not(:has(.step)){grid-template-columns:18px auto auto 1fr}
+.ostat i{font-style:normal;font-weight:700;color:var(--ink-2);font-size:.66rem}
+.ostat b{font-family:var(--num);font-weight:700;font-size:.82rem;text-align:right;min-width:1.6em}
+.ostat em{font-style:normal;font-family:var(--num);font-size:.66rem;color:var(--ink-2)}
+.ostat .bar{height:4px;border-radius:2px;background:var(--mist);overflow:hidden;margin-left:4px}
+.ostat .bar span{display:block;height:100%;background:var(--ok)}
+.ostat.tp .bar span{background:#6FB7FF}
+.ostat .step{width:18px;height:18px;font-size:.7rem}
+.order .grp{font-size:.7rem;margin:8px 0 2px}
+
+/* hand tray */
+.tray{padding:10px 12px}
+.trayRow{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.trayRow .grow{flex:1}
+.handName{font-weight:800;font-size:.86rem}
+.tray .count{font-family:var(--num);font-weight:700;color:var(--gold)}
+.othersLine{font-size:.74rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40%}
+#myHand{margin:8px 0;min-height:74px}
+.trayRow.acts .memo{flex:1;min-width:8em;margin:0}
+.drawBox{display:inline-flex;align-items:center;gap:4px}
+.drawBox b{font-family:var(--num);min-width:1.2em;text-align:center}
+.handBlock{margin-bottom:12px}
+
+/* weapon modal */
+.wgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin-top:6px}
+@media (max-width:720px){ .wgrid{grid-template-columns:1fr} }
+.wgrid h2{font-size:.82rem;color:var(--ink-2)}
+.wlist{display:flex;flex-direction:column;gap:6px}
+.wpick{display:flex;flex-direction:column;gap:2px;text-align:left;border:1.5px solid var(--line);background:var(--mist);border-radius:12px;padding:8px 10px;color:var(--ink);cursor:pointer}
+.wpick.on{border-color:var(--pink);box-shadow:0 0 0 2px var(--pink);background:var(--pink-soft)}
+.wtop{display:flex;align-items:center;gap:6px;font-size:.95rem}
+.wstats{display:flex;gap:10px;font-size:.72rem;color:var(--ink-2)}
+.wstats b{font-family:var(--num);color:var(--ink);margin-left:3px}
+.card.hint{box-shadow:0 0 0 2px var(--pink),0 3px 0 rgba(0,0,0,.18)}
+.card.hint.sel{box-shadow:0 0 0 3px var(--gold),0 6px 0 rgba(0,0,0,.18)}
+.wfoot{display:flex;align-items:center;gap:10px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line);position:sticky;bottom:-20px;background:var(--cloud);padding-bottom:4px}
+.wprev{flex:1;font-weight:700;font-size:.88rem}
+/* weapon log line */
+.le.weapon .wname{margin:0 2px;color:#FFFFFF}
+.le.weapon .wattr{font-family:var(--num);font-size:.72rem;color:#9A9A9E;margin-left:4px}
+.le.weapon .plus{color:var(--pink);margin:0 4px;font-weight:800}
+.le.weapon .wcards{margin-left:6px}
+.le.weapon .wto{margin-left:6px;font-weight:700;color:#FFFFFF}
+@media (min-width:960px){
+  #roomShell{align-items:stretch}
+  .chatPane{height:100%;display:flex}
+  .chatPane .chat{flex:1;min-height:0}
+  .mainPane{height:100%}
+}
+.step{width:20px;height:20px;border-radius:50%;border:1px solid var(--line);background:var(--mist);color:var(--ink);font-weight:800;line-height:1;padding:0;font-size:.78rem;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.step:hover{border-color:var(--pink);color:var(--pink)}
+.oitem .step{background:var(--cloud)}
+
+.phoneOnly{display:none}
+@media (max-width:720px){
+  .phoneOnly{display:inline}
+  .oitem .ostat{display:none}
+  .oitem{padding:5px 5px 5px 8px}
+  .ohead .pt{width:20px;height:20px}
+  .ohead .oname{font-size:.72rem}
+  .oitem .ometa{margin:2px 0 0;font-size:.62rem;line-height:1.35}
+  .oitem .oset{display:none}
+  .maphead .roundTag b{font-size:1.1rem}
+  .othersLine{display:none}
+}
+
+/* bigger board: narrower turn list, no helper text under the board, chat a little narrower */
+@media (min-width:960px){
+  #roomShell{grid-template-columns:minmax(0,1fr) minmax(440px,44%)}
+  #mapP .mapwrap{grid-template-columns:164px minmax(0,1fr);gap:8px}
+  .boardBox{position:relative;align-items:flex-start}
+  .maphead{margin-bottom:6px}
+}
+@media (min-width:1500px){ #roomShell{grid-template-columns:minmax(0,1fr) minmax(560px,46%)} }
+.selbar{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);display:flex;align-items:center;gap:6px;background:var(--cloud);border:1.5px solid var(--gold);border-radius:999px;padding:4px 6px 4px 12px;font-size:.82rem;font-weight:700;box-shadow:var(--shadow);z-index:3;white-space:nowrap}
+/* short screens (e.g. 1280×720): slimmer tray so the board keeps its size */
+@media (min-width:960px) and (max-height:820px){
+  .tray{padding:8px 10px}
+  #myHand{margin:6px 0;min-height:56px}
+  #myHand .card{width:40px;height:56px}
+  #myHand .card .r{font-size:1rem} #myHand .card .s{font-size:1rem}
+  .trayRow.acts .btn{padding:3px 12px;font-size:.84rem}
+  .top{padding:0 0 4px}
+  .top h1{font-size:1.1rem}
+  .maphead{margin-bottom:4px}
+}
+
+/* reachable squares (within 移動値) */
+.cell.reach{background-image:linear-gradient(rgba(255,92,150,.30),rgba(255,92,150,.30))}
+.cell.reach .dist{color:#B0124F;font-weight:800}
+@media (hover:hover){.cell.target.reach:hover{background:#FFB3CF}}
+.mvtag{font-family:var(--num);font-size:.74rem;background:var(--pink);color:#fff;border-radius:999px;padding:0 8px;margin-left:6px}
+
+/* suit hint: an outline, so it shows in every theme and alongside the selection ring */
+.card.hint{outline:3px solid var(--pink);outline-offset:2px}
+:root[data-theme="light"] .card.hint{outline-color:#E23C79}
+.card,.wpick{position:relative}
+.ord{position:absolute;top:-8px;left:-8px;min-width:20px;height:20px;border-radius:10px;background:var(--gold);color:#2A1C00;font-family:var(--num);font-weight:700;font-size:.74rem;line-height:20px;text-align:center;padding:0 5px;z-index:2;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.le.weapon .arrow{color:#9A9A9E;margin:0 3px}
+
+/* ===== square & dense: no rounded containers, minimal outer gaps, panels meet edge to edge ===== */
+.panel,.tray,.chat,.board,.oitem,.dice,.cmdmsg,.wpick,.citem,.ch,.room,.palette,.composer,.handBlock,.otherHands,.mchip,.selbar,#tpRow,.tabs,.banner{border-radius:0 !important}
+.btn,.tab,.pcmd,.back,select,input[type=text],input[type=number],textarea,.mnav button{border-radius:3px !important}
+.card{border-radius:5px}
+.attr,.tpcost,.mvtag,.tbadge,.dverdict,.kind{border-radius:3px !important}
+dialog{border-radius:6px}
+.cell{border-radius:0 !important}
+@media (min-width:960px){
+  #app{padding:0 !important;max-width:none !important}
+  #roomShell{height:100dvh !important;column-gap:0 !important}
+  #roomShell .top{padding:6px 10px;margin:0;background:var(--cloud);border-bottom:1px solid var(--line)}
+  .mainPane{gap:0 !important}
+  #mapP{padding:6px 8px 4px !important}
+  #mapP .mapwrap{grid-template-columns:164px minmax(0,1fr);gap:6px}
+  .board{padding:4px !important;box-shadow:none !important}
+  .order{gap:3px !important;padding:0 !important}
+  .oitem{border-left:3px solid transparent}
+  .oitem::before{display:none}
+  .oitem.pc{border-left-color:var(--pink)} .oitem.enemy{border-left-color:var(--void-2)}
+  .tray{border-top:1px solid var(--line);padding:8px 10px !important}
+  .chatPane .chat{border-left:1px solid var(--line);box-shadow:none !important}
+  .chat .composer{margin:10px -12px -12px}
+}
+@media (max-width:959px){
+  #app{padding-left:0 !important;padding-right:0 !important}
+  #roomShell .top{padding:4px 8px}
+  #mapP{padding:0 6px}
+  .tray{margin:6px 0 0}
+  .board{padding:3px !important}
+}
+/* buttons stay round; containers stay square */
+.btn,.tab,.pcmd,.back,.mnav button,.mchip,.selbar{border-radius:999px !important}
+.attr,.tpcost,.mvtag,.tbadge,.dverdict,.kind{border-radius:999px !important}
+/* room list keeps its roomy, rounded look (the dense rules are for the room itself) */
+#app:not(:has(#roomShell)){padding:16px 20px 80px !important;max-width:980px !important}
+#app:not(:has(#roomShell)) .panel{border-radius:18px !important;padding:18px}
+#app:not(:has(#roomShell)) .room{border-radius:14px !important;padding:14px 16px}
+#app:not(:has(#roomShell)) .roomlist{gap:10px}
+#app:not(:has(#roomShell)) input[type=text]{border-radius:10px !important;padding:8px 12px}
+#app:not(:has(#roomShell)) .hero{padding:28px 0 22px}
+#app:not(:has(#roomShell)) .room{background:var(--mist)}
 </style>
 </head>
 <body>
@@ -595,7 +766,7 @@ function log(room, entry) {
 }
 // essentials (HP/TP changes, cards played, variation switches) also appear in the digest tab (メイン)
 function isImportant(l) {
-  if (l.type === 'play' || l.type === 'variation') return true;
+  if (l.type === 'play' || l.type === 'variation' || l.type === 'weapon') return true;
   if (l.type === 'value') return l.key === 'HP' || l.key === 'TP' || /の(HP|TP)：/.test(l.text || '');
   return false;
 }
@@ -782,6 +953,23 @@ function apply(room, a, by) {
       room.cards.hands[seat] = hand.filter(c => !a.cards.includes(c));
       (room.cards.hands[a.to] = room.cards.hands[a.to] || []).push(...a.cards);
       log(room, { tab: opsTab(room), type: 'give', by, seat, to: a.to, toName: seatName(room, a.to), cards: a.cards });
+      return;
+    }
+    case 'useWeapons': { // declare one or more weapons at once, discarding any cards (suits are not enforced)
+      need(ch && canControlChar(room, by, a.cid), 'このキャラクターは操作できません');
+      const seat = ch.side === 'pc' ? ch.id : 'gm';
+      const hand = room.cards.hands[seat] || [];
+      const cards = Array.isArray(a.cards) ? a.cards : [];
+      need(cards.every(x => hand.includes(x)) && new Set(cards).size === cards.length, '手札にないカードが含まれています');
+      const pool = { c: ch.data.weapons.common, s: currentSlots(ch) };
+      const ws = (Array.isArray(a.weapons) ? a.weapons : []).map(k => pool[String(k)[0]]?.[+String(k).slice(1)]).filter(w => w && w.name);
+      need(ws.length, '武装を選んでください');
+      room.cards.hands[seat] = hand.filter(x => !cards.includes(x));
+      room.cards.discard.push(...cards);
+      const keep = ['威力', '射程', '回避'];
+      log(room, { tab: opsTab(room), type: 'weapon', by, seat, cid: ch.id, charName: ch.data.name,
+        weapons: ws.map(w => ({ name: w.name, suit: w.suit || null, attrs: Object.fromEntries(keep.filter(k => w.attrs && w.attrs[k] != null).map(k => [k, w.attrs[k]])) })),
+        cards, targets: (Array.isArray(a.targets) ? a.targets : []).map(id => room.chars[id]?.data.name).filter(Boolean), memo: String(a.memo || '').trim() });
       return;
     }
     case 'shuffleBack': {
@@ -1130,7 +1318,6 @@ function renderRoom() {
           <div class="mainPane">
             <section class="skyP" id="mapP"></section>
             <section class="tray" id="cardsP"></section>
-            <section class="panel" id="charsP"></section>
           </div>
           <div class="chatPane">
             <section class="panel chat" id="chatP">
@@ -1168,7 +1355,7 @@ function renderRoom() {
   $('undoBtn').disabled = !ui.history.length;
   $('undoBtn').hidden = ONLINE;
   computeUnread(room, ru);
-  renderMap(room, ru); renderCards(room, ru); renderChat(room, ru); renderChars(room, ru);
+  renderMap(room, ru); renderCards(room, ru); renderChat(room, ru);
   if (typeof refreshModal === 'function' && ui.modal && $('dlg').open) refreshModal();
   const total = ui.unreadTotal;
   $('unread').hidden = total <= 0; $('unread').textContent = total > 99 ? '99+' : total;
@@ -1205,6 +1392,7 @@ function tokHtml(c, sel) {
 function boardCells(room) {
   const chars = Object.values(room.chars);
   const sel = ui.selTok && room.chars[ui.selTok];
+  const mv = sel ? Number(sel.cur['移動値']) : NaN;
   const at = {}; chars.forEach(c => { if (c.x != null) (at[c.x + ',' + c.y] = at[c.x + ',' + c.y] || []).push(c); });
   let cells = '';
   for (let y = 0; y < 8; y++) {
@@ -1212,7 +1400,9 @@ function boardCells(room) {
     for (let x = 0; x < 8; x++) {
       const list = at[x + ',' + y] || [];
       const d = sel && sel.x != null ? dist(room, sel, { x, y }) : null;
-      cells += `<div class="cell ${(x + y) % 2 ? 'alt' : ''} ${list.length > 1 ? 'multi' : ''} ${sel ? 'target' : ''}" data-cell="${x},${y}" aria-label="${coordName(x, y)}">
+      // squares within 移動値 are highlighted; moving further is still allowed
+      const reach = d != null && d > 0 && Number.isFinite(mv) && d <= mv;
+      cells += `<div class="cell ${(x + y) % 2 ? 'alt' : ''} ${list.length > 1 ? 'multi' : ''} ${sel ? 'target' : ''} ${reach ? 'reach' : ''}" data-cell="${x},${y}" aria-label="${coordName(x, y)}${reach ? '（移動値の範囲内）' : ''}">
         ${list.map(c => tokHtml(c, sel && c.id === sel.id)).join('')}${d != null && d > 0 ? `<span class="dist">${d}</span>` : ''}</div>`;
     }
   }
@@ -1220,39 +1410,48 @@ function boardCells(room) {
   return cells;
 }
 const isPhone = () => matchMedia('(max-width:720px)').matches;
+function statLine(room, ru, c, k) {
+  if (!(k in c.cur)) return '';
+  const st = c.data.stats[k] || {}, can = canControlChar(room, ru.viewer, c.id);
+  if (st.max == null) return '';
+  const pct = Math.max(0, Math.min(100, c.cur[k] / st.max * 100));
+  return `<div class="ostat ${k === 'TP' ? 'tp' : ''}"><i>${esc(k)}</i>
+    ${can ? `<button class="step" data-vstep="-1" data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(c.data.name)}の${esc(k)}を1減らす">−</button>` : ''}
+    <b>${c.cur[k]}</b><em>/${st.max}</em>
+    ${can ? `<button class="step" data-vstep="1" data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(c.data.name)}の${esc(k)}を1増やす">＋</button>` : ''}
+    <span class="bar"><span style="width:${pct}%"></span></span></div>`;
+}
 function renderMap(room, ru) {
-  const chars = Object.values(room.chars);
   const sel = ui.selTok && room.chars[ui.selTok];
   const cells = boardCells(room);
-
-  const order = turnOrder(room);
+  const order = turnOrder(room), npcs = Object.values(room.chars).filter(c => c.side === 'npc');
   const v = ru.viewer, cur = room.turn.current;
-  const hpTxt = c => Number.isFinite(c.cur.HP) ? `HP ${c.cur.HP}${c.data.stats.HP?.max != null ? '/' + c.data.stats.HP.max : ''}` : '';
-  const list = order.map(c => `
-    <button class="oitem ${c.id === cur ? 'now' : ''} ${ui.selTok === c.id ? 'sel' : ''} ${c.side}" data-tok="${c.id}" title="${esc(c.data.name)}　${esc(hpTxt(c))}">
-      ${ptImg(c, null, 'pt')}<span class="oname">${esc(c.data.name)}</span>
-      <span class="ometa">SS${Number.isFinite(ssOf(c)) ? ssOf(c) : '-'}${c.x == null ? '・盤外' : ''}</span>
-      ${v === 'gm' ? `<span class="oset" data-setturn="${c.id}" role="button" aria-label="${esc(c.data.name)}を手番にする">▶</span>` : ''}
-    </button>`).join('');
+  const item = c => `
+    <div class="oitem ${c.id === cur ? 'now' : ''} ${ui.selTok === c.id ? 'sel' : ''} ${c.side}" data-charopen="${c.id}" role="button" tabindex="0" title="${esc(c.data.name)}の詳細を開く">
+      <div class="ohead">${ptImg(c, null, 'pt')}<span class="oname" style="color:${c.color}">${esc(c.data.name)}</span>
+        ${v === 'gm' && c.side !== 'npc' ? `<button class="oset" data-setturn="${c.id}" aria-label="${esc(c.data.name)}を手番にする">▶</button>` : ''}</div>
+      <div class="ometa">${'HP' in c.cur ? `<span class="phoneOnly">HP${c.cur.HP}${'TP' in c.cur ? ` TP${c.cur.TP}` : ''}<br></span>` : ''}${c.data.stats['SS値'] ? `SS${c.cur['SS値']}` : ''}${c.data.stats['移動値'] ? `　移${c.cur['移動値']}` : ''}${c.x == null ? '　盤外' : `　${coordName(c.x, c.y)}`}</div>
+      ${statLine(room, ru, c, 'HP')}${statLine(room, ru, c, 'TP')}
+    </div>`;
   const canNext = cur && (v === 'gm' || v === cur);
   $('mapP').innerHTML = `
-    ${v === 'gm' ? `<div class="mobileOnly row" style="margin-bottom:8px"><button class="btn small" data-opensettings>部屋の設定</button></div>` : ''}
-    <h2><span class="roundTag">第<b>${room.turn.round}</b>ラウンド</span><span class="grow"></span><span class="muted">${cur && room.chars[cur] ? `${esc(room.chars[cur].data.name)}の手番` : '手番なし'}</span></h2>
-    <div class="turnbar">
+    <div class="maphead">
+      <span class="roundTag">第<b>${room.turn.round}</b>ラウンド</span>
+      <span class="muted">${cur && room.chars[cur] ? `${esc(room.chars[cur].data.name)}の手番` : '手番なし'}</span>
       ${canNext ? `<button class="btn small primary" data-nextturn>次の手番へ</button>` : ''}
-      ${v === 'gm' ? `<button class="btn small" data-endround>ラウンド終了</button><button class="btn small" data-resetround>戦闘開始（第1ラウンドから）</button>` : ''}
+      ${v === 'gm' ? `<button class="btn small" data-endround>ラウンド終了</button><button class="btn small ghost" data-resetround>戦闘開始</button><button class="btn small ghost mobileOnly" data-opensettings>部屋の設定</button>` : ''}
+      <span class="grow"></span>
+      <button class="btn small" data-import>キャラを取り込む</button>
     </div>
     <div class="mapwrap">
-      <div class="order" aria-label="手番順（SS値の大きい順）">${list || '<p class="muted">キャラクターを取り込むと、SS値の順に並びます</p>'}</div>
-      <div>
-        <div class="board" id="board">${cells}</div>
-        <div class="mapbar">
-          ${isPhone() ? `<span class="muted">マップをタップすると、大きく開いて移動できます</span>` : sel ? `<span class="muted">${esc(sel.data.name)}を選択中。移動先のマスをタップ</span>
-            <button class="btn small" data-offboard>盤外へ</button><button class="btn small" data-unsel>選択をやめる</button>`
-          : `<span class="muted">コマをタップで選択、マスをタップで移動。数字は選んだコマからの距離（斜めは2マス）です。</span>`}
+      <div class="order" aria-label="手番順（SS値の大きい順）">${order.map(item).join('') || '<p class="muted">「キャラを取り込む」から読み込むと、SS値の順に並びます</p>'}
+        ${npcs.length ? `<div class="grp">NPC</div>${npcs.map(item).join('')}` : ''}</div>
+      <div class="boardCol">
+        <div class="boardBox"><div class="board" id="board">${cells}</div>
+          ${!isPhone() && sel ? `<div class="selbar"><span>${esc(sel.data.name)}を移動中${Number.isFinite(sel.cur['移動値']) ? `<span class="mvtag">移動値${sel.cur['移動値']}</span>` : ''}</span><button class="btn small" data-offboard>盤外へ</button><button class="btn small" data-unsel>やめる</button></div>` : ''}
         </div>
       </div>
-    </div>`;
+    </div>    </div>`;
 }
 
 // ---------------- cards ----------------
@@ -1267,38 +1466,45 @@ function renderCards(room, ru) {
   const mySeat = v === 'gm' || isPcSeat(room, v) ? v : null;
   const myHand = mySeat ? sortCards(viewHand(room, mySeat, v) || [], ru.sort) : [];
   ui.sel = ui.sel.filter(c => myHand.includes(c));
+  const allies = Object.values(room.chars).filter(c => c.side === 'pc' && c.id !== v);
+  const gmCount = (room.cards.hands.gm || []).length;
+  const others = allies.map(c => `${esc(c.data.name)} ${(room.cards.hands[c.id] || []).length}`).concat(v !== 'gm' ? [`GM ${gmCount}`] : []).join('　');
+  if (!mySeat) {
+    $('cardsP').innerHTML = `<div class="trayRow"><span class="muted">観戦中は手札を操作できません。</span><span class="grow"></span>
+      <button class="btn small" data-handsall>みんなの手札</button><button class="btn small" data-deckmenu>山札 ${room.cards.deck.length}・捨て札 ${room.cards.discard.length}</button></div>`;
+    return;
+  }
+  const n = ui.sel.length;
+  $('cardsP').innerHTML = `
+    <div class="trayRow">
+      <b class="handName">${esc(seatName(room, mySeat))}の手札</b><span class="count">${myHand.length}</span>
+      <button class="btn small ghost" data-sort>${ru.sort === 'rank' ? '数字順' : 'スート順'}</button>
+      <span class="grow"></span>
+      <span class="muted othersLine" title="ほかの人の手札の枚数">${others}</span>
+      <button class="btn small" data-handsall>みんなの手札</button>
+      <button class="btn small" data-deckmenu>山札 ${room.cards.deck.length}・捨て札 ${room.cards.discard.length}</button>
+    </div>
+    <div class="cards" id="myHand">${myHand.map(c => cardHtml(c, { sel: ui.sel.includes(c), attr: `data-pick="${c}"` })).join('') || '<span class="muted">手札はありません</span>'}</div>
+    <div class="trayRow acts">
+      <button class="btn primary" data-weapon>武装を使う</button>
+      <button class="btn" data-play="evade" ${n ? '' : 'disabled'}>回避で出す</button>
+      <button class="btn" data-play="other" ${n ? '' : 'disabled'}>その他で出す</button>
+      ${isPcSeat(room, mySeat) && allies.length ? `<button class="btn" data-give ${n ? '' : 'disabled'}>渡す</button>` : ''}
+      <input type="text" class="memo" id="memo" placeholder="メモ（例：脚へ）" value="${esc(ui.memo)}">
+      <span class="drawBox"><button class="step" data-drawstep="-1" aria-label="減らす">−</button><b>${ui.drawN}</b><button class="step" data-drawstep="1" aria-label="増やす">＋</button><button class="btn small" data-draw>枚ドロー</button></span>
+    </div>`;
+}
+// other people's hands (modal)
+function handsHtml(room, ru) {
+  const v = ru.viewer;
   const pcs = Object.values(room.chars).filter(c => c.side === 'pc' && c.id !== v);
   const gmCount = (room.cards.hands.gm || []).length;
-  $('cardsP').innerHTML = `
-    <h2>カード <span class="grow"></span><span class="muted">${(room.settings.decks || 1) > 1 ? `${room.settings.decks}組・` : ''}山札 ${room.cards.deck.length}枚・捨て札 ${room.cards.discard.length}枚</span></h2>
-    ${mySeat ? `
-      <div class="handHead"><b>${esc(seatName(room, mySeat))}の手札</b><span class="count">${myHand.length}</span><span style="flex:1"></span>
-        <button class="btn small" data-sort>${ru.sort === 'rank' ? '数字順' : 'スート順'}</button></div>
-      <div class="cards" id="myHand">${myHand.map(c => cardHtml(c, { sel: ui.sel.includes(c), attr: `data-pick="${c}"` })).join('') || '<span class="muted">手札はありません</span>'}</div>
-      <input type="text" class="memo" id="memo" placeholder="メモ（例：脚へ、ターゲットはヴォイドA）" value="${esc(ui.memo)}">
-      <div class="actions">
-        <button class="btn primary" data-play="attack" ${ui.sel.length ? '' : 'disabled'}>攻撃<span class="long">として出す</span></button>
-        <button class="btn primary" data-play="evade" ${ui.sel.length ? '' : 'disabled'}>回避<span class="long">として出す</span></button>
-        <button class="btn" data-play="other" ${ui.sel.length ? '' : 'disabled'}>その他<span class="long">で出す</span></button>
-      </div>
-      ${isPcSeat(room, mySeat) && pcs.length ? `<div class="row" style="margin-top:6px"><button class="btn small" data-give ${ui.sel.length ? '' : 'disabled'}>選んだカードを味方に渡す</button></div>` : ''}
-      <div class="row" style="margin-top:10px">
-        <button class="btn small" data-drawstep="-1" aria-label="減らす">−</button><b>${ui.drawN}</b><button class="btn small" data-drawstep="1" aria-label="増やす">＋</button>
-        <button class="btn" data-draw>枚ドロー</button>
-        <span style="flex:1"></span>
-        <button class="btn small" data-shuffleback ${room.cards.discard.length ? '' : 'disabled'}>捨て札を戻してシャッフル</button>
-      </div>` : `<p class="muted">観戦中は手札を操作できません。</p>`}
-    <div class="otherHands">
-      ${pcs.map(c => { const h = sortCards(viewHand(room, c.id, v) || [], ru.sort); return `<div>
-        <div class="who2"><span class="dot" style="background:${c.color}"></span>${esc(c.data.name)}<span class="muted">${h.length}枚</span></div>
-        <div class="cards">${h.map(x => cardHtml(x, { mini: true, attr: v === 'gm' ? `data-fixcard="${x}" data-from="${c.id}" title="GM：このカードを移す"` : 'disabled' })).join('') || '<span class="muted">なし</span>'}</div></div>`; }).join('')}
-      ${v !== 'gm' ? `<div><div class="who2"><span class="dot gm"></span>GM<span class="muted">${gmCount}枚</span></div>
-        <div class="cards">${Array.from({ length: gmCount }, () => `<span class="card mini back"></span>`).join('')}</div></div>` : ''}
-    </div>
-    <div class="row" style="margin-top:12px">
-      <button class="btn small" data-discards>捨て札を見る${mySeat ? '・拾う' : ''}</button>
-      ${v === 'gm' ? `<button class="btn small" data-adddeck>トランプを1組追加</button><button class="btn small danger" data-resetdeck>山札を作り直す</button>` : ''}
-    </div>`;
+  return `${pcs.map(c => { const h = sortCards(viewHand(room, c.id, v) || [], ru.sort); return `<div class="handBlock">
+      <div class="who2"><span class="dot" style="background:${c.color}"></span>${esc(c.data.name)}<span class="muted">${h.length}枚</span></div>
+      <div class="cards">${h.map(x => cardHtml(x, { mini: true, attr: v === 'gm' ? `data-fixcard="${x}" data-from="${c.id}" title="GM：このカードを移す"` : 'disabled' })).join('') || '<span class="muted">なし</span>'}</div></div>`; }).join('')}
+    ${v !== 'gm' ? `<div class="handBlock"><div class="who2"><span class="dot gm"></span>GM<span class="muted">${gmCount}枚</span></div>
+      <div class="cards">${Array.from({ length: gmCount }, () => `<span class="card mini back"></span>`).join('')}</div></div>` : ''}
+    ${!pcs.length && v === 'gm' ? '<p class="muted">PCがまだいません</p>' : ''}`;
 }
 
 // ---------------- characters ----------------
@@ -1385,6 +1591,11 @@ function logHtml(room, l) {
   const seatWho = esc(l.seatName || seatName(room, l.seat));
   const cls = l.by === 'gm' ? 'gm' : l.type === 'sys' ? 'sys' : 'pc';
   if (l.type === 'play') return `<div class="le ${cls}"><span class="who">${seatWho}</span>${l.cards.map(chipHtml).join(' ')}<span class="kind">${KIND[l.kind] || l.kind}</span>${l.memo ? esc(l.memo) : ''}<span class="t">${time}</span></div>`;
+  if (l.type === 'weapon') {
+    const ws = l.weapons.map(w => `<b class="wname">${w.suit ? `<span class="suit ${'HD'.includes(w.suit) ? 'red' : ''}">${SUIT[w.suit]}</span>` : ''}${esc(w.name)}</b>${Object.keys(w.attrs || {}).length ? `<span class="wattr">${Object.entries(w.attrs).map(([k, x]) => esc(k) + esc(x)).join(' ')}</span>` : ''}`).join('<span class="plus">＋</span>');
+    return `<div class="le ${cls} weapon"><span class="who">${esc(l.charName)}</span>${ws}
+      ${l.cards.length ? `<span class="wcards">${l.cards.map(chipHtml).join('<span class="arrow">→</span>')}</span>` : ''}${l.targets.length ? `<span class="wto">→ ${l.targets.map(esc).join('、')}</span>` : ''}${l.memo ? `　${esc(l.memo)}` : ''}<span class="t">${time}</span></div>`;
+  }
   if (l.type === 'pick') return `<div class="le ${cls}"><span class="who">${seatWho}</span>捨て札から ${l.cards.map(chipHtml).join(' ')} を拾った${l.memo ? '　' + esc(l.memo) : ''}<span class="t">${time}</span></div>`;
   if (l.type === 'give') return `<div class="le ${cls}"><span class="who">${seatWho}</span>${l.cards.map(chipHtml).join(' ')} を${esc(l.toName)}に渡した<span class="t">${time}</span></div>`;
   if (l.type === 'round') return `<div class="le round">${esc(l.text)}</div>`;
@@ -1412,6 +1623,7 @@ function logPlain(room, l) {
   const sn = l.seatName || seatName(room, l.seat);
   if (l.type === 'say') return `${l.name || (c && c.data.name)}：${l.dice ? (l.dice.hidden ? 'シークレットダイス' : `${l.dice.comment ? l.dice.comment + ' ' : ''}${l.dice.result}`) : l.text}`;
   if (l.type === 'play') return `［${sn}］${l.cards.map(cardText).join(' ')} を${KIND[l.kind] || l.kind}${l.memo ? `（${l.memo}）` : ''}`;
+  if (l.type === 'weapon') return `［${l.charName}］${l.weapons.map(w => (w.suit ? SUIT[w.suit] : '') + w.name).join('＋')}${l.cards.length ? `　${l.cards.map(cardText).join(' → ')}` : ''}${l.targets.length ? ` → ${l.targets.join('、')}` : ''}${l.memo ? ` ${l.memo}` : ''}`;
   if (l.type === 'pick') return `［${sn}］捨て札から ${l.cards.map(cardText).join(' ')} を拾った`;
   if (l.type === 'give') return `［${sn}］${l.cards.map(cardText).join(' ')} を${l.toName}に渡した`;
   if (l.type === 'round') return `―― ${l.text} ――`;
@@ -1635,9 +1847,73 @@ function mapModalHtml(room, ru) {
       <span style="flex:1"></span><button class="btn" data-close>閉じる</button></div>
     <div class="mchips">${order.map(c => `<button class="mchip ${c.id === cur ? 'now' : ''}" data-tok="${c.id}" aria-pressed="${ui.selTok === c.id}">${ptImg(c, null, 'pt')}${esc(c.data.name)}</button>`).join('')}</div>
     <div class="board big">${boardCells(room)}</div>
-    <div class="mapbar">${sel ? `<span class="muted">${esc(sel.data.name)}を選択中。移動先のマスをタップ</span>
+    <div class="mapbar">${sel ? `<span class="muted">${esc(sel.data.name)}を選択中${Number.isFinite(sel.cur['移動値']) ? `（移動値${sel.cur['移動値']}の範囲を表示）` : ''}。移動先のマスをタップ</span>
       <button class="btn small" data-offboard>盤外へ</button><button class="btn small" data-unsel>選択をやめる</button>`
       : `<span class="muted">コマか上の名前をタップで選択、マスをタップで移動。数字は選んだコマからの距離（斜めは2マス）です。</span>`}</div>`;
+}
+function charModalHtml(room, ru, cid) {
+  const c = room.chars[cid]; if (!c) return '<p>キャラクターがいません</p><button class="btn" data-close>閉じる</button>';
+  const v = ru.viewer, can = canControlChar(room, v, c.id);
+  const keys = STAT_KEYS.filter(k => k in c.cur).concat(Object.keys(c.cur).filter(k => !STAT_KEYS.includes(k)));
+  return `<div class="mhead">${ptImg(c)}
+      <button class="swatch" ${can ? `data-colorpick="${c.id}"` : 'disabled'} style="background:${c.color}" title="名前の色"></button>
+      <div><h1 style="color:${c.color}">${esc(c.data.name)}</h1><span class="muted">${esc([c.data.player, c.data.core?.name].filter(Boolean).join('　'))}</span></div>
+      <span style="flex:1"></span>
+      ${can ? `<button class="btn small" data-movechar="${c.id}">${c.x == null ? 'マップに置く' : '移動する'}</button><button class="btn small" data-portraits="${c.id}">立ち絵</button><button class="btn small" data-editchar="${c.id}">更新</button>` : ''}
+      ${v === 'gm' || v === c.id ? `<button class="btn small danger" data-delchar="${c.id}">外す</button>` : ''}
+      <button class="btn" data-close>閉じる</button></div>
+    <div class="vals">${keys.map(k => {
+      const st = c.data.stats[k] || {};
+      if (st.max == null) return `<span class="val">${esc(k)} ${can && v === 'gm' ? `<input type="number" value="${c.cur[k]}" data-vset data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(k)}">` : `<b>${c.cur[k]}</b>`}</span>`;
+      return `<span class="val">${esc(k)}${can ? `<button class="btn small" data-vstep="-1" data-cid="${c.id}" data-key="${esc(k)}">−</button><input type="number" value="${c.cur[k]}" data-vset data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(k)}"><button class="btn small" data-vstep="1" data-cid="${c.id}" data-key="${esc(k)}">＋</button>` : `<b>${c.cur[k]}</b>`}<span class="max">/ ${st.max}</span></span>`;
+    }).join('')}</div>
+    ${charSheetHtml(c, can)}`;
+}
+// 武装を使う: pick any number of weapons, the cards to discard and the targets in one go
+function weaponModalHtml(room, ru) {
+  const v = ru.viewer, w = ui.w;
+  const actors = Object.values(room.chars).filter(c => canControlChar(room, v, c.id) && c.side !== 'npc');
+  if (!actors.length) return `<div class="mhead"><h1>武装を使う</h1><span style="flex:1"></span><button class="btn" data-close>閉じる</button></div><p class="muted">操作できるキャラクターがいません。</p>`;
+  if (!actors.some(c => c.id === w.cid)) w.cid = (actors.find(c => c.id === room.turn.current) || actors[0]).id;
+  const ch = room.chars[w.cid], seat = ch.side === 'pc' ? ch.id : 'gm';
+  const hand = sortCards(viewHand(room, seat, v) || [], ru.sort);
+  w.cards = w.cards.filter(x => hand.includes(x));
+  const list = [...ch.data.weapons.common.map((x, i) => ['c' + i, x, '共通']), ...currentSlots(ch).map((x, i) => ['s' + i, x, null])].filter(([, x]) => x.name);
+  const picked = w.weapons.map(k => list.find(([kk]) => kk === k)).filter(Boolean);   // in the order they were chosen
+  const suits = new Set(picked.map(([, x]) => x.suit).filter(Boolean));
+  const others = Object.values(room.chars).filter(c => c.id !== ch.id).sort((a, b) => (a.side === ch.side) - (b.side === ch.side));
+  const preview = picked.length ? `${esc(ch.data.name)}：${picked.map(([, x]) => (x.suit ? SUIT[x.suit] : '') + esc(x.name)).join('＋')}${w.cards.length ? `　${w.cards.map(cardText).join(' → ')}` : ''}${w.targets.length ? ` → ${w.targets.map(id => esc(room.chars[id]?.data.name || '')).join('、')}` : ''}` : '武装を選んでください';
+  return `<div class="mhead"><h1>武装を使う</h1>
+      ${actors.length > 1 ? `<select data-wactor aria-label="使うキャラクター">${actors.map(c => `<option value="${c.id}" ${c.id === w.cid ? 'selected' : ''}>${esc(c.data.name)}</option>`).join('')}</select>` : `<span class="muted">${esc(ch.data.name)}</span>`}
+      ${ch.data.variations.length ? `<select data-mvariation="${ch.id}" aria-label="バリエーション"><option value="-1">基本</option>${ch.data.variations.map((x, i) => `<option value="${i}" ${ch.variation === i ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>` : ''}
+      <span style="flex:1"></span><button class="btn" data-close>閉じる</button></div>
+    <div class="wgrid">
+      <section><h2>武装（いくつでも選べます）</h2><div class="wlist">${list.map(([k, x, tag]) => `
+        <button class="wpick ${w.weapons.includes(k) ? 'on' : ''}" data-wtoggle="${k}" aria-pressed="${w.weapons.includes(k)}">
+          ${w.weapons.includes(k) ? `<span class="ord">${w.weapons.indexOf(k) + 1}</span>` : ''}
+          <span class="wtop">${x.suit ? `<span class="suit ${'HD'.includes(x.suit) ? 'red' : ''}">${SUIT[x.suit]}</span>` : ''}${tag ? `<span class="attr">${tag}</span>` : ''}<b>${esc(x.name)}</b></span>
+          <span class="wstats">${['威力', '射程', '回避'].filter(a => x.attrs[a] != null).map(a => `${a}<b>${esc(x.attrs[a])}</b>`).join('')}</span>
+        </button>`).join('')}</div></section>
+      <section><h2>出すカード（押した順に並びます）${suits.size ? `<span class="muted">　${[...suits].map(s => SUIT[s]).join('')} のカードを強調中・どれでも選べます</span>` : ''}</h2>
+        <div class="cards">${hand.map(x => { const k = cardOf(x); const hint = !k.joker && suits.has(k.s); let h = cardHtml(x, { sel: w.cards.includes(x), attr: `data-wcard="${x}"` }).replace('class="card', `class="card ${hint ? 'hint' : ''}`);
+          if (w.cards.includes(x)) h = h.replace(/<\/button>$/, `<span class="ord">${w.cards.indexOf(x) + 1}</span></button>`);
+          return h; }).join('') || '<span class="muted">手札はありません</span>'}</div>
+        <h2 style="margin-top:12px">対象</h2>
+        <div class="seatpick">${others.map(c => `<button class="mchip" data-wtarget="${c.id}" aria-pressed="${w.targets.includes(c.id)}">${ptImg(c, null, 'pt')}${esc(c.data.name)}</button>`).join('') || '<span class="muted">ほかにキャラクターがいません</span>'}</div>
+        <input type="text" id="wMemo" placeholder="メモ（例：コンボ1回目）" value="${esc(w.memo)}" style="width:100%;margin-top:10px">
+      </section>
+    </div>
+    <div class="wfoot"><span class="wprev">${preview}</span><button class="btn primary" data-wgo ${picked.length ? '' : 'disabled'}>使う</button></div>`;
+}
+function deckHtml(room, ru) {
+  const gm = ru.viewer === 'gm';
+  return `<div class="mhead"><h1>山札と捨て札</h1><span style="flex:1"></span><button class="btn" data-close>閉じる</button></div>
+    <div class="vals"><span class="val">山札<b>${room.cards.deck.length}</b></span><span class="val">捨て札<b>${room.cards.discard.length}</b></span>${(room.settings.decks || 1) > 1 ? `<span class="val">トランプ<b>${room.settings.decks}</b>組</span>` : ''}</div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn" data-discards>捨て札を見る・拾う</button>
+      <button class="btn" data-shuffleback ${room.cards.discard.length ? '' : 'disabled'}>捨て札を山札に戻してシャッフル</button>
+      ${gm ? `<button class="btn" data-adddeck>トランプを1組追加</button><button class="btn danger" data-resetdeck>山札を作り直す</button>` : ''}
+    </div>`;
 }
 function openModal(kind, arg) {
   ui.modal = { kind, arg };
@@ -1649,7 +1925,10 @@ function openModal(kind, arg) {
 function refreshModal(first) {
   const room = curRoom(); if (!room || !ui.modal) return;
   const ru = roomUI(room.id), top = $('dlg').scrollTop;
-  $('dlgBody').innerHTML = ui.modal.kind === 'cmd' ? cmdModalHtml(room, ru) : ui.modal.kind === 'map' ? mapModalHtml(room, ru) : sheetModalHtml(room, ru, ui.modal.arg);
+  const k = ui.modal.kind;
+  $('dlgBody').innerHTML = k === 'cmd' ? cmdModalHtml(room, ru) : k === 'map' ? mapModalHtml(room, ru) : k === 'char' ? charModalHtml(room, ru, ui.modal.arg)
+    : k === 'weapon' ? weaponModalHtml(room, ru) : k === 'hands' ? `<div class="mhead"><h1>みんなの手札</h1><span style="flex:1"></span><button class="btn" data-close>閉じる</button></div>${handsHtml(room, ru)}`
+    : k === 'deck' ? deckHtml(room, ru) : sheetModalHtml(room, ru, ui.modal.arg);
   if (!first) $('dlg').scrollTop = top;
 }
 function useCommand(i, sendNow) {
@@ -1667,16 +1946,37 @@ $('dlgBody').addEventListener('click', e => {
   if (!e.target.closest('[data-close]')) e.stopPropagation();
   const send = e.target.closest('[data-csend]');
   if (send) { useCommand(+send.dataset.csend, true); return; }
-  if (ui.modal.kind === 'map') { const room = curRoom(); if (room) mapClick(e.target, room, roomUI(room.id)); return; }
+  if (['map', 'char', 'weapon', 'hands', 'deck'].includes(ui.modal.kind)) {
+    const room = curRoom(); if (!room) return; const ru = roomUI(room.id);
+    if (ui.modal.kind === 'weapon' && weaponClick(e.target, room, ru)) return;
+    if (mapClick(e.target, room, ru)) return;
+    commonClick(e.target, room, ru); return;
+  }
   if (e.target.closest('select,input,label,button')) return;
   const it = e.target.closest('[data-ci]');
   if (it) useCommand(+it.dataset.ci, false);
 });
+$('dlgBody').addEventListener('input', e => { if (e.target.id === 'wMemo' && ui.w) ui.w.memo = e.target.value; });
+function weaponClick(t, room, ru) {
+  const w = ui.w; let el;
+  const tog = (arr, x) => arr.includes(x) ? arr.filter(y => y !== x) : [...arr, x];
+  if ((el = t.closest('[data-wtoggle]'))) { w.weapons = tog(w.weapons, el.dataset.wtoggle); refreshModal(); return true; }
+  if ((el = t.closest('[data-wcard]'))) { w.cards = tog(w.cards, el.dataset.wcard); refreshModal(); return true; }
+  if ((el = t.closest('[data-wtarget]'))) { w.targets = tog(w.targets, el.dataset.wtarget); refreshModal(); return true; }
+  if (t.closest('[data-wgo]')) {
+    const r = act({ type: 'useWeapons', cid: w.cid, weapons: w.weapons, cards: w.cards, targets: w.targets, memo: w.memo }, { silent: true });
+    if (r !== FAIL) { ui.w = null; ui.sel = []; closeDlg(); renderRoom(); toast('武装を使いました'); }
+    return true;
+  }
+  return false;
+}
 $('dlgBody').addEventListener('keydown', e => { const it = e.target.closest('[data-ci]'); if (it && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); useCommand(+it.dataset.ci, false); } });
 $('dlgBody').addEventListener('change', e => {
   if (!ui.modal) return;
   e.stopPropagation(); // the modal re-renders; the old element must not reach the page-level handler
   const t = e.target;
+  if (t.matches('[data-wactor]')) { ui.w = { cid: t.value, weapons: [], cards: [], targets: [], memo: ui.w.memo }; refreshModal(); return; }
+  if (t.matches('[data-vset]')) { act({ type: 'setValue', cid: t.dataset.cid, key: t.dataset.key, value: t.value }); return; }
   if (t.matches('[data-mvariation]') || t.matches('[data-variation]')) act({ type: 'variation', cid: t.dataset.mvariation || t.dataset.variation, idx: +t.value });
   if (t.matches('[data-used]')) act({ type: 'toggleUsed', cid: t.dataset.used, group: t.dataset.group, idx: +t.dataset.idx });
 });
@@ -1882,10 +2182,45 @@ function bindRoomStatic() {
   };
 }
 
+// card / character actions, shared by the page and the modals
+function commonClick(t, room, ru) {
+  const q = s => t.closest(s);
+  let el;
+  // cards
+  if ((el = q('[data-pick]'))) { const c = el.dataset.pick; ui.sel = ui.sel.includes(c) ? ui.sel.filter(x => x !== c) : [...ui.sel, c]; renderCards(room, ru); return true; }
+  if (q('[data-sort]')) { ru.sort = ru.sort === 'rank' ? 'suit' : 'rank'; saveU(); renderCards(room, ru); return true; }
+  if ((el = q('[data-play]'))) {
+    const cards = [...ui.sel], memo = ui.memo;
+    if (act({ type: 'play', cards, kind: el.dataset.play, memo }, { silent: true }) !== FAIL) { ui.sel = []; ui.memo = ''; }
+    renderRoom(); return true;
+  }
+  if ((el = q('[data-drawstep]'))) { ui.drawN = Math.max(1, Math.min(20, ui.drawN + +el.dataset.drawstep)); renderCards(room, ru); return true; }
+  if (q('[data-draw]')) { act({ type: 'draw', n: ui.drawN }); return true; }
+  if (q('[data-shuffleback]')) { act({ type: 'shuffleBack' }); return true; }
+  if (q('[data-adddeck]')) { ask('トランプをもう1組、今の山札に混ぜてシャッフルします。', 'トランプを追加', () => act({ type: 'addDeck' })); return true; }
+  if (q('[data-resetdeck]')) { ask(`全員の手札と捨て札を回収し、${room.settings.decks || 1}組で山札を作り直します。`, '山札を作り直す', () => act({ type: 'resetDeck' }), true); return true; }
+  if (q('[data-discards]')) { discardDialog(room, ru); return true; }
+  if (q('[data-give]')) { giveDialog(room, ru); return true; }
+  if ((el = q('[data-fixcard]'))) { fixCardDialog(room, el.dataset.fixcard, el.dataset.from); return true; }
+
+  // characters
+  if (q('[data-import]')) { importDialog(room, ru); return true; }
+  if ((el = q('[data-editchar]'))) { importDialog(room, ru, el.dataset.editchar); return true; }
+  if ((el = q('[data-colorpick]'))) { const c = room.chars[el.dataset.colorpick]; colorDialog(c.color, col => act({ type: 'setColor', cid: c.id, color: col })); return true; }
+  if ((el = q('[data-sheetopen]'))) { openModal('sheet', el.dataset.sheetopen); return true; }
+  if ((el = q('[data-portraits]'))) { portraitDialog(room, el.dataset.portraits); return true; }
+  if ((el = q('[data-delchar]'))) { const c = room.chars[el.dataset.delchar]; ask(`${c.data.name}を部屋から外します。手札は捨て札に移ります。`, 'キャラクターを外す', () => act({ type: 'removeChar', cid: c.id }), true); return true; }
+  if ((el = q('[data-vstep]'))) { const c = room.chars[el.dataset.cid], k = el.dataset.key; act({ type: 'setValue', cid: c.id, key: k, value: c.cur[k] + +el.dataset.vstep }); return true; }
+
+  if (q('[data-opensettings]')) { settingsDialog(room); return true; }
+  return false;
+}
+
 // map interactions, shared by the page and the big map modal
 function mapClick(t, room, ru) {
   const q = s => t.closest(s);
   let el;
+  if ((el = q('[data-movechar]'))) { ui.selTok = el.dataset.movechar; closeDlg(); if (isPhone()) openModal('map'); else renderRoom(); return true; }
   if ((el = q('[data-setturn]'))) { act({ type: 'setTurn', cid: el.dataset.setturn }); return true; }
   if (q('[data-nextturn]')) { act({ type: 'nextTurn' }); return true; }
   if (q('[data-endround]')) { act({ type: 'endRound' }); return true; }
@@ -1913,35 +2248,16 @@ document.addEventListener('click', e => {
   if (!room || !t.isConnected || t.closest('dialog')) return;
   const ru = roomUI(room.id);
 
+  if (t.closest('[data-vstep],[data-setturn]') && t.closest('[data-charopen]')) { /* buttons inside the list row act, the row does not open */ }
+  else if ((el = q('[data-charopen]'))) { openModal('char', el.dataset.charopen); return; }
+  if (q('[data-weapon]')) { ui.w = { cid: isPcSeat(room, ru.viewer) ? ru.viewer : (room.turn.current && room.chars[room.turn.current]?.side === 'enemy' ? room.turn.current : null), weapons: [], cards: [...ui.sel], targets: [], memo: ui.memo }; openModal('weapon'); return; }
+  if (q('[data-handsall]')) { openModal('hands'); return; }
+  if (q('[data-deckmenu]')) { openModal('deck'); return; }
   // phones: the board on the page is a preview; tapping it opens the big map
   if (isPhone() && t.closest('#mapP .board')) { openModal('map'); return; }
   if (mapClick(t, room, ru)) return;
 
-  // cards
-  if ((el = q('[data-pick]'))) { const c = el.dataset.pick; ui.sel = ui.sel.includes(c) ? ui.sel.filter(x => x !== c) : [...ui.sel, c]; renderCards(room, ru); return; }
-  if (q('[data-sort]')) { ru.sort = ru.sort === 'rank' ? 'suit' : 'rank'; saveU(); renderCards(room, ru); return; }
-  if ((el = q('[data-play]'))) {
-    const cards = [...ui.sel], memo = ui.memo;
-    if (act({ type: 'play', cards, kind: el.dataset.play, memo }, { silent: true }) !== FAIL) { ui.sel = []; ui.memo = ''; }
-    renderRoom(); return;
-  }
-  if ((el = q('[data-drawstep]'))) { ui.drawN = Math.max(1, Math.min(20, ui.drawN + +el.dataset.drawstep)); renderCards(room, ru); return; }
-  if (q('[data-draw]')) { act({ type: 'draw', n: ui.drawN }); return; }
-  if (q('[data-shuffleback]')) { act({ type: 'shuffleBack' }); return; }
-  if (q('[data-adddeck]')) { ask('トランプをもう1組、今の山札に混ぜてシャッフルします。', 'トランプを追加', () => act({ type: 'addDeck' })); return; }
-  if (q('[data-resetdeck]')) { ask(`全員の手札と捨て札を回収し、${room.settings.decks || 1}組で山札を作り直します。`, '山札を作り直す', () => act({ type: 'resetDeck' }), true); return; }
-  if (q('[data-discards]')) { discardDialog(room, ru); return; }
-  if (q('[data-give]')) { giveDialog(room, ru); return; }
-  if ((el = q('[data-fixcard]'))) { fixCardDialog(room, el.dataset.fixcard, el.dataset.from); return; }
-
-  // characters
-  if (q('[data-import]')) { importDialog(room, ru); return; }
-  if ((el = q('[data-editchar]'))) { importDialog(room, ru, el.dataset.editchar); return; }
-  if ((el = q('[data-colorpick]'))) { const c = room.chars[el.dataset.colorpick]; colorDialog(c.color, col => act({ type: 'setColor', cid: c.id, color: col })); return; }
-  if ((el = q('[data-sheetopen]'))) { openModal('sheet', el.dataset.sheetopen); return; }
-  if ((el = q('[data-portraits]'))) { portraitDialog(room, el.dataset.portraits); return; }
-  if ((el = q('[data-delchar]'))) { const c = room.chars[el.dataset.delchar]; ask(`${c.data.name}を部屋から外します。手札は捨て札に移ります。`, 'キャラクターを外す', () => act({ type: 'removeChar', cid: c.id }), true); return; }
-  if ((el = q('[data-vstep]'))) { const c = room.chars[el.dataset.cid], k = el.dataset.key; act({ type: 'setValue', cid: c.id, key: k, value: c.cur[k] + +el.dataset.vstep }); return; }
+  if (commonClick(t, room, ru)) return;
 
   if (q('[data-opensettings]')) { settingsDialog(room); return; }
   if (q('[data-theme-toggle]')) { U.theme = (U.theme || 'dark') === 'dark' ? 'light' : 'dark'; saveU(); applyTheme(); return; }
