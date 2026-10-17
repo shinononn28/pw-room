@@ -613,6 +613,14 @@ dialog{border-radius:6px}
 #app:not(:has(#roomShell)) input[type=text]{border-radius:10px !important;padding:8px 12px}
 #app:not(:has(#roomShell)) .hero{padding:28px 0 22px}
 #app:not(:has(#roomShell)) .room{background:var(--mist)}
+
+.cmdmsg + .cmdmsg{margin-top:6px}
+.wused{display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;margin-top:8px;font-size:.84rem}
+.wlabel{font-size:.74rem;font-weight:700;color:#9A9A9E;margin-right:2px}
+.wused .arrow{color:#9A9A9E}
+.wused .wto{font-weight:700;color:#FFFFFF;margin-left:6px}
+.wused .wmemo{color:#C9C9C9;margin-left:6px}
+.cmdhead .suit{font-size:1em}
 </style>
 </head>
 <body>
@@ -966,9 +974,8 @@ function apply(room, a, by) {
       need(ws.length, '武装を選んでください');
       room.cards.hands[seat] = hand.filter(x => !cards.includes(x));
       room.cards.discard.push(...cards);
-      const keep = ['威力', '射程', '回避'];
       log(room, { tab: opsTab(room), type: 'weapon', by, seat, cid: ch.id, charName: ch.data.name,
-        weapons: ws.map(w => ({ name: w.name, suit: w.suit || null, attrs: Object.fromEntries(keep.filter(k => w.attrs && w.attrs[k] != null).map(k => [k, w.attrs[k]])) })),
+        weapons: ws.map(w => ({ name: w.name, suit: w.suit || null, attrs: { ...(w.attrs || {}) }, text: w.text || '' })),
         cards, targets: (Array.isArray(a.targets) ? a.targets : []).map(id => room.chars[id]?.data.name).filter(Boolean), memo: String(a.memo || '').trim() });
       return;
     }
@@ -1592,9 +1599,19 @@ function logHtml(room, l) {
   const cls = l.by === 'gm' ? 'gm' : l.type === 'sys' ? 'sys' : 'pc';
   if (l.type === 'play') return `<div class="le ${cls}"><span class="who">${seatWho}</span>${l.cards.map(chipHtml).join(' ')}<span class="kind">${KIND[l.kind] || l.kind}</span>${l.memo ? esc(l.memo) : ''}<span class="t">${time}</span></div>`;
   if (l.type === 'weapon') {
-    const ws = l.weapons.map(w => `<b class="wname">${w.suit ? `<span class="suit ${'HD'.includes(w.suit) ? 'red' : ''}">${SUIT[w.suit]}</span>` : ''}${esc(w.name)}</b>${Object.keys(w.attrs || {}).length ? `<span class="wattr">${Object.entries(w.attrs).map(([k, x]) => esc(k) + esc(x)).join(' ')}</span>` : ''}`).join('<span class="plus">＋</span>');
-    return `<div class="le ${cls} weapon"><span class="who">${esc(l.charName)}</span>${ws}
-      ${l.cards.length ? `<span class="wcards">${l.cards.map(chipHtml).join('<span class="arrow">→</span>')}</span>` : ''}${l.targets.length ? `<span class="wto">→ ${l.targets.map(esc).join('、')}</span>` : ''}${l.memo ? `　${esc(l.memo)}` : ''}<span class="t">${time}</span></div>`;
+    // shown like a chat message: each weapon's full declaration (same as the 武装 command), then the cards in play order
+    const wc = room.chars[l.cid];
+    const face = wc ? ptImg(wc) : `<span class="pt none" style="background:var(--void-2)">${esc((l.charName || '?').slice(0, 1))}</span>`;
+    const blocks = l.weapons.map(w => {
+      const attrs = Object.entries(w.attrs || {}).map(([k, x]) => `${k}:${x}`).join(' ');
+      return `<div class="cmdmsg"><div class="cmdhead">【武装】${w.suit ? `<span class="suit ${'HD'.includes(w.suit) ? 'red' : ''}">${SUIT[w.suit]}</span> ` : ''}${esc(w.name)}${attrs ? `（${esc(attrs)}）` : ''}</div>${w.text ? `<div class="cmdbody">${esc(w.text)}</div>` : ''}</div>`;
+    }).join('');
+    return `<div class="msg">${face}<div class="mbody">
+      <div class="mname" style="color:${wc ? wc.color : '#B48CFF'}">${esc(l.charName)}<span class="t"> - ${time}</span></div>
+      ${blocks}
+      <div class="wused">${l.cards.length ? `<span class="wlabel">使用した手札</span>${l.cards.map(chipHtml).join('<span class="arrow">→</span>')}` : '<span class="wlabel">手札は使っていません</span>'}
+        ${l.targets.length ? `<span class="wto">→ ${l.targets.map(esc).join('、')}</span>` : ''}${l.memo ? `<span class="wmemo">${esc(l.memo)}</span>` : ''}</div>
+    </div></div>`;
   }
   if (l.type === 'pick') return `<div class="le ${cls}"><span class="who">${seatWho}</span>捨て札から ${l.cards.map(chipHtml).join(' ')} を拾った${l.memo ? '　' + esc(l.memo) : ''}<span class="t">${time}</span></div>`;
   if (l.type === 'give') return `<div class="le ${cls}"><span class="who">${seatWho}</span>${l.cards.map(chipHtml).join(' ')} を${esc(l.toName)}に渡した<span class="t">${time}</span></div>`;
@@ -1623,7 +1640,8 @@ function logPlain(room, l) {
   const sn = l.seatName || seatName(room, l.seat);
   if (l.type === 'say') return `${l.name || (c && c.data.name)}：${l.dice ? (l.dice.hidden ? 'シークレットダイス' : `${l.dice.comment ? l.dice.comment + ' ' : ''}${l.dice.result}`) : l.text}`;
   if (l.type === 'play') return `［${sn}］${l.cards.map(cardText).join(' ')} を${KIND[l.kind] || l.kind}${l.memo ? `（${l.memo}）` : ''}`;
-  if (l.type === 'weapon') return `［${l.charName}］${l.weapons.map(w => (w.suit ? SUIT[w.suit] : '') + w.name).join('＋')}${l.cards.length ? `　${l.cards.map(cardText).join(' → ')}` : ''}${l.targets.length ? ` → ${l.targets.join('、')}` : ''}${l.memo ? ` ${l.memo}` : ''}`;
+  if (l.type === 'weapon') return `${l.charName}：` + l.weapons.map(w => { const at = Object.entries(w.attrs || {}).map(([k, x]) => `${k}:${x}`).join(' '); return `【武装】${w.suit ? SUIT[w.suit] + ' ' : ''}${w.name}${at ? `（${at}）` : ''}${w.text ? '\n' + w.text : ''}`; }).join('\n')
+    + `\n使用した手札：${l.cards.length ? l.cards.map(cardText).join(' → ') : 'なし'}${l.targets.length ? `　対象：${l.targets.join('、')}` : ''}${l.memo ? `　${l.memo}` : ''}`;
   if (l.type === 'pick') return `［${sn}］捨て札から ${l.cards.map(cardText).join(' ')} を拾った`;
   if (l.type === 'give') return `［${sn}］${l.cards.map(cardText).join(' ')} を${l.toName}に渡した`;
   if (l.type === 'round') return `―― ${l.text} ――`;

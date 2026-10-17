@@ -344,9 +344,8 @@ function apply(room, a, by) {
       need(ws.length, '武装を選んでください');
       room.cards.hands[seat] = hand.filter(x => !cards.includes(x));
       room.cards.discard.push(...cards);
-      const keep = ['威力', '射程', '回避'];
       log(room, { tab: opsTab(room), type: 'weapon', by, seat, cid: ch.id, charName: ch.data.name,
-        weapons: ws.map(w => ({ name: w.name, suit: w.suit || null, attrs: Object.fromEntries(keep.filter(k => w.attrs && w.attrs[k] != null).map(k => [k, w.attrs[k]])) })),
+        weapons: ws.map(w => ({ name: w.name, suit: w.suit || null, attrs: { ...(w.attrs || {}) }, text: w.text || '' })),
         cards, targets: (Array.isArray(a.targets) ? a.targets : []).map(id => room.chars[id]?.data.name).filter(Boolean), memo: String(a.memo || '').trim() });
       return;
     }
