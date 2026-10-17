@@ -420,6 +420,28 @@ input[type=color]{width:44px;height:30px;padding:0;border:1.5px solid var(--line
 @keyframes blink{50%{opacity:.3}}
 @media (prefers-reduced-motion:reduce){.netdot{animation:none !important}}
 @media (max-width:959px){ #inviteBtn{display:none} }
+
+/* phones: turn order stays a vertical list at the left; the board is a tap-to-open preview */
+@media (max-width:720px){
+  .mapwrap{grid-template-columns:86px minmax(0,1fr) !important;gap:6px}
+  .order{flex-direction:column !important;overflow-y:auto;overflow-x:hidden;max-height:none;padding:2px 0 2px 2px}
+  .oitem{min-width:0 !important;grid-template-columns:20px 1fr;padding:4px 4px 4px 7px}
+  .oitem .pt{width:20px;height:20px}
+  .oitem .oname{font-size:.7rem}
+  .oitem .ometa{font-size:.62rem}
+  #mapP .board{cursor:zoom-in;padding:4px}
+  #mapP .board .dist{display:none}
+  #mapP .tok{border-width:2px;font-size:.55rem}
+}
+/* big map modal */
+dialog.mapDlg{max-width:min(760px,calc(100vw - 24px))}
+.board.big{max-width:min(100%,64dvh);margin:6px auto 0}
+.mchips{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px}
+.mchip{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;border:1.5px solid var(--line);background:var(--mist);border-radius:999px;padding:3px 10px 3px 4px;font-weight:700;font-size:.82rem;color:var(--ink)}
+.mchip .pt{width:22px;height:22px;border-radius:50%}
+.mchip[aria-pressed="true"]{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold)}
+.mchip.now{background:var(--pink-soft)}
+@media (max-width:640px){ dialog.mapDlg{max-height:96dvh} .board.big{max-width:100%} }
 </style>
 </head>
 <body>
@@ -1180,7 +1202,7 @@ function tokHtml(c, sel) {
   const down = Object.keys(c.cur).includes('HP') && c.cur.HP <= 0;
   return `<div class="tok ${c.side === 'enemy' ? 'enemy' : 'pc'} ${sel ? 'sel' : ''} ${down ? 'down' : ''}" data-tok="${c.id}" title="${esc(c.data.name)}" style="${c.side !== 'enemy' ? `background:${c.color}` : ''}">${p ? `<img src="${esc(p.url)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : esc(c.data.name.slice(0, 2))}</div>`;
 }
-function renderMap(room, ru) {
+function boardCells(room) {
   const chars = Object.values(room.chars);
   const sel = ui.selTok && room.chars[ui.selTok];
   const at = {}; chars.forEach(c => { if (c.x != null) (at[c.x + ',' + c.y] = at[c.x + ',' + c.y] || []).push(c); });
@@ -1195,6 +1217,14 @@ function renderMap(room, ru) {
     }
   }
   cells += `<div></div>` + [...'ABCDEFGH'].map(l => `<div class="coord">${l}</div>`).join('');
+  return cells;
+}
+const isPhone = () => matchMedia('(max-width:720px)').matches;
+function renderMap(room, ru) {
+  const chars = Object.values(room.chars);
+  const sel = ui.selTok && room.chars[ui.selTok];
+  const cells = boardCells(room);
+
   const order = turnOrder(room);
   const v = ru.viewer, cur = room.turn.current;
   const hpTxt = c => Number.isFinite(c.cur.HP) ? `HP ${c.cur.HP}${c.data.stats.HP?.max != null ? '/' + c.data.stats.HP.max : ''}` : '';
@@ -1217,7 +1247,7 @@ function renderMap(room, ru) {
       <div>
         <div class="board" id="board">${cells}</div>
         <div class="mapbar">
-          ${sel ? `<span class="muted">${esc(sel.data.name)}を選択中。移動先のマスをタップ</span>
+          ${isPhone() ? `<span class="muted">マップをタップすると、大きく開いて移動できます</span>` : sel ? `<span class="muted">${esc(sel.data.name)}を選択中。移動先のマスをタップ</span>
             <button class="btn small" data-offboard>盤外へ</button><button class="btn small" data-unsel>選択をやめる</button>`
           : `<span class="muted">コマをタップで選択、マスをタップで移動。数字は選んだコマからの距離（斜めは2マス）です。</span>`}
         </div>
@@ -1598,16 +1628,28 @@ function sheetModalHtml(room, ru, cid) {
     <div class="vals">${Object.keys(c.cur).map(k => `<span class="val">${esc(k)} <b>${c.cur[k]}</b>${c.data.stats[k]?.max != null ? `<span class="max">/ ${c.data.stats[k].max}</span>` : ''}</span>`).join('')}</div>
     ${charSheetHtml(c, can)}`;
 }
+function mapModalHtml(room, ru) {
+  const sel = ui.selTok && room.chars[ui.selTok], cur = room.turn.current;
+  const order = turnOrder(room);
+  return `<div class="mhead"><div><h1>マップ</h1><span class="muted">第${room.turn.round}ラウンド${cur && room.chars[cur] ? `・${esc(room.chars[cur].data.name)}の手番` : ''}</span></div>
+      <span style="flex:1"></span><button class="btn" data-close>閉じる</button></div>
+    <div class="mchips">${order.map(c => `<button class="mchip ${c.id === cur ? 'now' : ''}" data-tok="${c.id}" aria-pressed="${ui.selTok === c.id}">${ptImg(c, null, 'pt')}${esc(c.data.name)}</button>`).join('')}</div>
+    <div class="board big">${boardCells(room)}</div>
+    <div class="mapbar">${sel ? `<span class="muted">${esc(sel.data.name)}を選択中。移動先のマスをタップ</span>
+      <button class="btn small" data-offboard>盤外へ</button><button class="btn small" data-unsel>選択をやめる</button>`
+      : `<span class="muted">コマか上の名前をタップで選択、マスをタップで移動。数字は選んだコマからの距離（斜めは2マス）です。</span>`}</div>`;
+}
 function openModal(kind, arg) {
   ui.modal = { kind, arg };
   $('dlg').classList.add('wide');
+  $('dlg').classList.toggle('mapDlg', kind === 'map');
   refreshModal(true);
   if (!$('dlg').open) $('dlg').showModal();
 }
 function refreshModal(first) {
   const room = curRoom(); if (!room || !ui.modal) return;
   const ru = roomUI(room.id), top = $('dlg').scrollTop;
-  $('dlgBody').innerHTML = ui.modal.kind === 'cmd' ? cmdModalHtml(room, ru) : sheetModalHtml(room, ru, ui.modal.arg);
+  $('dlgBody').innerHTML = ui.modal.kind === 'cmd' ? cmdModalHtml(room, ru) : ui.modal.kind === 'map' ? mapModalHtml(room, ru) : sheetModalHtml(room, ru, ui.modal.arg);
   if (!first) $('dlg').scrollTop = top;
 }
 function useCommand(i, sendNow) {
@@ -1619,12 +1661,13 @@ function useCommand(i, sendNow) {
   if (sendNow) { $('sayBtn').click(); return; }
   renderRoom(); $('sayText').focus();
 }
-$('dlg').addEventListener('close', () => { ui.modal = null; $('dlg').classList.remove('wide'); });
+$('dlg').addEventListener('close', () => { ui.modal = null; $('dlg').classList.remove('wide', 'mapDlg'); });
 $('dlgBody').addEventListener('click', e => {
   if (!ui.modal) return;
   if (!e.target.closest('[data-close]')) e.stopPropagation();
   const send = e.target.closest('[data-csend]');
   if (send) { useCommand(+send.dataset.csend, true); return; }
+  if (ui.modal.kind === 'map') { const room = curRoom(); if (room) mapClick(e.target, room, roomUI(room.id)); return; }
   if (e.target.closest('select,input,label,button')) return;
   const it = e.target.closest('[data-ci]');
   if (it) useCommand(+it.dataset.ci, false);
@@ -1839,6 +1882,26 @@ function bindRoomStatic() {
   };
 }
 
+// map interactions, shared by the page and the big map modal
+function mapClick(t, room, ru) {
+  const q = s => t.closest(s);
+  let el;
+  if ((el = q('[data-setturn]'))) { act({ type: 'setTurn', cid: el.dataset.setturn }); return true; }
+  if (q('[data-nextturn]')) { act({ type: 'nextTurn' }); return true; }
+  if (q('[data-endround]')) { act({ type: 'endRound' }); return true; }
+  if (q('[data-resetround]')) { ask('ラウンド数を1に戻し、SS値がいちばん大きいキャラの手番から始めます。', '戦闘を開始', () => act({ type: 'resetRound' })); return true; }
+  // a selected token + a tap on a cell (even one holding another token) = move there
+  if ((el = q('[data-cell]')) && ui.selTok && !(q('[data-tok]') && q('[data-tok]').dataset.tok === ui.selTok)) {
+    const [x, y] = el.dataset.cell.split(',').map(Number);
+    if (act({ type: 'move', cid: ui.selTok, x, y }, { silent: true }) !== FAIL) ui.selTok = null;
+    renderRoom(); return true;
+  }
+  if ((el = q('[data-tok]'))) { const id = el.dataset.tok; ui.selTok = ui.selTok === id ? null : id; renderRoom(); return true; }
+  if (q('[data-offboard]')) { if (act({ type: 'move', cid: ui.selTok, x: null, y: null }, { silent: true }) !== FAIL) ui.selTok = null; renderRoom(); return true; }
+  if (q('[data-unsel]')) { ui.selTok = null; renderRoom(); return true; }
+  return false;
+}
+
 document.addEventListener('click', e => {
   const t = e.target, q = s => t.closest(s);
   const room = curRoom();
@@ -1850,20 +1913,9 @@ document.addEventListener('click', e => {
   if (!room || !t.isConnected || t.closest('dialog')) return;
   const ru = roomUI(room.id);
 
-  // map
-  if ((el = q('[data-setturn]'))) { act({ type: 'setTurn', cid: el.dataset.setturn }); return; }
-  if (q('[data-nextturn]')) { act({ type: 'nextTurn' }); return; }
-  if (q('[data-endround]')) { act({ type: 'endRound' }); return; }
-  if (q('[data-resetround]')) { ask('ラウンド数を1に戻し、SS値がいちばん大きいキャラの手番から始めます。', '戦闘を開始', () => act({ type: 'resetRound' })); return; }
-  // a selected token + a tap on a cell (even one holding another token) = move there
-  if ((el = q('[data-cell]')) && ui.selTok && !(q('[data-tok]') && q('[data-tok]').dataset.tok === ui.selTok)) {
-    const [x, y] = el.dataset.cell.split(',').map(Number);
-    if (act({ type: 'move', cid: ui.selTok, x, y }, { silent: true }) !== FAIL) ui.selTok = null;
-    renderRoom(); return;
-  }
-  if ((el = q('[data-tok]'))) { const id = el.dataset.tok; ui.selTok = ui.selTok === id ? null : id; renderMap(room, ru); return; }
-  if (q('[data-offboard]')) { if (act({ type: 'move', cid: ui.selTok, x: null, y: null }, { silent: true }) !== FAIL) ui.selTok = null; renderRoom(); return; }
-  if (q('[data-unsel]')) { ui.selTok = null; renderMap(room, ru); return; }
+  // phones: the board on the page is a preview; tapping it opens the big map
+  if (isPhone() && t.closest('#mapP .board')) { openModal('map'); return; }
+  if (mapClick(t, room, ru)) return;
 
   // cards
   if ((el = q('[data-pick]'))) { const c = el.dataset.pick; ui.sel = ui.sel.includes(c) ? ui.sel.filter(x => x !== c) : [...ui.sel, c]; renderCards(room, ru); return; }
