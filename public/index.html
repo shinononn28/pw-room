@@ -1,0 +1,1933 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<!--PW_ONLINE-->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>プリンセスウイング卓（ローカル版）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+1p:wght@400;500;700;800&family=Chakra+Petch:wght@500;600;700&family=Roboto:wght@400;700&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ===== tokens =====
+   Clear steps: page (darkest) -> panel -> inside a panel (lightest of the three).
+   The board is a bright window of sky inside the dark UI: the one memorable element. */
+:root{
+  --sky:#0A0D1E; --cloud:#1B2246; --mist:#2B3460; --line:#3E4A80;
+  --ink:#F3F5FF; --ink-2:#AEB7DD;
+  --pink:#FF5C96; --pink-ink:#FFFFFF; --pink-soft:#4A2246;
+  --gold:#FFC24B; --void:#3A2F86; --void-2:#A595FF;
+  --board:#F4F8FF; --cell:#E2ECFA; --cell-2:#C8D9F1; --cell-ink:#4A5A8C; --cell-line:#B3C6E4;
+  --red:#FF6B87; --ok:#36D49A; --ng:#FF6B87;
+  --shadow:0 20px 44px -22px rgba(0,0,0,.85);
+  --num:"Chakra Petch","M PLUS 1p",sans-serif;
+  color-scheme:dark;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+:root[data-theme="light"]{
+  --sky:#C9D4E8; --cloud:#FFFFFF; --mist:#EAF0F8; --line:#C2CEE2;
+  --ink:#121A38; --ink-2:#4E5A80;
+  --pink:#E23C79; --pink-ink:#FFFFFF; --pink-soft:#FBE0EA;
+  --gold:#E5A021; --void:#3A2F86; --void-2:#5B4FB0;
+  --board:#1B2246; --cell:#E2ECFA; --cell-2:#C8D9F1; --cell-ink:#4A5A8C; --cell-line:#B3C6E4;
+  --red:#D02F4E; --ok:#14966A; --ng:#D02F4E;
+  --shadow:0 18px 40px -24px rgba(18,26,56,.55);
+  color-scheme:light;
+}
+*,*::before,*::after{box-sizing:inherit}
+[hidden]{display:none !important}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--sky);color:var(--ink);font-family:"M PLUS 1p","Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif;font-weight:500;line-height:1.6;font-size:15px}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--pink);outline-offset:2px}
+#app{max-width:1480px;margin:0 auto;padding:10px 14px 80px}
+h1{font-size:1.3rem;font-weight:800;margin:0;letter-spacing:.02em}
+h2{font-size:.9rem;font-weight:800;color:var(--ink);margin:0 0 10px;display:flex;align-items:center;gap:8px}
+h2 .grow{flex:1}
+.muted{color:var(--ink-2);font-size:.82rem}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+
+/* buttons: pink = the one main action, ghost = everything else */
+.btn{border:1.5px solid var(--line);background:var(--mist);border-radius:999px;padding:5px 14px;font-weight:700;font-size:.9rem;line-height:1.4}
+.btn:hover:not(:disabled){border-color:var(--ink-2)}
+.btn.primary{background:var(--pink);border-color:var(--pink);color:var(--pink-ink)}
+.btn.primary:hover:not(:disabled){filter:brightness(1.05)}
+.btn.small{padding:2px 11px;font-size:.82rem}
+.btn.ghost{background:transparent}
+.top .btn.ghost,.top .back{border-color:var(--line);color:var(--ink-2)}
+.btn.danger{color:var(--red)}
+.btn:disabled{opacity:.38;cursor:default}
+input[type=text],input[type=number],select,textarea{border:1.5px solid var(--line);background:var(--mist);border-radius:10px;padding:5px 9px;min-width:0}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pink)}
+
+/* header */
+.top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 0 12px}
+.top .grow{flex:1}
+.back{text-decoration:none;color:var(--ink-2);font-weight:700;font-size:.85rem;padding:4px 10px;border-radius:999px;border:1.5px solid var(--line)}
+.back:hover{border-color:var(--ink-2)}
+.viewsel{display:flex;align-items:center;gap:6px;font-weight:700;font-size:.82rem;color:var(--ink-2)}
+.viewsel select{font-weight:700;color:var(--ink)}
+
+/* layout: chat is a first-class column for text sessions.
+   Wide screens: header + board on the left, chat runs the full height on the right. */
+.mainPane{display:flex;flex-direction:column;gap:14px;min-width:0}
+.panel{background:var(--cloud);border-radius:18px;padding:14px}
+@media (min-width:960px){
+  #roomShell{display:grid;grid-template-columns:minmax(0,1fr) minmax(480px,54%);grid-template-rows:auto 1fr;column-gap:18px;align-items:start}
+  #roomShell .layout{display:contents}
+  #roomShell .top{grid-column:1;grid-row:1}
+  .mainPane{grid-column:1;grid-row:2}
+  .chatPane{grid-column:2;grid-row:1 / span 2;position:sticky;top:10px;height:calc(100dvh - 20px)}
+  .mnav{display:none}
+}
+@media (min-width:1500px){ #app{max-width:1600px} #roomShell{grid-template-columns:minmax(0,1fr) minmax(640px,56%)} }
+/* phones: one pane at a time, switched from the bottom bar */
+@media (max-width:959px){
+  #roomShell[data-pane="board"] .chatPane{display:none}
+  #roomShell[data-pane="chat"] .mainPane{display:none}
+  #roomShell[data-pane="board"]{padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))}
+  #roomShell[data-pane="chat"]{display:flex;flex-direction:column;height:calc(100dvh - 86px - env(safe-area-inset-bottom,0px))}
+  #roomShell[data-pane="chat"] .layout{flex:1;min-height:0;display:flex}
+  #roomShell[data-pane="chat"] .chatPane{flex:1;min-height:0;display:flex}
+  #roomShell[data-pane="chat"] .chat{flex:1}
+  #app:has(#roomShell[data-pane="chat"]){padding-bottom:0}
+  .top{gap:8px;padding:2px 0 8px;flex-wrap:nowrap}
+  .top h1{font-size:1.05rem;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .top .grow{display:none}
+  .viewsel{margin-left:auto}
+  .viewsel select{max-width:38vw}
+  #undoBtn,#setBtn{display:none}
+  .mnav{position:fixed;left:0;right:0;bottom:0;z-index:20;display:grid;grid-template-columns:1fr 1fr;gap:8px;
+    padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px));background:var(--cloud);box-shadow:0 -8px 24px -16px rgba(14,21,48,.5)}
+  .mnav button{border:none;background:transparent;border-radius:999px;padding:9px 0;font-weight:800;font-size:.95rem;color:var(--ink-2);position:relative}
+  .mnav button[aria-pressed="true"]{background:var(--pink);color:var(--pink-ink)}
+  .mnav .badge{background:var(--gold) !important;color:#2A1C00 !important}
+  .mnav .badge{position:absolute;top:2px;right:calc(50% - 4.2em);min-width:20px;height:20px;border-radius:10px;background:var(--pink);color:#fff;font-size:.72rem;line-height:20px;padding:0 6px;font-family:var(--num)}
+  #toast{bottom:calc(80px + env(safe-area-inset-bottom,0px))}
+}
+/* ===== map: floats on the sky, no card around it ===== */
+.skyP{padding:2px 0 6px}
+.turnbar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.turnbar:empty{display:none}
+.roundTag{font-weight:800;font-size:.95rem;color:var(--ink)}
+.roundTag b{font-family:var(--num);font-size:1.4rem;margin:0 2px;vertical-align:-1px}
+.mapwrap{display:grid;grid-template-columns:170px minmax(0,1fr);gap:12px;align-items:start}
+.board{display:grid;grid-template-columns:20px repeat(8,1fr);grid-template-rows:repeat(8,1fr) 18px;gap:0;aspect-ratio:1/1;max-width:560px;margin:0 auto;user-select:none;
+  background:var(--board);border-radius:16px;padding:8px;box-shadow:var(--shadow)}
+.cell{position:relative;display:flex;flex-wrap:wrap;align-content:center;justify-content:center;gap:2px;padding:2px;min-width:0;min-height:0;
+  background:var(--cell);border-right:1px solid var(--cell-line);border-bottom:1px solid var(--cell-line)}
+.cell.alt{background:var(--cell-2)}
+.cell.target{cursor:pointer}
+@media (hover:hover){.cell.target:hover{background:#FFD3E3}}
+.cell .dist{position:absolute;right:3px;bottom:1px;font-family:var(--num);font-size:.68rem;font-weight:700;color:var(--cell-ink)}
+.coord{display:flex;align-items:center;justify-content:center;font-family:var(--num);font-size:.72rem;font-weight:700;color:var(--cell-ink)}
+:root[data-theme="light"] .coord{color:#C8D4F0}
+.tok{width:min(84%,50px);aspect-ratio:1/1;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:clamp(.6rem,2.2vw,.9rem);
+  border:3px solid #FFFFFF;box-shadow:0 3px 8px rgba(10,13,30,.45);overflow:hidden;white-space:nowrap;position:relative;z-index:1}
+.cell.multi .tok{width:46%;border-width:2px}
+.tok.enemy{background:var(--void);border-color:#1A1440}
+.tok.sel{box-shadow:0 0 0 4px var(--gold),0 3px 8px rgba(10,13,30,.45)}
+.tok.down{filter:grayscale(.9);opacity:.55}
+.tok img{width:100%;height:100%;object-fit:cover;object-position:top}
+.mapbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:10px;max-width:620px;margin-left:auto;margin-right:auto}
+
+/* turn order list (left of the map) */
+.order{display:flex;flex-direction:column;gap:6px;max-height:640px;overflow:auto;padding:2px}
+.oitem{display:grid;grid-template-columns:32px 1fr auto;column-gap:8px;align-items:center;text-align:left;border:none;background:var(--cloud);color:var(--ink);border-radius:12px;padding:6px 8px;min-width:0;position:relative}
+.oitem::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:4px;border-radius:0 4px 4px 0;background:var(--pink)}
+.oitem.enemy::before{background:var(--void)}
+.oitem .pt{width:32px;height:32px;grid-row:1/3;border-radius:50%}
+.oitem .oname{font-weight:800;font-size:.86rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.oitem .ometa{font-family:var(--num);font-size:.74rem;font-weight:600;color:var(--ink-2);white-space:nowrap;grid-column:2}
+.oitem .oset{grid-row:1/3;grid-column:3;color:var(--ink-2);padding:2px 6px;border-radius:8px;font-size:.8rem}
+.oitem .oset:hover{background:var(--pink-soft);color:var(--pink)}
+.oitem.now{box-shadow:inset 0 0 0 2px var(--gold);background:var(--mist)}
+.oitem:hover{background:var(--mist)}
+.oitem.now::after{content:"手番";position:absolute;top:-7px;right:8px;font-size:.66rem;font-weight:800;color:#4A3000;background:var(--gold);border-radius:999px;padding:0 8px;line-height:1.6}
+.oitem.sel{outline:2px dashed var(--gold);outline-offset:1px}
+@media (max-width:720px), (min-width:960px) and (max-width:1180px){
+  .mapwrap{grid-template-columns:1fr}
+  .order{flex-direction:row;overflow-x:auto;max-height:none;padding-bottom:4px}
+  .oitem{min-width:160px}
+}
+
+/* ===== hand tray: navy, cards pop ===== */
+.tray{background:var(--cloud);color:var(--ink);border-radius:18px;padding:14px 16px 16px}
+.tray h2{color:var(--ink)}
+.tray .muted{color:var(--ink-2)}
+.tray .btn{background:var(--mist);color:var(--ink);border-color:var(--line)}
+.tray .btn:hover:not(:disabled){border-color:var(--ink-2)}
+.tray .btn.primary{background:var(--pink);border-color:var(--pink);color:#fff}
+.tray .btn.danger{color:var(--red)}
+.tray input[type=text]{background:var(--mist);border-color:var(--line);color:var(--ink)}
+.tray input::placeholder{color:var(--ink-2)}
+.handHead{display:flex;align-items:baseline;gap:8px;margin-bottom:10px}
+.handHead b{font-weight:800}
+.handHead .count{font-family:var(--num);font-weight:700;color:var(--gold)}
+.cards{display:flex;flex-wrap:wrap;gap:8px}
+.card{width:52px;height:74px;border-radius:8px;border:none;background:#FFFFFF;color:#1B2547;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-family:var(--num);font-weight:700;line-height:1;padding:0;position:relative;box-shadow:0 3px 0 rgba(0,0,0,.18);transition:transform .12s}
+.card .r{font-size:1.25rem} .card .s{font-size:1.3rem;margin-top:2px}
+.card.red{color:#D7334E}
+.card.joker{color:#6A4CD6;font-size:.62rem;letter-spacing:.04em}
+.card.sel{transform:translateY(-8px);box-shadow:0 0 0 3px var(--gold),0 6px 0 rgba(0,0,0,.18)}
+.card.mini{width:32px;height:46px;border-radius:6px;box-shadow:0 2px 0 rgba(0,0,0,.18)}
+.card.mini .r{font-size:.85rem}.card.mini .s{font-size:.85rem;margin-top:1px}
+/* card back: princess-pink with a wing-like chevron weave */
+.card.back{background:
+  repeating-linear-gradient(135deg,transparent 0 5px,rgba(255,255,255,.28) 5px 7px),
+  repeating-linear-gradient(45deg,transparent 0 5px,rgba(255,255,255,.28) 5px 7px),
+  var(--pink);box-shadow:inset 0 0 0 2px #fff,0 2px 0 rgba(0,0,0,.18)}
+@media (prefers-reduced-motion:reduce){.card{transition:none}}
+.actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.actions .btn{padding:9px 6px;font-size:.92rem}
+.memo{width:100%;margin-top:12px}
+.otherHands{margin-top:16px;padding:12px;border-radius:14px;background:var(--mist);display:grid;gap:12px}
+.who2{display:flex;align-items:center;gap:6px;font-weight:700;font-size:.86rem;margin-bottom:5px}
+.dot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--pink)}
+.dot.gm{background:var(--void-2)}
+.chip{display:inline-flex;align-items:center;padding:0 7px;border-radius:6px;background:#fff;border:1px solid var(--line);font-family:var(--num);font-weight:700;color:#1B2547;font-size:.88rem;line-height:1.6}
+.chip.red{color:#D7334E}
+
+/* ===== chat: white sheet ===== */
+.chat{padding:12px 14px 12px;height:100%;display:flex;flex-direction:column;min-height:0}
+.tabs{display:flex;gap:4px;overflow-x:auto;margin:-2px -2px 10px;padding:2px}
+.tab{border:none;background:transparent;border-radius:999px;padding:4px 12px;font-weight:700;white-space:nowrap;font-size:.86rem;color:var(--ink-2)}
+.tab:hover{background:var(--mist)}
+.tab[aria-pressed="true"]{background:var(--pink);color:var(--pink-ink)}
+.tab.secret{box-shadow:inset 0 0 0 1.5px var(--void-2)}
+.tab.secret[aria-pressed="true"]{background:var(--void-2);box-shadow:none;color:#120E33}
+.tab .lock{font-size:.7rem;margin-left:4px;opacity:.85}
+.log{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:12px;padding:4px 6px 4px 0;font-size:.98rem}
+.msg{display:flex;gap:10px;align-items:flex-start}
+.pt{width:48px;height:48px;border-radius:14px;object-fit:cover;object-position:top;flex:none;background:var(--mist)}
+.pt.none{display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:.9rem}
+.mbody{min-width:0;flex:1}
+.mname{font-weight:800;font-size:.86rem}
+.mname .t,.le .t{color:var(--ink-2);font-family:var(--num);font-size:.7rem;font-weight:500;margin-left:8px}
+.mtext{white-space:pre-wrap;word-break:break-word;line-height:1.75}
+.dice{display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;margin-top:6px;background:var(--mist);border-left:4px solid var(--line);border-radius:4px 12px 12px 4px;padding:7px 12px}
+.dice.ok{border-left-color:var(--ok)} .dice.ng{border-left-color:var(--ng)}
+.dice .dres{font-family:var(--num);font-size:.82rem;font-weight:600;color:var(--ink-2);word-break:break-all}
+.dice .dtotal{font-family:var(--num);font-size:1.5rem;font-weight:700;margin-left:auto;line-height:1;color:var(--ink)}
+.dice .dverdict{font-weight:800;font-size:.78rem;border-radius:999px;padding:1px 9px;background:var(--line);color:var(--ink)}
+.dice.ok .dverdict{background:var(--ok);color:#fff} .dice.ng .dverdict{background:var(--ng);color:#fff}
+.dice .dverdict.s{background:var(--void);color:#fff}
+.dice.secret{box-shadow:inset 0 0 0 1.5px var(--void-2)}
+.le{font-size:.86rem;padding:1px 0 1px 10px;border-left:3px solid var(--line);line-height:1.7;color:var(--ink-2)}
+.le .who{color:var(--ink)}
+.le.pc{border-left-color:var(--pink)} .le.gm{border-left-color:var(--void-2)} .le.sys{color:var(--ink-2)}
+.le .who{font-weight:800;margin-right:6px}
+.le .kind{font-weight:800;font-size:.76rem;padding:1px 8px;border-radius:999px;background:var(--pink);color:#fff;margin:0 6px}
+.le.round{border-left:none;text-align:center;font-weight:800;color:var(--gold);letter-spacing:.04em;padding:6px 0;margin:4px 0;font-size:.82rem;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.le.turn{border-left-color:var(--gold);font-weight:700}
+.composer{display:flex;flex-direction:column;gap:8px;margin:10px -14px -12px;padding:12px 14px;background:var(--mist);border-radius:0 0 18px 18px}
+.composer textarea,.composer select,.composer input[type=text]{background:var(--cloud)}
+.speak{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.speak .pt{width:32px;height:32px;border-radius:50%}
+.speak select{max-width:45%;font-weight:700}
+.speak #freeName{flex:1;min-width:6em}
+.composer textarea{width:100%;min-height:4.8em;resize:vertical;line-height:1.65;font-size:1rem}
+.palette{display:flex;flex-wrap:wrap;gap:5px;max-height:240px;overflow:auto;background:var(--cloud);border-radius:12px;padding:8px}
+.palette .pgrp{width:100%;font-size:.72rem;font-weight:800;color:var(--ink-2);margin-top:2px}
+.pcmd{border:1.5px solid var(--line);background:var(--mist);border-radius:999px;padding:1px 10px;font-size:.82rem;font-weight:700}
+.pcmd:hover{border-color:var(--pink);color:var(--pink)}
+#tpRow{font-size:.84rem;font-weight:700;background:var(--pink-soft);border-radius:10px;padding:5px 10px}
+#tpInfo .warn{color:var(--red)}
+#palBtn[aria-expanded="true"]{background:var(--mist);border-color:var(--pink);color:var(--pink)}
+
+/* ===== characters ===== */
+.ch{border-radius:14px;padding:10px 12px;margin-bottom:8px;background:var(--mist);position:relative;border-left:4px solid var(--pink)}
+.ch.foe{border-left-color:var(--void-2)}
+.ch.me{box-shadow:inset 0 0 0 2px var(--pink)}
+
+.chead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.chead .pt{width:38px;height:38px;border-radius:50%}
+.uname{font-weight:800}
+.vals{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px}
+.val{display:inline-flex;align-items:center;gap:4px;font-size:.8rem;font-weight:700;color:var(--ink-2)}
+.val b,.val input{font-family:var(--num);font-weight:700;color:var(--ink);font-size:1rem}
+.val input{width:3.4em;text-align:center;padding:1px 4px;background:var(--cloud)}
+.val .max{font-family:var(--num);color:var(--ink-2);font-weight:600}
+.val .btn{padding:0 8px;line-height:1.5}
+.gauge{display:block;height:5px;border-radius:3px;background:var(--line);overflow:hidden;width:100%;margin-top:2px}
+.gauge i{display:block;height:100%;background:var(--pink)}
+details.sheet{margin-top:8px}
+details.sheet summary{cursor:pointer;font-weight:700;font-size:.82rem;color:var(--pink)}
+.item{border-top:1px solid var(--line);padding:7px 0;font-size:.86rem}
+.item .iname{font-weight:800;display:flex;align-items:center;gap:6px}
+.item .iname label{margin-left:auto;font-size:.74rem;font-weight:700;color:var(--ink-2);display:flex;align-items:center;gap:3px}
+.item.used .iname span:not(.attr):not(.suit){text-decoration:line-through;opacity:.55}
+.attrs{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0}
+.attr{font-size:.72rem;font-weight:700;background:var(--cloud);border-radius:999px;padding:0 8px;color:var(--ink-2)}
+.itext{white-space:pre-wrap;color:var(--ink)}
+.grp{font-size:.74rem;font-weight:800;color:var(--ink-2);margin-top:10px}
+.suit{font-family:var(--num);font-weight:700;font-size:1.05rem;color:var(--ink)} .suit.red{color:var(--red)}
+
+/* dialogs */
+dialog{border:none;border-radius:20px;background:var(--cloud);color:var(--ink);padding:18px;max-width:min(540px,calc(100vw - 24px));width:100%;box-shadow:0 30px 60px -20px rgba(14,21,48,.5)}
+dialog::backdrop{background:rgba(14,21,48,.45)}
+dialog h1{margin-bottom:6px}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;font-weight:700;font-size:.88rem}
+.seatpick{display:flex;flex-wrap:wrap;gap:6px}
+.wchip{border:1.5px solid var(--line);border-radius:999px;padding:2px 10px;font-weight:700;background:var(--cloud);font-size:.85rem;display:inline-flex;align-items:center;gap:4px}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px;margin:8px 0}
+.pgrid figure{margin:0;text-align:center;font-size:.78rem}
+.pgrid img{width:100%;aspect-ratio:3/4;object-fit:cover;object-position:top;border-radius:10px;background:var(--mist)}
+.dlist{display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow:auto}
+
+/* room list */
+.hero{padding:28px 0 18px}
+.hero h1{font-size:clamp(1.8rem,5vw,2.6rem);font-weight:800;letter-spacing:.04em;line-height:1.2}
+.hero p{color:var(--ink-2);margin:8px 0 0}
+.roomlist{display:flex;flex-direction:column;gap:8px}
+.room{display:flex;align-items:center;gap:10px;background:var(--mist);border-radius:14px;padding:12px 14px;flex-wrap:wrap}
+.room a{flex:1;font-weight:800;color:var(--ink);text-decoration:none;min-width:10em}
+.room a:hover{color:var(--pink)}
+
+#toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--sky);border-radius:999px;padding:8px 18px;font-weight:700;z-index:50;max-width:calc(100% - 24px);font-size:.9rem}
+@media (max-width:520px){ .cell .dist{font-size:.58rem;right:2px;bottom:0} .board{padding:4px} .card{width:46px;height:66px} body{font-size:14px} }
+@media (max-width:520px){ .actions .long{display:none} }
+
+.mobileOnly{display:none}
+@media (max-width:959px){.mobileOnly{display:flex}}
+
+.btn.dangerFill{background:var(--red);border-color:var(--red);color:#fff}
+.chat{box-shadow:var(--shadow)}
+.room{background:var(--cloud)}
+.hero{padding:18px 0 18px}
+:root[data-theme="light"] .card:not(.back){box-shadow:inset 0 0 0 1.5px #B9C6DD,0 3px 0 rgba(18,26,56,.14)}
+:root[data-theme="light"] .card.sel{box-shadow:0 0 0 3px var(--gold),0 6px 0 rgba(18,26,56,.14)}
+:root[data-theme="light"] .chip{border-color:#B9C6DD}
+
+/* chat: black with white text, like ココフォリア (same in both themes) */
+.chat{--cloud:#141414;--mist:#232323;--line:#3A3A3A;--ink:#FFFFFF;--ink-2:#B9B9B9;--pink-soft:#3A1F2A;
+  background:var(--cloud);color:var(--ink);box-shadow:var(--shadow)}
+.chat .le .who,.chat .mtext{color:var(--ink)}
+.chat .composer{background:#1E1E1E;border-top:1px solid #2C2C2C}
+.chat .composer textarea,.chat .composer select,.chat .composer input[type=text]{background:#0E0E0E;border-color:#3A3A3A;color:#FFFFFF}
+.chat .composer textarea::placeholder{color:#8C8C8C}
+.chat .tab{color:#B9B9B9}
+.chat .tab:hover{background:#232323}
+.chat .dice{background:#232323}
+.chat .pt{background:#232323}
+.chat .palette{background:#141414}
+.chat #tpRow{background:#3A1F2A}
+.chat .btn{background:#232323;border-color:#3A3A3A;color:#FFFFFF}
+.chat .btn.primary{background:var(--pink);border-color:var(--pink)}
+.chat .tab[aria-pressed="true"]{background:var(--pink);color:#FFFFFF}
+.chat .tab.secret[aria-pressed="true"]{background:var(--void-2);color:#120E33}
+
+.tab{position:relative}
+.tbadge{display:inline-block;min-width:18px;height:18px;border-radius:9px;background:var(--gold);color:#2A1C00;font-family:var(--num);font-size:.68rem;font-weight:700;line-height:18px;padding:0 5px;margin-left:5px;vertical-align:1px;text-align:center}
+.chat .tab[aria-pressed="true"] .tbadge{display:none}
+
+/* big modals (commands, character data): roomy, full descriptions */
+dialog.wide{max-width:min(880px,calc(100vw - 24px));max-height:88dvh;overflow:auto;padding:20px 22px}
+.mhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:-20px;background:var(--cloud);padding:8px 0 10px;margin-top:-8px;z-index:2}
+.mhead .pt{width:48px;height:48px;border-radius:50%}
+.mhead h1{font-size:1.25rem}
+.cgroup{margin-top:16px}
+.cgroup h2{font-size:.85rem;color:var(--ink-2);border-bottom:1px solid var(--line);padding-bottom:4px}
+.clist{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:8px}
+.clist.dicegrid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+.citem{background:var(--mist);border-radius:12px;padding:10px 12px;cursor:pointer;border:1.5px solid transparent;text-align:left}
+.citem:hover,.citem:focus-visible{border-color:var(--pink);outline:none}
+.citem.used{opacity:.6}
+.ctop{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.cname{font-size:1rem;font-weight:800}
+.tpcost{font-family:var(--num);font-weight:700;font-size:.8rem;background:var(--pink);color:#fff;border-radius:999px;padding:0 8px}
+.tpcost.short{background:var(--red)}
+.citem .itext{font-size:.88rem;line-height:1.7;margin-top:4px}
+.linkBtn{border:none;background:none;color:var(--pink);font-weight:700;font-size:.82rem;padding:6px 0 0;cursor:pointer}
+.sheetBody .grp{font-size:.85rem}
+@media (max-width:640px){
+  dialog.wide{max-width:100vw;width:100vw;max-height:94dvh;margin:auto 0 0;border-radius:20px 20px 0 0;padding:16px}
+  .clist{grid-template-columns:1fr}
+}
+.sheetBody .item{background:var(--mist);border:none;border-radius:12px;padding:10px 12px;margin-top:8px}
+.sheetBody .item .attr{background:var(--cloud)}
+.sheetBody .grp{margin-top:16px;border-bottom:1px solid var(--line);padding-bottom:4px}
+.citem .attr{background:var(--cloud)}
+.back{white-space:nowrap}
+@media (max-width:959px){ .top [data-theme-toggle]{display:none} .viewsel{white-space:nowrap} }
+
+/* chat text sized for long declarations (effect text of 特技・武装 etc.) */
+.log{font-size:.86rem;gap:9px}
+.msg{gap:9px}
+.chat .pt{width:38px;height:38px;border-radius:10px}
+.mname{font-size:.8rem}
+.mtext{line-height:1.6}
+.dice{margin-top:4px;padding:5px 10px}
+.dice .dres{font-size:.76rem}
+.dice .dtotal{font-size:1.25rem}
+.le{font-size:.8rem;line-height:1.6}
+.cmdmsg{margin-top:2px;background:#1E1E1E;border-left:3px solid var(--pink);border-radius:4px 10px 10px 4px;padding:6px 10px}
+.cmdhead{font-weight:800;font-size:.84rem;color:#FFFFFF}
+.cmdbody{white-space:pre-wrap;word-break:break-word;font-size:.8rem;line-height:1.6;color:#C9C9C9;margin-top:2px}
+.composer textarea{font-size:.9rem;min-height:4.2em}
+
+/* colour swatches */
+.swatch{width:22px;height:22px;border-radius:50%;border:2px solid rgba(255,255,255,.85);padding:0;flex:none;cursor:pointer}
+.swatch.small{width:14px;height:14px;border-width:1.5px}
+.swatch:disabled{cursor:default}
+.swatches{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:10px}
+.swatch.big{width:100%;height:auto;aspect-ratio:1/1;border:3px solid transparent}
+.swatch.big.on{border-color:var(--ink)}
+input[type=color]{width:44px;height:30px;padding:0;border:1.5px solid var(--line);border-radius:8px;background:none}
+.gv.ro{grid-template-columns:22px 2.2em auto 1fr}
+
+/* ===== chat: ココフォリア-like (gray sheet, Roboto/Noto Sans JP, hairline dividers) ===== */
+.chat{--cloud:#2B2C30;--mist:#36383D;--line:rgba(255,255,255,.12);--ink:#FFFFFF;--ink-2:#9A9A9E;
+  background:#2B2C30;font-family:Roboto,"Noto Sans JP","Hiragino Sans","Yu Gothic",sans-serif;font-weight:400;padding:10px 12px 12px}
+.chat .tabs{border-bottom:1px solid rgba(255,255,255,.12);margin:-2px -12px 0;padding:2px 12px 8px}
+.chat .tab{font-family:"M PLUS 1p",sans-serif}
+.log{gap:0;font-size:.95rem;padding:0 4px 0 0}
+.msg{gap:14px;padding:12px 4px;border-bottom:1px solid rgba(255,255,255,.12);align-items:flex-start}
+.chat .msg .pt{width:56px;height:56px;border-radius:2px;flex:none}
+.chat .msg .pt.none{font-size:1.2rem}
+.mname{font-size:.98rem;font-weight:700;line-height:1.4;margin-bottom:3px}
+.mname .t{font-family:Roboto,sans-serif;font-size:.9rem;font-weight:400;color:#8E8F94;margin-left:0}
+.mtext{font-size:.95rem;line-height:1.55;color:#FFFFFF}
+.le{font-size:.82rem;line-height:1.55;padding:8px 4px 8px 12px;border-bottom:1px solid rgba(255,255,255,.12);color:#C4C5C9;border-left-width:3px}
+.le .who{color:#FFFFFF;font-weight:700}
+.le .t{font-family:Roboto,sans-serif;color:#7E7F84;font-size:.78rem}
+.le.round{border-bottom:1px solid rgba(255,255,255,.12);border-top:none;padding:10px 0}
+.dice{background:#36383D}
+.cmdmsg{background:#36383D}
+.cmdbody{color:#CFCFD3}
+.chat .composer{background:#25262A;border-top:1px solid rgba(255,255,255,.12)}
+.chat .composer textarea,.chat .composer select,.chat .composer input[type=text]{background:#1E1F22;border-color:#45474D}
+.chat .btn{background:#36383D;border-color:#4A4C52}
+
+/* compact turn-order list beside the map */
+.mapwrap{grid-template-columns:118px minmax(0,1fr);gap:10px}
+.order{gap:4px}
+.oitem{grid-template-columns:24px 1fr;column-gap:6px;padding:4px 6px 4px 8px;border-radius:10px}
+.oitem::before{top:6px;bottom:6px;width:3px}
+.oitem .pt{width:24px;height:24px;grid-row:1/3}
+.oitem .oname{font-size:.76rem}
+.oitem .ometa{font-size:.66rem;grid-column:2}
+.oitem .oset{position:absolute;right:2px;bottom:2px;font-size:.68rem;padding:0 4px}
+.oitem.now::after{top:-6px;right:4px;font-size:.6rem;padding:0 6px}
+.chead .swatch{width:16px;height:16px}
+
+.netdot{width:10px;height:10px;border-radius:50%;background:var(--gold);flex:none}
+.netdot[data-s="open"]{background:var(--ok)}
+.netdot[data-s="closed"]{background:var(--red);animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.3}}
+@media (prefers-reduced-motion:reduce){.netdot{animation:none !important}}
+@media (max-width:959px){ #inviteBtn{display:none} }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<dialog id="dlg"><div id="dlgBody"></div></dialog>
+<div id="toast" hidden></div>
+<script>
+'use strict';
+// =====================================================================
+// core: state, actions, visibility
+// Everything that changes a room goes through apply(room, action, by).
+// Everything a viewer may see goes through the view* functions.
+// When moving to a server, these two parts move there unchanged.
+// =====================================================================
+const SUIT = { S: '♠', C: '♣', H: '♥', D: '♦' };
+const RANK = r => ({ 1: 'A', 11: 'J', 12: 'Q', 13: 'K' }[r] || String(r));
+const KIND = { attack: '攻撃', evade: '回避', other: 'その他' };
+const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const clone = o => JSON.parse(JSON.stringify(o));
+
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = crypto.getRandomValues(new Uint32Array(1))[0] % (i + 1);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+// copy 1 uses plain ids (S7); extra decks get a suffix (S7#2) so every card stays unique
+function newDeck(jokers, copies = 1) {
+  const d = [];
+  for (let k = 1; k <= copies; k++) {
+    const tag = k === 1 ? '' : '#' + k;
+    for (const s of 'SCHD') for (let r = 1; r <= 13; r++) d.push(s + r + tag);
+    for (let i = 1; i <= jokers; i++) d.push('X' + i + tag);
+  }
+  return shuffle(d);
+}
+const cardOf = c => c[0] === 'X' ? { joker: true } : { s: c[0], r: parseInt(c.slice(1), 10) };
+const cardText = c => { const k = cardOf(c); return k.joker ? 'JOKER' : SUIT[k.s] + RANK(k.r); };
+function sortCards(cards, mode) {
+  const so = { S: 0, C: 1, H: 2, D: 3 };
+  return [...cards].sort((a, b) => {
+    const x = cardOf(a), y = cardOf(b);
+    if (x.joker || y.joker) return (x.joker ? 1 : 0) - (y.joker ? 1 : 0) || a.localeCompare(b);
+    return mode === 'rank' ? (x.r - y.r || so[x.s] - so[y.s]) : (so[x.s] - so[y.s] || x.r - y.r);
+  });
+}
+
+// Dropbox share link -> direct image link
+function toDirectImage(url) {
+  const s = (url || '').trim();
+  try {
+    const u = new URL(s);
+    if (/(^|\.)dropbox\.com$/.test(u.hostname)) { u.searchParams.delete('dl'); u.searchParams.set('raw', '1'); }
+    return u.toString();
+  } catch (e) { return s; }
+}
+
+// ----- character import format (pw-character v2, v1 also accepted) -----
+const SLOT_SUITS = ['S', 'C', 'H', 'D'];
+// name colours chosen to stay readable on the black chat
+const NAME_COLORS = ['#5DADEC', '#FF6B9A', '#4FD1A5', '#FFB547', '#B48CFF', '#7C8CFF', '#FF8A5C', '#E6E66A', '#FF7A7A', '#FFFFFF', '#9BE15D', '#F28CD8'];
+const isHex = s => typeof s === 'string' && /^#[0-9a-f]{6}$/i.test(s);
+const STAT_KEYS = ['HP', 'TP', 'SS値', '移動値'];
+function normalizeChar(raw) {
+  if (!raw || typeof raw !== 'object') throw new Error('JSONの形になっていません');
+  if (raw.format && raw.format !== 'pw-character') throw new Error(`形式が違います（${raw.format}）`);
+  if (!raw.name || typeof raw.name !== 'string') throw new Error('name（キャラクター名）がありません');
+  const item = x => ({ name: String(x?.name || ''), attrs: x?.attrs && typeof x.attrs === 'object' ? x.attrs : {}, text: String(x?.text || '') });
+  // values: {HP:{max:20}} / {SS値:{value:3}} / {HP:20} (shorthand = max for HP/TP, value otherwise)
+  const stats = {};
+  for (const [k, v] of Object.entries(raw.values || {})) {
+    if (v && typeof v === 'object') {
+      if (Number.isFinite(Number(v.max))) stats[k] = { max: Number(v.max) };
+      else if (Number.isFinite(Number(v.value))) stats[k] = { value: Number(v.value) };
+    } else if (Number.isFinite(Number(v))) stats[k] = (k === 'HP' || k === 'TP') ? { max: Number(v) } : { value: Number(v) };
+  }
+  // weapons: {common:[2], slots:[4 by suit]}; a v1 array becomes common weapons
+  const w = raw.weapons;
+  const slotsFrom = arr => {
+    const out = SLOT_SUITS.map(s => ({ suit: s, ...item(null) }));
+    (Array.isArray(arr) ? arr : []).forEach((x, i) => {
+      const s = SLOT_SUITS.includes(x?.suit) ? x.suit : SLOT_SUITS[i];
+      if (s) out[SLOT_SUITS.indexOf(s)] = { suit: s, ...item(x) };
+    });
+    return out;
+  };
+  const weapons = Array.isArray(w) ? { common: w.map(item), slots: slotsFrom([]) }
+    : { common: Array.isArray(w?.common) ? w.common.map(item) : [], slots: slotsFrom(w?.slots) };
+  // 特殊機能 may sit in core.functions or at the top level (functions)
+  const fnSrc = Array.isArray(raw.core?.functions) ? raw.core.functions : Array.isArray(raw.functions) ? raw.functions : [];
+  const core = raw.core || fnSrc.length ? { ...item(raw.core || { name: '' }), functions: fnSrc.map(item) } : null;
+  return {
+    format: 'pw-character', version: 2,
+    name: raw.name, player: String(raw.player || ''),
+    core, stats,
+    // tp: TP consumed when the 特技 is used (cost is accepted as an older name)
+    skills: Array.isArray(raw.skills) ? raw.skills.map(x => { const t = x?.tp ?? x?.cost; return { ...item(x), tp: t != null && Number.isFinite(Number(t)) ? Number(t) : null }; }) : [],
+    weapons,
+    variations: Array.isArray(raw.variations) ? raw.variations.map(v => ({ name: String(v?.name || 'バリエーション'), slots: slotsFrom(v?.slots) })) : [],
+    wingDrive: raw.wingDrive ? item(raw.wingDrive) : null,
+    portraits: Array.isArray(raw.portraits) ? raw.portraits.filter(p => p && p.url).map(p => ({ label: String(p.label || '立ち絵'), url: toDirectImage(p.url) })) : [],
+    memo: String(raw.memo || ''),
+  };
+}
+const statStart = s => s.max ?? s.value;
+const currentSlots = ch => ch.variation >= 0 && ch.data.variations[ch.variation] ? ch.data.variations[ch.variation].slots : ch.data.weapons.slots;
+const ssOf = ch => Number.isFinite(ch.cur['SS値']) ? ch.cur['SS値'] : (ch.data.stats['SS値'] ? statStart(ch.data.stats['SS値']) : -Infinity);
+// turn order: SS値 high -> low; ties: PC before enemy, then join order
+function turnOrder(room) {
+  return Object.values(room.chars).filter(c => c.side !== 'npc')
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => ssOf(b.c) - ssOf(a.c) || (a.c.side === 'pc' ? 0 : 1) - (b.c.side === 'pc' ? 0 : 1) || a.i - b.i)
+    .map(x => x.c);
+}
+
+function newRoom(name) {
+  return {
+    id: uid('r'), name: name || '新しい部屋', createdAt: Date.now(),
+    settings: { jokers: 2, decks: 1, opsTab: 'battle', digestTab: 'main', gmSeesSecret: true, logValues: true },
+    turn: { round: 1, current: null },
+    chars: {},
+    cards: { deck: newDeck(2), discard: [], hands: { gm: [] } },
+    tabs: [
+      { id: 'main', name: 'メイン' },
+      { id: 'battle', name: '戦闘' },
+      { id: 'chat', name: '雑談' },
+    ],
+    logs: [],
+  };
+}
+
+// seats: 'gm', each PC character id, 'obs'
+const isPcSeat = (room, seat) => !!(room.chars[seat] && room.chars[seat].side === 'pc');
+function seatName(room, seat) {
+  if (seat === 'gm') return 'GM';
+  if (seat === 'obs') return '観戦';
+  return room.chars[seat]?.data.name || '（不明）';
+}
+function canControlChar(room, seat, cid) { return seat === 'gm' || seat === cid; }
+
+class ActionError extends Error {}
+function need(cond, msg) { if (!cond) throw new ActionError(msg); }
+
+function log(room, entry) {
+  // names are stored at the time of logging, so old logs stay readable after a character leaves
+  const extra = { byName: seatName(room, entry.by) };
+  if (entry.seat) extra.seatName = seatName(room, entry.seat);
+  room.logs.push({ id: uid('l'), t: Date.now(), ...extra, ...entry });
+  if (room.logs.length > 5000) room.logs.splice(0, room.logs.length - 5000);
+}
+// essentials (HP/TP changes, cards played, variation switches) also appear in the digest tab (メイン)
+function isImportant(l) {
+  if (l.type === 'play' || l.type === 'variation') return true;
+  if (l.type === 'value') return l.key === 'HP' || l.key === 'TP' || /の(HP|TP)：/.test(l.text || '');
+  return false;
+}
+const digestTab = room => room.tabs.some(t => t.id === room.settings.digestTab) ? room.settings.digestTab : null;
+function logsForTab(room, tabId) {
+  const ops = opsTab(room), dg = digestTab(room);
+  if (tabId === dg && dg !== ops) return room.logs.filter(l => l.tab === tabId || (l.tab === ops && isImportant(l)));
+  return room.logs.filter(l => l.tab === tabId);
+}
+const opsTab = room => room.tabs.some(t => t.id === room.settings.opsTab) ? room.settings.opsTab : room.tabs[0].id;
+
+function apply(room, a, by) {
+  const name = seatName(room, by);
+  const ch = a.cid ? room.chars[a.cid] : null;
+  switch (a.type) {
+    // ----- characters -----
+    case 'addChar': {
+      need(by === 'gm' || a.side === 'pc', '敵やNPCを追加できるのはGMだけです');
+      const data = normalizeChar(a.data);
+      const id = typeof a.id === 'string' && /^c[0-9a-z]{6,30}$/.test(a.id) && !room.chars[a.id] ? a.id : uid('c');
+      const cur = {}; for (const [k, s] of Object.entries(data.stats)) cur[k] = statStart(s);
+      const colors = NAME_COLORS.slice(0, 8);
+      room.chars[id] = { id, side: a.side, data, cur, used: {}, variation: -1, x: null, y: null, portrait: data.portraits[0]?.label || null,
+        color: a.side === 'enemy' ? '#FF7A7A' : colors[Object.keys(room.chars).filter(k => room.chars[k].side !== 'enemy').length % colors.length], owner: by };
+      if (a.side === 'pc') room.cards.hands[id] = room.cards.hands[id] || [];
+      log(room, { tab: opsTab(room), type: 'sys', by, text: `${data.name}（${{ pc: 'PC', enemy: '敵', npc: 'NPC' }[a.side]}）が参加しました` });
+      return id;
+    }
+    case 'updateCharData': {
+      need(ch && canControlChar(room, by, a.cid), 'このキャラクターは編集できません');
+      const data = normalizeChar(a.data);
+      for (const [k, s] of Object.entries(data.stats)) if (!(k in ch.cur)) ch.cur[k] = statStart(s);
+      ch.data = data;
+      if (!(ch.variation < data.variations.length)) ch.variation = -1;
+      if (ch.portrait && !data.portraits.some(p => p.label === ch.portrait)) ch.portrait = data.portraits[0]?.label || null;
+      log(room, { tab: opsTab(room), type: 'sys', by, text: `${data.name}のデータを更新しました` });
+      return;
+    }
+    case 'removeChar': {
+      need(ch && (by === 'gm' || by === a.cid), 'このキャラクターは削除できません');
+      const hand = room.cards.hands[a.cid] || [];
+      room.cards.discard.push(...hand);
+      delete room.cards.hands[a.cid];
+      delete room.chars[a.cid];
+      if (room.turn.current === a.cid) room.turn.current = null;
+      log(room, { tab: opsTab(room), type: 'sys', by, text: `${ch.data.name}が退出しました${hand.length ? `（手札${hand.length}枚は捨て札へ）` : ''}` });
+      return;
+    }
+    case 'setValue': {
+      need(ch && canControlChar(room, by, a.cid), 'このキャラクターの値は変えられません');
+      const before = ch.cur[a.key];
+      const v = Number(a.value);
+      need(Number.isFinite(v), '数値を入れてください');
+      if (before === v) return;
+      ch.cur[a.key] = v;
+      if (room.settings.logValues === false) return;
+      // repeated +/- on the same value within a few seconds are folded into one log line (20 → 14)
+      const last = room.logs[room.logs.length - 1];
+      if (last && last.type === 'value' && !last.cmd && last.cid === a.cid && last.key === a.key && last.by === by && Date.now() - last.t < 8000) {
+        if (last.from === v) room.logs.pop();
+        else { last.to = v; last.t = Date.now(); last.text = `${ch.data.name}の${a.key}：${last.from} → ${v}`; }
+        return;
+      }
+      log(room, { tab: opsTab(room), type: 'value', by, cid: a.cid, key: a.key, from: before, to: v, text: `${ch.data.name}の${a.key}：${before} → ${v}` });
+      return;
+    }
+    case 'toggleUsed': {
+      need(ch && canControlChar(room, by, a.cid), 'このキャラクターは操作できません');
+      const k = `${a.group}:${a.idx}`;
+      ch.used[k] = !ch.used[k];
+      const it = a.group === 'wingDrive' ? ch.data.wingDrive : a.group === 'common' ? ch.data.weapons.common[a.idx]
+        : a.group.startsWith('slot') ? currentSlots(ch)[a.idx] : a.group === 'func' ? ch.data.core?.functions[a.idx] : ch.data[a.group]?.[a.idx];
+      log(room, { tab: opsTab(room), type: 'value', by, text: `${ch.data.name}の「${it?.name || '?'}」を${ch.used[k] ? '使用済み' : '未使用'}にしました` });
+      return;
+    }
+    case 'setPortraits': {
+      need(ch && canControlChar(room, by, a.cid), 'このキャラクターは編集できません');
+      ch.data.portraits = a.portraits.map(p => ({ label: String(p.label || '立ち絵'), url: toDirectImage(p.url) })).filter(p => p.url);
+      if (!ch.data.portraits.some(p => p.label === ch.portrait)) ch.portrait = ch.data.portraits[0]?.label || null;
+      return;
+    }
+    case 'setColor': {
+      need(ch && canControlChar(room, by, a.cid), 'このキャラクターの色は変えられません');
+      need(isHex(a.color), '色の指定が正しくありません');
+      ch.color = a.color.toUpperCase();
+      return;
+    }
+    case 'setPortrait': { need(ch && canControlChar(room, by, a.cid), '操作できません'); ch.portrait = a.label; return; }
+
+    case 'variation': {
+      need(ch && canControlChar(room, by, a.cid), 'このキャラクターは操作できません');
+      const i = a.idx | 0;
+      need(i === -1 || ch.data.variations[i], 'そのバリエーションはありません');
+      if (ch.variation === i) return;
+      ch.variation = i;
+      log(room, { tab: opsTab(room), type: 'variation', by, cid: a.cid, text: `${ch.data.name}の武装を「${i === -1 ? '基本' : ch.data.variations[i].name}」に切り替えました` });
+      return;
+    }
+
+    // ----- turn -----
+    case 'setTurn': {
+      need(by === 'gm', '手番を指定できるのはGMだけです');
+      need(a.cid === null || room.chars[a.cid], 'キャラクターが見つかりません');
+      room.turn.current = a.cid;
+      if (a.cid) log(room, { tab: opsTab(room), type: 'turn', by, text: `${room.chars[a.cid].data.name}の手番です` });
+      return;
+    }
+    case 'nextTurn': {
+      need(by === 'gm' || by === room.turn.current, '手番を進められるのは、GMか手番のPCだけです');
+      const order = turnOrder(room);
+      const i = order.findIndex(c => c.id === room.turn.current);
+      const next = order[i + 1] || null;
+      room.turn.current = next ? next.id : null;
+      log(room, { tab: opsTab(room), type: 'turn', by, text: next ? `${next.data.name}の手番です` : '全員の手番が終わりました。ラウンド終了です' });
+      return;
+    }
+    case 'endRound': {
+      need(by === 'gm', 'ラウンドを進められるのはGMだけです');
+      log(room, { tab: opsTab(room), type: 'round', by, text: `第${room.turn.round}ラウンド終了（手札交換のタイミングです）` });
+      room.turn.round += 1;
+      room.turn.current = turnOrder(room)[0]?.id || null;
+      log(room, { tab: opsTab(room), type: 'round', by, text: `第${room.turn.round}ラウンド開始${room.turn.current ? `：${room.chars[room.turn.current].data.name}の手番です` : ''}` });
+      return;
+    }
+    case 'resetRound': {
+      need(by === 'gm', 'ラウンドを戻せるのはGMだけです');
+      room.turn = { round: 1, current: turnOrder(room)[0]?.id || null };
+      log(room, { tab: opsTab(room), type: 'round', by, text: `戦闘開始：第1ラウンド${room.turn.current ? `、${room.chars[room.turn.current].data.name}の手番です` : ''}` });
+      return;
+    }
+
+    // ----- map -----
+    case 'move': {
+      need(ch && canControlChar(room, by, a.cid), 'このコマは動かせません');
+      const from = ch.x == null ? '盤外' : coordName(ch.x, ch.y);
+      if (a.x == null) { ch.x = ch.y = null; }
+      else { need(a.x >= 0 && a.x < 8 && a.y >= 0 && a.y < 8, 'マップの外です'); ch.x = a.x; ch.y = a.y; }
+      const to = ch.x == null ? '盤外' : coordName(ch.x, ch.y);
+      if (from !== to) log(room, { tab: opsTab(room), type: 'move', by, text: `${ch.data.name}：${from} → ${to}` });
+      return;
+    }
+
+    // ----- cards -----
+    case 'draw': {
+      const seat = a.seat || by;
+      need(seat === by || by === 'gm', '他の人の手札は操作できません');
+      need(seat === 'gm' || isPcSeat(room, seat), 'この席は手札を持てません');
+      const n = Math.max(1, Math.min(20, a.n | 0));
+      need(room.cards.deck.length >= n, `山札が足りません（残り${room.cards.deck.length}枚）`);
+      const got = room.cards.deck.splice(0, n);
+      (room.cards.hands[seat] = room.cards.hands[seat] || []).push(...got);
+      // a GM draw only shows how many; PC draws are open to the PC side
+      log(room, { tab: opsTab(room), type: 'draw', by, seat, n, cards: got, secretCards: seat === 'gm' });
+      return;
+    }
+    case 'play': {
+      const seat = a.seat || by;
+      need(seat === by || by === 'gm', '他の人の手札は出せません');
+      const hand = room.cards.hands[seat] || [];
+      need(a.cards.length > 0, 'カードを選んでください');
+      need(a.cards.every(c => hand.includes(c)), '手札にないカードが含まれています');
+      room.cards.hands[seat] = hand.filter(c => !a.cards.includes(c));
+      room.cards.discard.push(...a.cards);
+      log(room, { tab: opsTab(room), type: 'play', by, seat, cards: a.cards, kind: a.kind, memo: (a.memo || '').trim(), as: a.as || null });
+      return;
+    }
+    case 'pick': { // pick a card up from the discard pile (card effects)
+      const seat = a.seat || by;
+      need(seat === by || by === 'gm', '他の人の手札には拾えません');
+      need(seat === 'gm' || isPcSeat(room, seat), 'この席は手札を持てません');
+      const i = room.cards.discard.lastIndexOf(a.card);
+      need(i >= 0, 'そのカードは捨て札にありません');
+      room.cards.discard.splice(i, 1);
+      (room.cards.hands[seat] = room.cards.hands[seat] || []).push(a.card);
+      log(room, { tab: opsTab(room), type: 'pick', by, seat, cards: [a.card], memo: (a.memo || '').trim() });
+      return;
+    }
+    case 'give': { // hand cards to an ally (e.g. end-of-round exchange)
+      const seat = a.seat || by;
+      need(seat === by || by === 'gm', '他の人の手札は渡せません');
+      need(isPcSeat(room, seat) && isPcSeat(room, a.to) && seat !== a.to, '渡せるのは味方のPC同士だけです');
+      const hand = room.cards.hands[seat] || [];
+      need(a.cards.length && a.cards.every(c => hand.includes(c)), '手札にないカードが含まれています');
+      room.cards.hands[seat] = hand.filter(c => !a.cards.includes(c));
+      (room.cards.hands[a.to] = room.cards.hands[a.to] || []).push(...a.cards);
+      log(room, { tab: opsTab(room), type: 'give', by, seat, to: a.to, toName: seatName(room, a.to), cards: a.cards });
+      return;
+    }
+    case 'shuffleBack': {
+      const n = room.cards.discard.length;
+      need(n > 0, '捨て札がありません');
+      room.cards.deck = shuffle([...room.cards.deck, ...room.cards.discard]);
+      room.cards.discard = [];
+      log(room, { tab: opsTab(room), type: 'sys', by, text: `捨て札${n}枚を山札に戻してシャッフルしました（山札${room.cards.deck.length}枚）` });
+      return;
+    }
+    case 'resetDeck': {
+      need(by === 'gm', '山札の作り直しはGMだけができます');
+      room.cards.deck = newDeck(room.settings.jokers, room.settings.decks || 1);
+      room.cards.discard = [];
+      for (const k of Object.keys(room.cards.hands)) room.cards.hands[k] = [];
+      log(room, { tab: opsTab(room), type: 'sys', by, text: `山札を作り直しました（${room.cards.deck.length}枚、全員の手札は空になりました）` });
+      return;
+    }
+    case 'addDeck': { // more players -> shuffle one more full deck into the draw pile
+      need(by === 'gm', '山札の追加はGMだけができます');
+      const k = (room.settings.decks || 1) + 1;
+      const extra = newDeck(room.settings.jokers, k).filter(id => id.endsWith('#' + k));
+      room.settings.decks = k;
+      room.cards.deck = shuffle([...room.cards.deck, ...extra]);
+      log(room, { tab: opsTab(room), type: 'sys', by, text: `山札にトランプを1組追加してシャッフルしました（${k}組、山札${room.cards.deck.length}枚）` });
+      return;
+    }
+    case 'moveCard': { // GM correction: discard/hand -> hand/discard/deck top
+      need(by === 'gm', 'カードの補正はGMだけができます');
+      const take = from => {
+        const arr = from === 'discard' ? room.cards.discard : room.cards.hands[from];
+        need(arr && arr.includes(a.card), 'そのカードは見つかりません');
+        arr.splice(arr.indexOf(a.card), 1);
+      };
+      take(a.from);
+      if (a.to === 'discard') room.cards.discard.push(a.card);
+      else if (a.to === 'deck') room.cards.deck.unshift(a.card);
+      else (room.cards.hands[a.to] = room.cards.hands[a.to] || []).push(a.card);
+      const where = s => s === 'discard' ? '捨て札' : s === 'deck' ? '山札の上' : `${seatName(room, s)}の手札`;
+      const hidden = a.from === 'gm' || a.to === 'gm' || a.to === 'deck';
+      log(room, { tab: opsTab(room), type: 'fix', by, text: `補正：${hidden ? 'カード1枚' : cardText(a.card)}を${where(a.from)}から${where(a.to)}へ移しました` });
+      return;
+    }
+
+    // ----- chat -----
+    case 'say': {
+      const tab = room.tabs.find(t => t.id === a.tab);
+      need(tab, 'タブが見つかりません');
+      need(canSeeTab(room, tab, by), 'このタブには発言できません');
+      const text = (a.text || '').trim();
+      need(text, '空の発言は送れません');
+      if (a.as) need(room.chars[a.as] && canControlChar(room, by, a.as), 'そのキャラクターとしては発言できません');
+      // a 特技 command spends its TP automatically; refuse before anything is logged if TP is short
+      let tpCh = null;
+      if (a.as && Number.isFinite(a.spendTP) && a.spendTP > 0) {
+        tpCh = room.chars[a.as];
+        need(Number.isFinite(tpCh.cur.TP), 'このキャラクターはTPを持っていません');
+        need(tpCh.cur.TP >= a.spendTP, `TPが足りません（現在${tpCh.cur.TP}、必要${a.spendTP}）`);
+      }
+      const pUrl = a.as ? (room.chars[a.as].data.portraits.find(p => p.label === a.portrait) || {}).url || null : null;
+      const dice = parseDice(text);
+      const color = a.as ? room.chars[a.as].color : (isHex(a.color) ? a.color : null);
+      log(room, { tab: tab.id, type: 'say', by, as: a.as || null, name: a.as ? room.chars[a.as].data.name : (a.name || name), color, portrait: a.portrait || null, portraitUrl: pUrl, text, cmd: a.cmd || null, dice });
+      if (tpCh) {
+        const before = tpCh.cur.TP;
+        tpCh.cur.TP = before - a.spendTP;
+        log(room, { tab: opsTab(room), type: 'value', by, cid: tpCh.id, key: 'TP', from: before, to: tpCh.cur.TP, cmd: true, text: `${tpCh.data.name}のTP：${before} → ${tpCh.cur.TP}（${a.cmd || '特技'}）` });
+      }
+      return;
+    }
+    case 'addTab': {
+      need((a.name || '').trim(), 'タブ名を入れてください');
+      const t = { id: typeof a.id === 'string' && /^t[0-9a-z]{6,30}$/.test(a.id) && !room.tabs.some(x => x.id === a.id) ? a.id : uid('t'), name: a.name.trim() };
+      if (a.secret) { t.secret = true; t.members = [...new Set([...(a.members || []), by])]; }
+      room.tabs.push(t);
+      return t.id;
+    }
+    case 'editTab': {
+      const t = room.tabs.find(x => x.id === a.tab); need(t, 'タブが見つかりません');
+      need(by === 'gm' || (t.members || []).includes(by), 'このタブは編集できません');
+      if (a.name) t.name = a.name.trim();
+      if (t.secret && a.members) t.members = [...new Set(a.members)];
+      return;
+    }
+    case 'removeTab': {
+      need(by === 'gm', 'タブの削除はGMだけができます');
+      need(room.tabs.length > 1, '最後のタブは消せません');
+      room.tabs = room.tabs.filter(t => t.id !== a.tab);
+      room.logs = room.logs.filter(l => l.tab !== a.tab);
+      return;
+    }
+    case 'settings': {
+      need(by === 'gm', '部屋の設定はGMだけが変えられます');
+      Object.assign(room.settings, a.patch);
+      if ('name' in a) room.name = a.name;
+      return;
+    }
+  }
+  throw new ActionError('不明な操作です');
+}
+// upgrade rooms saved by an older version
+function migrateRoom(room) {
+  room.turn = room.turn || { round: 1, current: null };
+  room.settings.decks = room.settings.decks || 1;
+  if (!('digestTab' in room.settings)) room.settings.digestTab = 'main';
+  for (const ch of Object.values(room.chars)) {
+    if (!ch.data.stats || ch.data.skills.some(s => !('tp' in s))) { try { ch.data = normalizeChar({ ...ch.data, values: ch.data.stats ? Object.fromEntries(Object.entries(ch.data.stats)) : ch.data.values }); } catch (e) {} }
+    if (ch.variation == null) ch.variation = -1;
+  }
+  return room;
+}
+// ----- dice (BCDice-like): 2D6+1>=8 / 1d100<=50 / choice[A,B,C] / S1D6 (secret) -----
+// The first word is the command, the rest is a comment. Rolled on the authority side (here: apply()).
+function rand(n) { return crypto.getRandomValues(new Uint32Array(1))[0] % n; }
+function parseDice(raw) {
+  const text = raw.trim();
+  const sp = text.search(/\s/);
+  let head = (sp < 0 ? text : text.slice(0, sp)).normalize('NFKC');
+  let rest = sp < 0 ? '' : text.slice(sp).trim();
+  let secret = false;
+  if (/^s(?=[\dd(]|choice)/i.test(head)) { secret = true; head = head.slice(1); }
+  // choice[A,B,C] / choice(A,B,C) / choice A B C
+  let m = head.match(/^choice[\[(](.*)[\])]$/i);
+  if (m || /^choice$/i.test(head)) {
+    let items;
+    if (m) items = m[1].split(/[,、，]/);
+    else { items = rest.split(/\s+/); rest = ''; }
+    items = items.map(s => s.trim()).filter(Boolean);
+    if (items.length < 2) return null;
+    const pick = items[rand(items.length)];
+    return { secret, comment: rest, expr: `choice[${items.join(',')}]`, result: `(choice[${items.join(',')}]) ＞ ${pick}`, total: pick, kind: 'choice' };
+  }
+  m = head.match(/^([0-9dD+\-]+)(?:(>=|<=|<>|>|<|=)(-?\d+))?$/);
+  if (!m || !/\d*[dD]\d+/.test(m[1])) return null;
+  const terms = m[1].match(/[+\-]?[^+\-]+/g);
+  if (!terms) return null;
+  let total = 0, parts = [], count = 0;
+  for (const t of terms) {
+    const sign = t[0] === '-' ? -1 : 1, body = t.replace(/^[+\-]/, '');
+    const d = body.match(/^(\d*)[dD](\d+)$/);
+    if (d) {
+      const n = d[1] === '' ? 1 : +d[1], f = +d[2];
+      if (n < 1 || n > 100 || f < 1 || f > 1000) return null;
+      count += n; if (count > 200) return null;
+      const rolls = Array.from({ length: n }, () => rand(f) + 1);
+      const s = rolls.reduce((a, b) => a + b, 0);
+      total += sign * s;
+      parts.push(`${sign < 0 ? '-' : parts.length ? '+' : ''}${s}[${rolls.join(',')}]`);
+    } else if (/^\d+$/.test(body)) { total += sign * +body; parts.push(`${sign < 0 ? '-' : '+'}${body}`); }
+    else return null;
+  }
+  const expr = m[1].toUpperCase() + (m[2] ? m[2] + m[3] : '');
+  let ok = null;
+  if (m[2]) {
+    const t = +m[3];
+    ok = { '>=': total >= t, '<=': total <= t, '>': total > t, '<': total < t, '=': total === t, '<>': total !== t }[m[2]];
+  }
+  const detail = parts.join('');
+  const showDetail = !(terms.length === 1 && /^\d+\[\d+\]$/.test(detail) && detail.startsWith(String(total) + '[') && !detail.includes(','));
+  return { secret, comment: rest, expr, total, ok, kind: 'dice',
+    result: `(${expr}) ＞ ${showDetail ? detail + ' ＞ ' : ''}${total}${ok == null ? '' : ok ? ' ＞ 成功' : ' ＞ 失敗'}` };
+}
+
+const coordName = (x, y) => 'ABCDEFGH'[x] + (y + 1);
+
+// ----- visibility -----
+function canSeeTab(room, tab, seat) {
+  if (!tab.secret) return true;
+  if (seat === 'gm' && room.settings.gmSeesSecret) return true;
+  return (tab.members || []).includes(seat);
+}
+// hands: the PC side sees every PC hand; GM's hand is only a count for everyone else
+function viewHand(room, owner, viewer) {
+  const hand = room.cards.hands[owner] || [];
+  if (owner === 'gm') return viewer === 'gm' ? hand : null;
+  return hand;
+}
+function viewLog(room, l, viewer) {
+  const tab = room.tabs.find(t => t.id === l.tab);
+  if (!tab || !canSeeTab(room, tab, viewer)) return null;
+  if (l.type === 'draw' && l.secretCards && viewer !== 'gm') return { ...l, cards: null };
+  if (l.type === 'say' && l.dice && l.dice.secret && viewer !== 'gm' && viewer !== l.by) return { ...l, text: '', dice: { secret: true, hidden: true } };
+  return l;
+}
+
+// what one seat may receive (server -> browser). Logs are sent separately through viewLog.
+function viewRoom(room, seat) {
+  const { logs, ...rest } = room;
+  const r = JSON.parse(JSON.stringify(rest));
+  r.cards.deck = Array(room.cards.deck.length).fill('?');
+  if (seat !== 'gm') r.cards.hands.gm = Array((room.cards.hands.gm || []).length).fill('?');
+  r.tabs = r.tabs.filter(t => canSeeTab(room, t, seat));
+  return r;
+}
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, ActionError, normalizeChar };
+}
+// =====================================================================
+// local storage + UI
+// =====================================================================
+const ONLINE = !!window.PW_ONLINE;
+const KEY = 'pw-local-v1';
+let DB = { rooms: {} };
+if (!ONLINE) { try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.rooms) DB = s; } catch (e) {} }
+Object.values(DB.rooms).forEach(migrateRoom);
+const persist = () => { if (ONLINE) return; try { localStorage.setItem(KEY, JSON.stringify(DB)); } catch (e) { toast('保存できませんでした（容量がいっぱいかもしれません）'); } };
+const UIKEY = 'pw-local-ui';
+let U = {}; try { U = JSON.parse(localStorage.getItem(UIKEY)) || {}; } catch (e) {}
+const saveU = () => { try { localStorage.setItem(UIKEY, JSON.stringify(U)); } catch (e) {} };
+const ui = { sel: [], memo: '', selTok: null, drawN: 1, history: [], palette: false, cmd: null, openSheets: new Set(), seenTab: {} };
+const roomUI = rid => (U[rid] = U[rid] || { viewer: 'gm', tab: 'main', sort: 'suit', as: '', name: '' });
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const route = () => {
+  const h = location.hash.replace(/^#\/?/, '').split('/');
+  return h[0] === 'r' && h[1] ? { view: 'room', id: h[1], gmKey: h[2] === 'gm' ? h[3] : null } : { view: 'list' };
+};
+const curRoom = () => { const r = route(); return r.view === 'room' ? DB.rooms[r.id] : null; };
+
+// run an action as the current viewpoint; returns FAIL when it was refused
+const FAIL = Symbol('fail');
+function act(a, opts = {}) {
+  const room = curRoom(); if (!room) return;
+  const ru = roomUI(room.id);
+  if (ONLINE) {
+    if (a.type === 'addChar' && !a.id) a.id = uid('c');
+    if (a.type === 'addTab' && !a.id) a.id = uid('t');
+    let ret;
+    try { ret = apply(JSON.parse(JSON.stringify(room)), a, ru.viewer); }   // check on a copy; the server decides
+    catch (e) { toast(e && e.message ? e.message : '操作できませんでした'); return FAIL; }
+    return netSend({ t: 'act', a }) ? ret : FAIL;
+  }
+  const before = JSON.stringify(room);
+  try {
+    const ret = apply(room, a, a.by || ru.viewer);
+    ui.history.push(before); if (ui.history.length > 30) ui.history.shift();
+    persist();
+    if (!opts.silent) renderRoom();
+    return ret;
+  } catch (e) {
+    toast(e && e.message ? e.message : '操作できませんでした');
+    return FAIL;
+  }
+}
+
+let toastT;
+function toast(m) { const t = $('toast'); t.textContent = m; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 2800); }
+
+// ---------------- room list ----------------
+function renderListOnline() {
+  const list = recentRooms(), keys = gmKeys();
+  $('app').innerHTML = `
+    <div class="row" style="justify-content:flex-end;padding-top:8px"><button class="btn small ghost" data-theme-toggle></button></div>
+    <div class="hero"><h1>プリンセスウイング卓</h1>
+    <p>トランプとマップで戦う、武装少女RPGのセッション部屋。部屋のURLを仲間に送れば、同じ部屋に入れます。</p></div>
+    <div class="panel">
+      <h2>最近入った部屋</h2>
+      <div class="roomlist">${list.length ? list.map(r => `
+        <div class="room"><a href="#/r/${r.id}">${esc(r.name)}</a>${keys[r.id] ? '<span class="attr">GM</span>' : ''}
+          <button class="btn small ghost" data-forget="${r.id}">一覧から消す</button></div>`).join('') : '<p class="muted">まだありません。GMから届いた部屋のURLを開くと、ここに並びます。</p>'}
+      </div>
+    </div>
+    <div class="panel" style="margin-top:14px">
+      <h2>GMとして部屋を作る</h2>
+      <div class="row">
+        <input type="text" id="newRoomName" placeholder="部屋の名前（例：第3話 空に焦がれる少女）" style="flex:1;min-width:12em">
+        <input type="text" id="newRoomPass" placeholder="作成用の合言葉（設定している場合）" style="width:14em">
+        <button class="btn primary" id="newRoom">部屋を作る</button>
+      </div>
+      <p class="muted">作った人のブラウザにGMキーが保存されます。別の端末でGMをするときは、部屋の設定にある「GM用リンク」を使ってください。</p>
+    </div>`;
+  if (typeof applyTheme === 'function') applyTheme();
+  $('newRoom').onclick = async () => {
+    try { const j = await createOnlineRoom($('newRoomName').value.trim(), $('newRoomPass').value); NET.wantSeat = 'gm'; location.hash = `#/r/${j.id}`; }
+    catch (e) { toast(e.message); }
+  };
+}
+function renderList() {
+  if (ONLINE) return renderListOnline();
+  const rooms = Object.values(DB.rooms).sort((a, b) => b.createdAt - a.createdAt);
+  $('app').innerHTML = `
+    <div class="row" style="justify-content:flex-end;padding-top:8px"><button class="btn small ghost" data-theme-toggle></button></div>
+    <div class="hero"><h1>プリンセスウイング卓</h1>
+    <p>トランプとマップで戦う、武装少女RPGのセッション部屋。ローカル版はこのブラウザの中だけで動きます。</p></div>
+    <div class="panel">
+      <h2>部屋</h2>
+      <div class="roomlist">${rooms.length ? rooms.map(r => `
+        <div class="room"><a href="#/r/${r.id}">${esc(r.name)}</a>
+          <span class="muted">${Object.keys(r.chars).length}キャラ・ログ${r.logs.length}件</span>
+          <button class="btn small" data-export="${r.id}">書き出し</button>
+          <button class="btn small danger" data-delroom="${r.id}">削除</button></div>`).join('') : '<p class="muted">まだ部屋がありません</p>'}
+      </div>
+      <div class="row" style="margin-top:12px">
+        <input type="text" id="newRoomName" placeholder="部屋の名前（例：第3話 空に焦がれる少女）" style="flex:1">
+        <button class="btn primary" id="newRoom">部屋を作る</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label class="btn small">書き出した部屋を読み込む<input type="file" id="importRoom" accept=".json,application/json" hidden></label>
+      </div>
+    </div>`;
+  if (typeof applyTheme === 'function') applyTheme();
+  $('newRoom').onclick = () => {
+    const r = newRoom($('newRoomName').value.trim());
+    DB.rooms[r.id] = r; persist(); location.hash = `#/r/${r.id}`;
+  };
+  $('importRoom').onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      const r = JSON.parse(await f.text());
+      if (!r || !r.cards || !r.chars || !r.tabs) throw new Error();
+      r.id = uid('r'); DB.rooms[r.id] = r; persist(); renderList(); toast(`「${r.name}」を読み込みました`);
+    } catch (err) { toast('部屋のファイルとして読み込めませんでした'); }
+  };
+}
+function download(name, text) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// ---------------- room ----------------
+function renderRoom() {
+  const room = curRoom();
+  if (!room && ONLINE) {
+    const r = route();
+    if (r.gmKey) { saveGmKey(r.id, r.gmKey); location.replace(`#/r/${r.id}`); return; }
+    if (NET.roomId !== r.id) netJoin(r.id, gmKeys()[r.id] ? 'gm' : (NET.wantSeat || 'obs'));
+    $('app').innerHTML = `<p class="loading" style="padding:40vh 0;text-align:center">部屋に入っています…<br><span class="muted">サーバーが眠っていた場合は、起きるまで30秒ほどかかります</span></p>`;
+    return;
+  }
+  if (!room) { location.hash = '#/'; return; }
+  const ru = roomUI(room.id);
+  const seats = [...(!ONLINE || gmKeys()[room.id] ? [['gm', 'GM']] : []), ...Object.values(room.chars).filter(c => c.side === 'pc').map(c => [c.id, c.data.name]), ['obs', '観戦']];
+  if (!seats.some(s => s[0] === ru.viewer)) ru.viewer = ONLINE ? 'obs' : 'gm';
+  if (!room.tabs.some(t => t.id === ru.tab && canSeeTab(room, t, ru.viewer))) ru.tab = room.tabs.find(t => canSeeTab(room, t, ru.viewer))?.id;
+  if (!$('roomShell') || $('roomShell').dataset.id !== room.id) {
+    $('app').innerHTML = `
+      <div id="roomShell" data-id="${room.id}">
+        <header class="top"><a class="back" href="#/">部屋一覧</a><h1 id="roomTitle"></h1>${ONLINE ? '<span class="netdot" id="netDot" data-s="connecting"></span><button class="btn small ghost" id="inviteBtn">招待リンク</button>' : ''}<span class="grow"></span>
+          <label class="viewsel" title="ローカル版の確認用です。選んだ人から見える情報だけが表示されます">視点<select id="viewer"></select></label>
+          <button class="btn small ghost" data-theme-toggle></button>
+          <button class="btn small ghost" id="undoBtn" title="直前の操作を取り消します（ローカル版のみ）">1つ戻す</button>
+          <button class="btn small ghost" id="setBtn">部屋の設定</button></header>
+        <div class="layout">
+          <div class="mainPane">
+            <section class="skyP" id="mapP"></section>
+            <section class="tray" id="cardsP"></section>
+            <section class="panel" id="charsP"></section>
+          </div>
+          <div class="chatPane">
+            <section class="panel chat" id="chatP">
+              <div class="tabs" id="tabs"></div>
+              <div class="log" id="chatLog"></div>
+              <div class="composer">
+                <div class="row" id="tpRow" hidden><span id="tpInfo" style="flex:1"></span><button class="btn small" id="cmdClear">コマンドをやめる</button></div>
+                <div class="speak">
+                  <span id="speakFace"></span><button class="swatch" id="colorBtn" title="名前の色" aria-label="名前の色を選ぶ"></button>
+                  <select id="asSel" aria-label="発言するキャラクター"></select><select id="ptSel" aria-label="立ち絵"></select>
+                  <input type="text" id="freeName" placeholder="名前（NPCなど）">
+                </div>
+                <textarea id="sayText" rows="3"></textarea>
+                <div class="row"><button class="btn small" id="palBtn" aria-expanded="false">コマンド</button><button class="btn small ghost" id="copyLog">ログをコピー</button><span style="flex:1"></span><button class="btn primary" id="sayBtn">送信</button></div>
+              </div>
+            </section>
+          </div>
+        </div>
+        <nav class="mnav" aria-label="表示の切り替え">
+          <button data-pane="board">盤面</button>
+          <button data-pane="chat">チャット<span class="badge" id="unread" hidden></span></button>
+        </nav>
+      </div>`;
+    bindRoomStatic();
+  }
+  $('roomTitle').textContent = room.name;
+  if (ONLINE) netStatus(NET.status);
+  if (typeof applyTheme === 'function') applyTheme();
+  // phones show one pane at a time (盤面 / チャット); wide screens show both
+  ru.pane = ru.pane || 'board';
+  $('roomShell').dataset.pane = ru.pane;
+  document.querySelectorAll('.mnav [data-pane]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.pane === ru.pane)));
+  $('viewer').innerHTML = seats.map(([v, n]) => `<option value="${v}" ${v === ru.viewer ? 'selected' : ''}>${esc(n)}</option>`).join('');
+  $('setBtn').hidden = ru.viewer !== 'gm';
+  $('undoBtn').disabled = !ui.history.length;
+  $('undoBtn').hidden = ONLINE;
+  computeUnread(room, ru);
+  renderMap(room, ru); renderCards(room, ru); renderChat(room, ru); renderChars(room, ru);
+  if (typeof refreshModal === 'function' && ui.modal && $('dlg').open) refreshModal();
+  const total = ui.unreadTotal;
+  $('unread').hidden = total <= 0; $('unread').textContent = total > 99 ? '99+' : total;
+  document.title = (total > 0 ? `(${total}) ` : '') + room.name;
+  saveU();
+}
+
+// unread counts per tab, tracked by log id: a log read in one tab (e.g. an HP change shown in
+// both メイン and 戦闘) is read everywhere. The open tab counts as read while the chat is on screen.
+function computeUnread(room, ru) {
+  const v = ru.viewer, key = room.id + ':' + v;
+  const chatOnScreen = ru.pane === 'chat' || matchMedia('(min-width:960px)').matches;
+  let seen = ui.seenTab[key];
+  const lists = {};
+  for (const t of room.tabs) if (canSeeTab(room, t, v)) lists[t.id] = logsForTab(room, t.id).filter(l => l.by !== v && viewLog(room, l, v));
+  if (!seen) { seen = ui.seenTab[key] = new Set(); Object.values(lists).forEach(list => list.forEach(l => seen.add(l.id))); }
+  if (chatOnScreen && lists[ru.tab]) lists[ru.tab].forEach(l => seen.add(l.id));
+  ui.unread = {}; const ids = new Set();
+  for (const [tid, list] of Object.entries(lists)) {
+    const un = list.filter(l => !seen.has(l.id));
+    ui.unread[tid] = un.length; un.forEach(l => ids.add(l.id));
+  }
+  ui.unreadTotal = ids.size;
+}
+
+// ---------------- map ----------------
+// a diagonal step counts as 2 squares
+const dist = (room, a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+function tokHtml(c, sel) {
+  const p = c.data.portraits.find(x => x.label === c.portrait) || c.data.portraits[0];
+  const down = Object.keys(c.cur).includes('HP') && c.cur.HP <= 0;
+  return `<div class="tok ${c.side === 'enemy' ? 'enemy' : 'pc'} ${sel ? 'sel' : ''} ${down ? 'down' : ''}" data-tok="${c.id}" title="${esc(c.data.name)}" style="${c.side !== 'enemy' ? `background:${c.color}` : ''}">${p ? `<img src="${esc(p.url)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : esc(c.data.name.slice(0, 2))}</div>`;
+}
+function renderMap(room, ru) {
+  const chars = Object.values(room.chars);
+  const sel = ui.selTok && room.chars[ui.selTok];
+  const at = {}; chars.forEach(c => { if (c.x != null) (at[c.x + ',' + c.y] = at[c.x + ',' + c.y] || []).push(c); });
+  let cells = '';
+  for (let y = 0; y < 8; y++) {
+    cells += `<div class="coord">${y + 1}</div>`;
+    for (let x = 0; x < 8; x++) {
+      const list = at[x + ',' + y] || [];
+      const d = sel && sel.x != null ? dist(room, sel, { x, y }) : null;
+      cells += `<div class="cell ${(x + y) % 2 ? 'alt' : ''} ${list.length > 1 ? 'multi' : ''} ${sel ? 'target' : ''}" data-cell="${x},${y}" aria-label="${coordName(x, y)}">
+        ${list.map(c => tokHtml(c, sel && c.id === sel.id)).join('')}${d != null && d > 0 ? `<span class="dist">${d}</span>` : ''}</div>`;
+    }
+  }
+  cells += `<div></div>` + [...'ABCDEFGH'].map(l => `<div class="coord">${l}</div>`).join('');
+  const order = turnOrder(room);
+  const v = ru.viewer, cur = room.turn.current;
+  const hpTxt = c => Number.isFinite(c.cur.HP) ? `HP ${c.cur.HP}${c.data.stats.HP?.max != null ? '/' + c.data.stats.HP.max : ''}` : '';
+  const list = order.map(c => `
+    <button class="oitem ${c.id === cur ? 'now' : ''} ${ui.selTok === c.id ? 'sel' : ''} ${c.side}" data-tok="${c.id}" title="${esc(c.data.name)}　${esc(hpTxt(c))}">
+      ${ptImg(c, null, 'pt')}<span class="oname">${esc(c.data.name)}</span>
+      <span class="ometa">SS${Number.isFinite(ssOf(c)) ? ssOf(c) : '-'}${c.x == null ? '・盤外' : ''}</span>
+      ${v === 'gm' ? `<span class="oset" data-setturn="${c.id}" role="button" aria-label="${esc(c.data.name)}を手番にする">▶</span>` : ''}
+    </button>`).join('');
+  const canNext = cur && (v === 'gm' || v === cur);
+  $('mapP').innerHTML = `
+    ${v === 'gm' ? `<div class="mobileOnly row" style="margin-bottom:8px"><button class="btn small" data-opensettings>部屋の設定</button></div>` : ''}
+    <h2><span class="roundTag">第<b>${room.turn.round}</b>ラウンド</span><span class="grow"></span><span class="muted">${cur && room.chars[cur] ? `${esc(room.chars[cur].data.name)}の手番` : '手番なし'}</span></h2>
+    <div class="turnbar">
+      ${canNext ? `<button class="btn small primary" data-nextturn>次の手番へ</button>` : ''}
+      ${v === 'gm' ? `<button class="btn small" data-endround>ラウンド終了</button><button class="btn small" data-resetround>戦闘開始（第1ラウンドから）</button>` : ''}
+    </div>
+    <div class="mapwrap">
+      <div class="order" aria-label="手番順（SS値の大きい順）">${list || '<p class="muted">キャラクターを取り込むと、SS値の順に並びます</p>'}</div>
+      <div>
+        <div class="board" id="board">${cells}</div>
+        <div class="mapbar">
+          ${sel ? `<span class="muted">${esc(sel.data.name)}を選択中。移動先のマスをタップ</span>
+            <button class="btn small" data-offboard>盤外へ</button><button class="btn small" data-unsel>選択をやめる</button>`
+          : `<span class="muted">コマをタップで選択、マスをタップで移動。数字は選んだコマからの距離（斜めは2マス）です。</span>`}
+        </div>
+      </div>
+    </div>`;
+}
+
+// ---------------- cards ----------------
+function cardHtml(c, opts = {}) {
+  const k = cardOf(c);
+  if (k.joker) return `<button class="card joker ${opts.mini ? 'mini' : ''} ${opts.sel ? 'sel' : ''}" ${opts.attr || ''}>JOKER</button>`;
+  return `<button class="card ${'HD'.includes(k.s) ? 'red' : ''} ${opts.mini ? 'mini' : ''} ${opts.sel ? 'sel' : ''}" ${opts.attr || ''} aria-label="${cardText(c)}"><span class="r">${RANK(k.r)}</span><span class="s">${SUIT[k.s]}</span></button>`;
+}
+const chipHtml = c => { const k = cardOf(c); return k.joker ? `<span class="chip">JK</span>` : `<span class="chip ${'HD'.includes(k.s) ? 'red' : ''}">${SUIT[k.s]}${RANK(k.r)}</span>`; };
+function renderCards(room, ru) {
+  const v = ru.viewer;
+  const mySeat = v === 'gm' || isPcSeat(room, v) ? v : null;
+  const myHand = mySeat ? sortCards(viewHand(room, mySeat, v) || [], ru.sort) : [];
+  ui.sel = ui.sel.filter(c => myHand.includes(c));
+  const pcs = Object.values(room.chars).filter(c => c.side === 'pc' && c.id !== v);
+  const gmCount = (room.cards.hands.gm || []).length;
+  $('cardsP').innerHTML = `
+    <h2>カード <span class="grow"></span><span class="muted">${(room.settings.decks || 1) > 1 ? `${room.settings.decks}組・` : ''}山札 ${room.cards.deck.length}枚・捨て札 ${room.cards.discard.length}枚</span></h2>
+    ${mySeat ? `
+      <div class="handHead"><b>${esc(seatName(room, mySeat))}の手札</b><span class="count">${myHand.length}</span><span style="flex:1"></span>
+        <button class="btn small" data-sort>${ru.sort === 'rank' ? '数字順' : 'スート順'}</button></div>
+      <div class="cards" id="myHand">${myHand.map(c => cardHtml(c, { sel: ui.sel.includes(c), attr: `data-pick="${c}"` })).join('') || '<span class="muted">手札はありません</span>'}</div>
+      <input type="text" class="memo" id="memo" placeholder="メモ（例：脚へ、ターゲットはヴォイドA）" value="${esc(ui.memo)}">
+      <div class="actions">
+        <button class="btn primary" data-play="attack" ${ui.sel.length ? '' : 'disabled'}>攻撃<span class="long">として出す</span></button>
+        <button class="btn primary" data-play="evade" ${ui.sel.length ? '' : 'disabled'}>回避<span class="long">として出す</span></button>
+        <button class="btn" data-play="other" ${ui.sel.length ? '' : 'disabled'}>その他<span class="long">で出す</span></button>
+      </div>
+      ${isPcSeat(room, mySeat) && pcs.length ? `<div class="row" style="margin-top:6px"><button class="btn small" data-give ${ui.sel.length ? '' : 'disabled'}>選んだカードを味方に渡す</button></div>` : ''}
+      <div class="row" style="margin-top:10px">
+        <button class="btn small" data-drawstep="-1" aria-label="減らす">−</button><b>${ui.drawN}</b><button class="btn small" data-drawstep="1" aria-label="増やす">＋</button>
+        <button class="btn" data-draw>枚ドロー</button>
+        <span style="flex:1"></span>
+        <button class="btn small" data-shuffleback ${room.cards.discard.length ? '' : 'disabled'}>捨て札を戻してシャッフル</button>
+      </div>` : `<p class="muted">観戦中は手札を操作できません。</p>`}
+    <div class="otherHands">
+      ${pcs.map(c => { const h = sortCards(viewHand(room, c.id, v) || [], ru.sort); return `<div>
+        <div class="who2"><span class="dot" style="background:${c.color}"></span>${esc(c.data.name)}<span class="muted">${h.length}枚</span></div>
+        <div class="cards">${h.map(x => cardHtml(x, { mini: true, attr: v === 'gm' ? `data-fixcard="${x}" data-from="${c.id}" title="GM：このカードを移す"` : 'disabled' })).join('') || '<span class="muted">なし</span>'}</div></div>`; }).join('')}
+      ${v !== 'gm' ? `<div><div class="who2"><span class="dot gm"></span>GM<span class="muted">${gmCount}枚</span></div>
+        <div class="cards">${Array.from({ length: gmCount }, () => `<span class="card mini back"></span>`).join('')}</div></div>` : ''}
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn small" data-discards>捨て札を見る${mySeat ? '・拾う' : ''}</button>
+      ${v === 'gm' ? `<button class="btn small" data-adddeck>トランプを1組追加</button><button class="btn small danger" data-resetdeck>山札を作り直す</button>` : ''}
+    </div>`;
+}
+
+// ---------------- characters ----------------
+function charSheetHtml(c, canEdit) {
+  const d = c.data;
+  const item = (it, group, idx, head = '') => {
+    const used = !!c.used[`${group}:${idx}`];
+    return `<div class="item ${used ? 'used' : ''}"><div class="iname">${head}<span>${esc(it.name || '（未設定）')}</span>
+      <label><input type="checkbox" data-used="${c.id}" data-group="${group}" data-idx="${idx}" ${used ? 'checked' : ''} ${canEdit ? '' : 'disabled'}>使用済み</label></div>
+      ${Object.keys(it.attrs).length ? `<div class="attrs">${Object.entries(it.attrs).map(([k, v]) => `<span class="attr">${esc(k)}：${esc(v)}</span>`).join('')}</div>` : ''}
+      ${it.text ? `<div class="itext">${esc(it.text)}</div>` : ''}</div>`;
+  };
+  const suitHead = s => `<span class="suit ${'HD'.includes(s) ? 'red' : ''}">${SUIT[s]}</span>`;
+  const vgroup = `slot${c.variation}`;
+  return `<div class="sheetBody">
+    ${d.core && d.core.name ? `<div class="grp">プリンセスコア</div><div class="item"><div class="iname"><span>${esc(d.core.name)}</span></div>${d.core.text ? `<div class="itext">${esc(d.core.text)}</div>` : ''}</div>` : ''}
+    ${d.core && d.core.functions.length ? `<div class="grp">特殊機能</div>${d.core.functions.map((it, i) => item(it, 'func', i)).join('')}` : ''}
+    ${d.skills.length ? `<div class="grp">特技</div>${d.skills.map((it, i) => item(it, 'skills', i, it.tp != null ? `<span class="attr">TP${it.tp}</span>` : '')).join('')}` : ''}
+    <div class="grp">武装</div>
+    ${d.weapons.common.map((it, i) => item(it, 'common', i, '<span class="attr">共通</span>')).join('')}
+    ${d.variations.length ? `<div class="row" style="margin:6px 0"><span class="muted">バリエーション</span>
+      <select data-variation="${c.id}" ${canEdit ? '' : 'disabled'}><option value="-1">基本</option>${d.variations.map((x, i) => `<option value="${i}" ${c.variation === i ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></div>` : ''}
+    ${currentSlots(c).map((it, i) => item(it, vgroup, i, suitHead(it.suit))).join('')}
+    ${d.wingDrive ? `<div class="grp">ウイングドライブ</div>${item(d.wingDrive, 'wingDrive', 0)}` : ''}
+    ${d.memo ? `<div class="grp">メモ</div><div class="itext">${esc(d.memo)}</div>` : ''}
+  </div>`;
+}
+function ptImg(c, label, cls = 'pt') {
+  const p = c && (c.data.portraits.find(x => x.label === label) || c.data.portraits.find(x => x.label === c.portrait) || c.data.portraits[0]);
+  if (p) return `<img class="${cls}" src="${esc(p.url)}" alt="" loading="lazy" referrerpolicy="no-referrer">`;
+  const bg = c ? (c.side === 'enemy' ? 'var(--void)' : c.color) : 'var(--void-2)';
+  return `<span class="${cls} none" style="background:${bg}">${esc((c ? c.data.name : 'GM').slice(0, 1))}</span>`;
+}
+function renderChars(room, ru) {
+  const v = ru.viewer;
+  const groups = [['pc', 'PC'], ['enemy', '敵'], ['npc', 'NPC']];
+  const html = groups.map(([side, label]) => {
+    const list = Object.values(room.chars).filter(c => c.side === side);
+    if (!list.length) return '';
+    return `<div class="grp" style="margin:4px 0 6px">${label}</div>` + list.map(c => {
+      const can = canControlChar(room, v, c.id);
+      const keys = STAT_KEYS.filter(k => k in c.cur).concat(Object.keys(c.cur).filter(k => !STAT_KEYS.includes(k)));
+      return `<div class="ch ${c.id === v ? 'me' : ''} ${c.side === 'enemy' ? 'foe' : ''}">
+        <div class="chead">${ptImg(c)}
+          <button class="swatch" ${can ? `data-colorpick="${c.id}"` : 'disabled'} style="background:${c.color}" title="名前の色" aria-label="${esc(c.data.name)}の名前の色"></button>
+          <span class="uname" style="color:${c.color}">${esc(c.data.name)}</span>${c.data.player ? `<span class="muted">${esc(c.data.player)}</span>` : ''}
+          ${c.data.core && c.data.core.name ? `<span class="attr">${esc(c.data.core.name)}</span>` : ''}
+          <span style="flex:1"></span>
+          ${can ? `<button class="btn small" data-portraits="${c.id}">立ち絵</button><button class="btn small" data-editchar="${c.id}">更新</button>` : ''}
+          ${v === 'gm' || v === c.id ? `<button class="btn small danger" data-delchar="${c.id}" aria-label="${esc(c.data.name)}を外す">×</button>` : ''}</div>
+        <div class="vals">${keys.map(k => {
+          const st = c.data.stats[k] || {}, gauge = st.max != null;
+          if (!gauge) return `<span class="val">${esc(k)} ${can && v === 'gm' ? `<input type="number" value="${c.cur[k]}" data-vset data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(k)}">` : `<b>${c.cur[k]}</b>`}</span>`;
+          return `<span class="val">${esc(k)}
+            ${can ? `<button class="btn small" data-vstep="-1" data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(k)}を1減らす">−</button><input type="number" value="${c.cur[k]}" data-vset data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(k)}"><button class="btn small" data-vstep="1" data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(k)}を1増やす">＋</button>` : `<b>${c.cur[k]}</b>`}
+            <span class="max">/ ${st.max}</span></span>`;
+        }).join('')}</div>
+        <button class="linkBtn" data-sheetopen="${c.id}">データを見る</button>
+      </div>`;
+    }).join('');
+  }).join('');
+  $('charsP').innerHTML = `<h2>キャラクター <span class="grow"></span><button class="btn small primary" data-import>取り込む</button></h2>${html || '<p class="muted">まだいません。「取り込む」からキャラシのJSONを読み込んでください。</p>'}`;
+}
+
+// ---------------- chat ----------------
+function speakerOptions(room, v) {
+  const opts = [];
+  if (v === 'gm') { opts.push(['', 'GM（名前を自由入力）']); Object.values(room.chars).forEach(c => opts.push([c.id, c.data.name])); }
+  else if (isPcSeat(room, v)) { opts.push([v, room.chars[v].data.name]); opts.push(['', 'PL発言（名前を自由入力）']); }
+  else opts.push(['', '観戦者（名前を自由入力）']);
+  return opts;
+}
+function logHtml(room, l) {
+  const c = l.as ? room.chars[l.as] : null;
+  const dt = new Date(l.t), p2 = n => String(n).padStart(2, '0');
+  const time = `${dt.getFullYear()}/${p2(dt.getMonth() + 1)}/${p2(dt.getDate())} ${p2(dt.getHours())}:${p2(dt.getMinutes())}`;
+  if (l.type === 'say') {
+    const face = l.portraitUrl ? `<img class="pt" src="${esc(l.portraitUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : c ? ptImg(c, l.portrait) : `<span class="pt none" style="background:var(--void-2)">${esc((l.name || '?').slice(0, 1))}</span>`;
+    return `<div class="msg">${face}
+      <div class="mbody"><div class="mname" style="color:${l.color || (c ? c.color : '#B48CFF')}">${esc(l.name || (c && c.data.name) || '')}<span class="t"> - ${time}</span></div>
+      ${diceHtml(l)}</div></div>`;
+  }
+  const who = esc(l.byName || seatName(room, l.by));
+  const seatWho = esc(l.seatName || seatName(room, l.seat));
+  const cls = l.by === 'gm' ? 'gm' : l.type === 'sys' ? 'sys' : 'pc';
+  if (l.type === 'play') return `<div class="le ${cls}"><span class="who">${seatWho}</span>${l.cards.map(chipHtml).join(' ')}<span class="kind">${KIND[l.kind] || l.kind}</span>${l.memo ? esc(l.memo) : ''}<span class="t">${time}</span></div>`;
+  if (l.type === 'pick') return `<div class="le ${cls}"><span class="who">${seatWho}</span>捨て札から ${l.cards.map(chipHtml).join(' ')} を拾った${l.memo ? '　' + esc(l.memo) : ''}<span class="t">${time}</span></div>`;
+  if (l.type === 'give') return `<div class="le ${cls}"><span class="who">${seatWho}</span>${l.cards.map(chipHtml).join(' ')} を${esc(l.toName)}に渡した<span class="t">${time}</span></div>`;
+  if (l.type === 'round') return `<div class="le round">${esc(l.text)}</div>`;
+  if (l.type === 'turn') return `<div class="le turn">${esc(l.text)}<span class="t">${time}</span></div>`;
+  if (l.type === 'draw') return `<div class="le ${cls}"><span class="who">${seatWho}</span>${l.n}枚ドロー ${l.cards ? l.cards.map(chipHtml).join(' ') : ''}<span class="t">${time}</span></div>`;
+  const showWho = l.type !== 'sys' && !(l.byName && l.text && l.text.startsWith(l.byName));
+  return `<div class="le ${l.type === 'sys' ? 'sys' : cls}">${showWho ? `<span class="who">${who}</span>` : ''}${esc(l.text)}<span class="t">${time}</span></div>`;
+}
+function diceHtml(l) {
+  const d = l.dice;
+  if (!d) {
+    // command declarations (【特技】… + effect text) get a compact two-part layout
+    const m = /^【[^】]+】/.test(l.text) ? l.text.match(/^([^\n]*)\n?([\s\S]*)$/) : null;
+    if (m) return `<div class="cmdmsg"><div class="cmdhead">${esc(m[1])}</div>${m[2].trim() ? `<div class="cmdbody">${esc(m[2])}</div>` : ''}</div>`;
+    return `<div class="mtext">${esc(l.text)}</div>`;
+  }
+  if (d.hidden) return `<div class="dice secret"><span class="dres">シークレットダイス</span></div>`;
+  const cls = d.ok === true ? 'ok' : d.ok === false ? 'ng' : '';
+  return `${d.comment ? `<div class="mtext">${esc(d.comment)}</div>` : ''}
+    <div class="dice ${cls}${d.secret ? ' secret' : ''}"><span class="dres">${esc(d.result)}</span>
+    <span class="dtotal">${esc(d.total)}</span>${d.ok != null ? `<span class="dverdict">${d.ok ? '成功' : '失敗'}</span>` : ''}${d.secret ? '<span class="dverdict s">シークレット</span>' : ''}</div>`;
+}
+function logPlain(room, l) {
+  const c = l.as ? room.chars[l.as] : null;
+  const sn = l.seatName || seatName(room, l.seat);
+  if (l.type === 'say') return `${l.name || (c && c.data.name)}：${l.dice ? (l.dice.hidden ? 'シークレットダイス' : `${l.dice.comment ? l.dice.comment + ' ' : ''}${l.dice.result}`) : l.text}`;
+  if (l.type === 'play') return `［${sn}］${l.cards.map(cardText).join(' ')} を${KIND[l.kind] || l.kind}${l.memo ? `（${l.memo}）` : ''}`;
+  if (l.type === 'pick') return `［${sn}］捨て札から ${l.cards.map(cardText).join(' ')} を拾った`;
+  if (l.type === 'give') return `［${sn}］${l.cards.map(cardText).join(' ')} を${l.toName}に渡した`;
+  if (l.type === 'round') return `―― ${l.text} ――`;
+  if (l.type === 'turn') return `▶ ${l.text}`;
+  if (l.type === 'draw') return `［${sn}］${l.n}枚ドロー${l.cards ? ' ' + l.cards.map(cardText).join(' ') : ''}`;
+  return `［${l.type === 'sys' ? 'システム' : (l.byName || seatName(room, l.by))}］${l.text}`;
+}
+function renderChat(room, ru) {
+  const v = ru.viewer;
+  $('tabs').innerHTML = room.tabs.filter(t => canSeeTab(room, t, v)).map(t =>
+    `<button class="tab ${t.secret ? 'secret' : ''}" data-tab="${t.id}" aria-pressed="${t.id === ru.tab}">${esc(t.name)}${t.secret ? '<span class="lock">秘匿</span>' : ''}${ui.unread && ui.unread[t.id] ? `<span class="tbadge">${ui.unread[t.id] > 99 ? '99+' : ui.unread[t.id]}</span>` : ''}</button>`).join('') +
+    `<button class="tab" data-addtab aria-label="タブを追加">＋</button>` +
+    (room.tabs.find(t => t.id === ru.tab)?.secret ? `<button class="tab" data-edittab="${ru.tab}">参加者</button>` : '');
+  const box = $('chatLog');
+  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+  const logs = logsForTab(room, ru.tab).map(l => viewLog(room, l, v)).filter(Boolean).slice(-400);
+  box.innerHTML = logs.map(l => logHtml(room, l)).join('') || '<p class="muted">まだ発言はありません</p>';
+  if (atBottom || box.dataset.tab !== ru.tab) box.scrollTop = box.scrollHeight;
+  box.dataset.tab = ru.tab;
+  const opts = speakerOptions(room, v);
+  if (!opts.some(o => o[0] === ru.as)) ru.as = opts[0][0];
+  $('asSel').innerHTML = opts.map(([id, n]) => `<option value="${id}" ${id === ru.as ? 'selected' : ''}>${esc(n)}</option>`).join('');
+  const c = room.chars[ru.as];
+  $('speakFace').innerHTML = c ? ptImg(c, c.portrait) : `<span class="pt none" style="background:var(--void-2)">${esc((ru.name || (v === 'gm' ? 'GM' : '?')).slice(0, 1))}</span>`;
+  $('colorBtn').style.background = c ? c.color : (ru.freeColor || '#B48CFF');
+  $('ptSel').hidden = !c || !c.data.portraits.length;
+  $('ptSel').innerHTML = c ? c.data.portraits.map(p => `<option ${p.label === c.portrait ? 'selected' : ''}>${esc(p.label)}</option>`).join('') : '';
+  $('freeName').hidden = !!c;
+  if (!c && document.activeElement !== $('freeName')) $('freeName').value = ru.name || (v === 'gm' ? 'GM' : seatName(room, v));
+  renderPalette(room, c);
+  const tab = room.tabs.find(t => t.id === ru.tab);
+  $('sayText').placeholder = tab ? `「${tab.name}」に発言　2D6>=8 や choice[A,B] でダイス、先頭にSでシークレット` : '';
+}
+
+// chat palette: commands for 特技 / 武装 / ウイングドライブ / 特殊機能 of the speaking character
+function cmdText(kind, it, extra = '') {
+  const attrs = Object.entries(it.attrs || {}).map(([k, v]) => `${k}:${v}`).join(' ');
+  return `【${kind}】${extra}${it.name}${attrs ? `（${attrs}）` : ''}${it.text ? '\n' + it.text : ''}`;
+}
+function diceItems(room) {
+  const pcs = Object.values(room.chars).filter(x => x.side === 'pc').map(x => x.data.name);
+  const foes = Object.values(room.chars).filter(x => x.side === 'enemy').map(x => x.data.name);
+  const out = ['1D6', '2D6', '1D10', '1D100'].map(t => ({ grp: 'ダイス', label: t, text: t + ' ' }));
+  if (pcs.length > 1) out.push({ grp: 'ダイス', label: '対象をランダム（PC）', text: `choice[${pcs.join(',')}] 攻撃対象` });
+  if (foes.length > 1) out.push({ grp: 'ダイス', label: '対象をランダム（敵）', text: `choice[${foes.join(',')}] 攻撃対象` });
+  return out;
+}
+function paletteItems(c, room) {
+  const out = [];
+  if (!c) return room ? diceItems(room) : out;
+  const d = c.data;
+  d.skills.forEach((it, i) => out.push({ grp: '特技', label: it.name, text: cmdText('特技', it, it.tp != null ? `TP${it.tp} ` : ''), tp: it.tp, name: it.name, src: it, used: c.used[`skills:${i}`] }));
+  (d.core?.functions || []).forEach((it, i) => out.push({ grp: '特殊機能', label: it.name, text: cmdText('特殊機能', it), name: it.name, src: it, used: c.used[`func:${i}`] }));
+  if (d.wingDrive) out.push({ grp: 'ウイングドライブ', label: d.wingDrive.name, text: cmdText('ウイングドライブ', d.wingDrive), name: d.wingDrive.name, src: d.wingDrive, used: c.used['wingDrive:0'] });
+  d.weapons.common.forEach((it, i) => it.name && out.push({ grp: '武装', label: it.name, tag: '共通', text: cmdText('武装', it, '共通 '), name: it.name, src: it, used: c.used[`common:${i}`] }));
+  currentSlots(c).forEach((it, i) => it.name && out.push({ grp: '武装', label: it.name, suit: it.suit, text: cmdText('武装', it, SUIT[it.suit] + ' '), name: it.name, src: it, used: c.used[`slot${c.variation}:${i}`] }));
+  return room ? out.concat(diceItems(room)) : out;
+}
+function renderPalette(room, c) {
+  const cmd = ui.cmd && ui.cmd.cid === c?.id ? ui.cmd : null;
+  const showTp = !!(cmd && cmd.tp && c && Number.isFinite(c.cur.TP));
+  $('tpRow').hidden = !showTp;
+  if (showTp) {
+    const short = c.cur.TP < cmd.tp;
+    $('tpInfo').innerHTML = short
+      ? `<b class="warn">TPが足りません</b>（現在${c.cur.TP}、「${esc(cmd.name)}」はTP${cmd.tp}）`
+      : `送信すると「${esc(cmd.name)}」でTPが<b>${cmd.tp}</b>減ります（${c.cur.TP} → ${c.cur.TP - cmd.tp}）`;
+  }
+}
+// =====================================================================
+// online mode: talk to the room server over WebSocket.
+// The browser validates an action on a copy of its own (filtered) state first, so mistakes are
+// reported instantly; the server then applies it for real and sends everyone their view.
+// =====================================================================
+const NET = { ws: null, roomId: null, wantSeat: null, backoff: 500, status: 'idle', renderQueued: false };
+const loadJson = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
+const gmKeys = () => loadJson('pw-gmkeys', {});
+function saveGmKey(id, key) { const o = gmKeys(); o[id] = key; try { localStorage.setItem('pw-gmkeys', JSON.stringify(o)); } catch (e) {} }
+const recentRooms = () => loadJson('pw-recent', []);
+function rememberRoom(id, name) {
+  const list = recentRooms().filter(r => r.id !== id);
+  list.unshift({ id, name, at: Date.now() });
+  try { localStorage.setItem('pw-recent', JSON.stringify(list.slice(0, 20))); } catch (e) {}
+}
+function forgetRoom(id) { try { localStorage.setItem('pw-recent', JSON.stringify(recentRooms().filter(r => r.id !== id))); } catch (e) {} }
+
+function netStatus(s) {
+  NET.status = s;
+  const el = document.getElementById('netDot');
+  if (el) { el.dataset.s = s; el.title = { open: '接続中', connecting: '接続しています…', closed: '再接続を待っています…' }[s] || ''; }
+}
+function netConnect() {
+  if (NET.ws && NET.ws.readyState <= 1) return;
+  netStatus('connecting');
+  const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+  NET.ws = ws;
+  ws.onopen = () => { NET.backoff = 500; netStatus('open'); if (NET.roomId) netJoin(NET.roomId, NET.wantSeat); };
+  ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (err) { return; } onNet(m); };
+  ws.onclose = () => { netStatus('closed'); setTimeout(netConnect, NET.backoff); NET.backoff = Math.min(NET.backoff * 2, 10000); };
+}
+function netSend(m) {
+  if (NET.ws && NET.ws.readyState === 1) { NET.ws.send(JSON.stringify(m)); return true; }
+  toast('サーバーとの接続が切れています。再接続を待っています'); netConnect(); return false;
+}
+function netJoin(id, seat) {
+  NET.roomId = id; NET.wantSeat = seat || NET.wantSeat || 'obs';
+  if (!NET.ws || NET.ws.readyState !== 1) { netConnect(); return; }
+  NET.ws.send(JSON.stringify({ t: 'join', room: id, seat: NET.wantSeat, gmKey: gmKeys()[id] || null }));
+}
+function queueRender() {
+  if (NET.renderQueued) return;
+  NET.renderQueued = true;
+  requestAnimationFrame(() => { NET.renderQueued = false; const r = route(); if (r.view === 'room') renderRoom(); });
+}
+function onNet(m) {
+  if (m.t === 'joined') {
+    DB.rooms = { [m.room.id]: { ...m.room, logs: m.logs } };
+    const ru = roomUI(m.room.id);
+    if (ru.viewer !== m.seat) ru.as = null;     // speak as the new seat's character by default
+    ru.viewer = m.seat; NET.wantSeat = m.seat;
+    rememberRoom(m.room.id, m.room.name);
+    ui.seenTab = {};
+    queueRender(); return;
+  }
+  if (m.t === 'state') {
+    const old = DB.rooms[m.room.id]; if (!old) return;
+    DB.rooms[m.room.id] = { ...m.room, logs: old.logs };
+    const ru = roomUI(m.room.id);
+    if (ru.viewer !== m.seat) { ru.viewer = m.seat; ru.as = null; NET.wantSeat = m.seat; }
+    queueRender(); return;
+  }
+  if (m.t === 'logs') {
+    const r = DB.rooms[m.room]; if (!r) return;
+    if (m.reset) r.logs = m.add || [];
+    else {
+      if (m.remove && m.remove.length) r.logs = r.logs.filter(l => !m.remove.includes(l.id));
+      for (const u of m.update || []) { const i = r.logs.findIndex(l => l.id === u.id); if (i >= 0) r.logs[i] = u; else r.logs.push(u); }
+      r.logs.push(...(m.add || []));
+    }
+    queueRender(); return;
+  }
+  if (m.t === 'error') {
+    toast(m.message || 'エラーが起きました');
+    if (m.code === 'not_found') { forgetRoom(NET.roomId); NET.roomId = null; location.hash = '#/'; }
+  }
+}
+async function createOnlineRoom(name, password) {
+  const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, password }) });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j.error || '部屋を作れませんでした');
+  saveGmKey(j.id, j.gmKey); rememberRoom(j.id, j.name);
+  return j;
+}
+const inviteLink = id => `${location.origin}${location.pathname}#/r/${id}`;
+const gmLink = id => `${location.origin}${location.pathname}#/r/${id}/gm/${gmKeys()[id] || ''}`;
+// =====================================================================
+// events and dialogs
+// =====================================================================
+const SAMPLE = {
+  format: 'pw-character', version: 2, name: 'サンプル・リリィ', player: 'PL名',
+  core: { name: '（プリンセスコア名）', text: '', functions: [{ name: '特殊機能の名前', text: '効果の説明' }] },
+  values: { HP: { max: 20 }, TP: { max: 10 }, 'SS値': { value: 4 }, '移動値': { value: 3 } },
+  skills: [{ name: '特技の名前', tp: 2, attrs: { 'タイミング': 'メイン' }, text: '効果の説明' }],
+  weapons: {
+    common: [{ name: '共通武装1', attrs: {}, text: '' }, { name: '共通武装2', attrs: {}, text: '' }],
+    slots: [
+      { suit: 'S', name: '♠の武装', attrs: { '回避値': '2', '射程': '1' }, text: '' },
+      { suit: 'C', name: '♣の武装', attrs: { '回避値': '1' }, text: '' },
+      { suit: 'H', name: '♥の武装', attrs: {}, text: '' },
+      { suit: 'D', name: '♦の武装', attrs: {}, text: '' },
+    ],
+  },
+  variations: [{ name: 'バリエーションA', slots: [
+    { suit: 'S', name: '♠の武装（A）' }, { suit: 'C', name: '♣の武装（A）' }, { suit: 'H', name: '♥の武装（A）' }, { suit: 'D', name: '♦の武装（A）' }] }],
+  wingDrive: { name: 'ウイングドライブの名前', attrs: {}, text: '効果の説明' },
+  portraits: [{ label: '通常', url: 'https://www.dropbox.com/scl/fi/xxxx/normal.png?rlkey=xxxx&dl=0' }],
+  memo: '',
+};
+// in-app confirmation (window.confirm is blocked in some viewers and silently returns false)
+function ask(message, okLabel, onOk, danger) {
+  openDlg(`<h1>${esc(okLabel)}</h1><p>${esc(message)}</p>
+    <div class="row" style="margin-top:14px"><span style="flex:1"></span><button class="btn" data-close>やめる</button>
+    <button class="btn ${danger ? 'dangerFill' : 'primary'}" id="askOk">${esc(okLabel)}</button></div>`, () => {
+    $('askOk').onclick = () => { closeDlg(); onOk(); };
+    $('askOk').focus();
+  });
+}
+// ----- big modals: command list and character data. They re-render when the room changes. -----
+function cmdModalHtml(room, ru) {
+  const c = room.chars[ru.as];
+  const items = paletteItems(c, room);
+  const groups = [];
+  items.forEach((it, i) => { let g = groups.find(x => x.name === it.grp); if (!g) groups.push(g = { name: it.grp, list: [] }); g.list.push([it, i]); });
+  const tpNow = c && Number.isFinite(c.cur.TP) ? `<span class="muted">TP ${c.cur.TP}${c.data.stats.TP?.max != null ? ' / ' + c.data.stats.TP.max : ''}</span>` : '';
+  const can = c && canControlChar(room, ru.viewer, c.id);
+  const varSel = c && c.data.variations.length ? `<label class="row muted" style="gap:6px">武装<select data-mvariation="${c.id}" ${can ? '' : 'disabled'}><option value="-1">基本</option>${c.data.variations.map((x, i) => `<option value="${i}" ${c.variation === i ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>` : '';
+  return `<div class="mhead"><div><h1>${c ? esc(c.data.name) + 'のコマンド' : 'ダイス'}</h1>${tpNow}</div><span style="flex:1"></span>${varSel}<button class="btn" data-close>閉じる</button></div>
+    <p class="muted">押すと発言欄に入ります。「すぐ送る」はそのまま送信します。${c ? '特技はTPが自動で減ります。' : ''}</p>
+    ${groups.map(g => `<section class="cgroup"><h2>${esc(g.name)}</h2><div class="clist ${g.name === 'ダイス' ? 'dicegrid' : ''}">${g.list.map(([it, i]) => {
+      const s = it.src;
+      const short = it.tp != null && c && Number.isFinite(c.cur.TP) && c.cur.TP < it.tp;
+      return `<div class="citem ${it.used ? 'used' : ''}" data-ci="${i}" role="button" tabindex="0">
+        <div class="ctop">${it.suit ? `<span class="suit ${'HD'.includes(it.suit) ? 'red' : ''}">${SUIT[it.suit]}</span>` : ''}${it.tag ? `<span class="attr">${it.tag}</span>` : ''}
+          <b class="cname">${esc(it.label)}</b>${it.tp != null ? `<span class="tpcost ${short ? 'short' : ''}">TP${it.tp}</span>` : ''}${it.used ? '<span class="attr">使用済み</span>' : ''}
+          <span style="flex:1"></span><button class="btn small" data-csend="${i}" ${short ? 'disabled' : ''}>すぐ送る</button></div>
+        ${s && Object.keys(s.attrs || {}).length ? `<div class="attrs">${Object.entries(s.attrs).map(([k, v]) => `<span class="attr">${esc(k)}：${esc(v)}</span>`).join('')}</div>` : ''}
+        ${s && s.text ? `<div class="itext">${esc(s.text)}</div>` : g.name === 'ダイス' ? `<div class="itext muted">${esc(it.text.trim())}</div>` : ''}
+      </div>`; }).join('')}</div></section>`).join('')}`;
+}
+function sheetModalHtml(room, ru, cid) {
+  const c = room.chars[cid]; if (!c) return '<p>キャラクターがいません</p><button class="btn" data-close>閉じる</button>';
+  const can = canControlChar(room, ru.viewer, c.id);
+  return `<div class="mhead">${ptImg(c)}<div><h1>${esc(c.data.name)}</h1><span class="muted">${esc(c.data.player || '')}</span></div><span style="flex:1"></span><button class="btn" data-close>閉じる</button></div>
+    <div class="vals">${Object.keys(c.cur).map(k => `<span class="val">${esc(k)} <b>${c.cur[k]}</b>${c.data.stats[k]?.max != null ? `<span class="max">/ ${c.data.stats[k].max}</span>` : ''}</span>`).join('')}</div>
+    ${charSheetHtml(c, can)}`;
+}
+function openModal(kind, arg) {
+  ui.modal = { kind, arg };
+  $('dlg').classList.add('wide');
+  refreshModal(true);
+  if (!$('dlg').open) $('dlg').showModal();
+}
+function refreshModal(first) {
+  const room = curRoom(); if (!room || !ui.modal) return;
+  const ru = roomUI(room.id), top = $('dlg').scrollTop;
+  $('dlgBody').innerHTML = ui.modal.kind === 'cmd' ? cmdModalHtml(room, ru) : sheetModalHtml(room, ru, ui.modal.arg);
+  if (!first) $('dlg').scrollTop = top;
+}
+function useCommand(i, sendNow) {
+  const room = curRoom(), ru = roomUI(room.id), c = room.chars[ru.as];
+  const it = paletteItems(c, room)[i]; if (!it) return;
+  ui.cmd = it.grp === 'ダイス' || !c ? null : { cid: c.id, name: it.name || it.label, tp: it.tp ?? null, label: it.label };
+  closeDlg();
+  $('sayText').value = it.text;
+  if (sendNow) { $('sayBtn').click(); return; }
+  renderRoom(); $('sayText').focus();
+}
+$('dlg').addEventListener('close', () => { ui.modal = null; $('dlg').classList.remove('wide'); });
+$('dlgBody').addEventListener('click', e => {
+  if (!ui.modal) return;
+  if (!e.target.closest('[data-close]')) e.stopPropagation();
+  const send = e.target.closest('[data-csend]');
+  if (send) { useCommand(+send.dataset.csend, true); return; }
+  if (e.target.closest('select,input,label,button')) return;
+  const it = e.target.closest('[data-ci]');
+  if (it) useCommand(+it.dataset.ci, false);
+});
+$('dlgBody').addEventListener('keydown', e => { const it = e.target.closest('[data-ci]'); if (it && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); useCommand(+it.dataset.ci, false); } });
+$('dlgBody').addEventListener('change', e => {
+  if (!ui.modal) return;
+  e.stopPropagation(); // the modal re-renders; the old element must not reach the page-level handler
+  const t = e.target;
+  if (t.matches('[data-mvariation]') || t.matches('[data-variation]')) act({ type: 'variation', cid: t.dataset.mvariation || t.dataset.variation, idx: +t.value });
+  if (t.matches('[data-used]')) act({ type: 'toggleUsed', cid: t.dataset.used, group: t.dataset.group, idx: +t.dataset.idx });
+});
+
+function openDlg(html, bind) { ui.modal = null; $('dlg').classList.remove('wide'); $('dlgBody').innerHTML = html; bind && bind(); if (!$('dlg').open) $('dlg').showModal(); }
+function closeDlg() { $('dlg').close(); }
+$('dlg').addEventListener('click', e => { if (e.target.closest('[data-close]')) closeDlg(); });
+
+function importDialog(room, ru, editCid) {
+  const v = ru.viewer, editing = editCid && room.chars[editCid];
+  openDlg(`
+    <h1>${editing ? `${esc(editing.data.name)}のデータを更新` : 'キャラクターを取り込む'}</h1>
+    <p class="muted">キャラシ作成ツールが書き出したJSON（形式：pw-character）を読み込みます。HPなどの数値はキャラシの値をそのまま使います。</p>
+    ${editing ? '' : `<div class="field">種類<select id="impSide">
+      ${v === 'gm' ? '<option value="pc">PC</option><option value="enemy" selected>敵</option><option value="npc">NPC</option>' : '<option value="pc">PC</option>'}</select></div>`}
+    <div class="field">JSONファイル<input type="file" id="impFile" accept=".json,application/json"></div>
+    <div class="field">または貼り付け<textarea id="impText" rows="8" placeholder='{"format":"pw-character", ...}'>${editing ? esc(JSON.stringify(editing.data, null, 2)) : ''}</textarea></div>
+    <div class="row"><button class="btn small" id="impSample">サンプルを入れる</button><span style="flex:1"></span>
+      <button class="btn" data-close>やめる</button><button class="btn primary" id="impOk">${editing ? '更新する' : '取り込む'}</button></div>`, () => {
+    $('impFile').onchange = async e => { const f = e.target.files[0]; if (f) $('impText').value = await f.text(); };
+    $('impSample').onclick = () => { $('impText').value = JSON.stringify(SAMPLE, null, 2); };
+    $('impOk').onclick = () => {
+      let data; try { data = JSON.parse($('impText').value); } catch (e) { toast('JSONとして読めませんでした'); return; }
+      const side = editing ? null : $('impSide').value;
+      const r = editing ? act({ type: 'updateCharData', cid: editCid, data }) : act({ type: 'addChar', side, data });
+      if (r === FAIL) return;
+      closeDlg();
+      if (ONLINE && side === 'pc' && roomUI(room.id).viewer === 'obs') netJoin(room.id, r);
+    };
+  });
+}
+function portraitDialog(room, cid) {
+  const c = room.chars[cid];
+  let list = c.data.portraits.map(p => ({ ...p }));
+  const draw = () => {
+    $('ptList').innerHTML = list.map((p, i) => `<figure><img src="${esc(p.url)}" alt="" referrerpolicy="no-referrer" onerror="this.style.outline='2px solid var(--red)';this.alt='読み込めません'">
+      <figcaption>${esc(p.label)}</figcaption><button class="btn small danger" data-rmpt="${i}">外す</button></figure>`).join('') || '<p class="muted">まだありません</p>';
+  };
+  openDlg(`
+    <h1>${esc(c.data.name)}の立ち絵</h1>
+    <p class="muted">Dropboxで画像の共有リンク（リンクを知っている全員が閲覧可）を作って貼ってください。表示用の形に自動で変換します。画像を直接指すURLならDropbox以外でも使えます。</p>
+    <div class="pgrid" id="ptList"></div>
+    <div class="field">名前（差分名）<input type="text" id="ptLabel" placeholder="例：通常、笑顔、負傷"></div>
+    <div class="field">共有リンク<input type="text" id="ptUrl" placeholder="https://www.dropbox.com/scl/fi/…&dl=0"></div>
+    <div class="row"><img id="ptPrev" alt="" style="width:64px;height:84px;object-fit:cover;border-radius:8px;background:var(--bg)" referrerpolicy="no-referrer"><span id="ptMsg" class="muted"></span>
+      <span style="flex:1"></span><button class="btn" id="ptAdd">追加</button></div>
+    <div class="row" style="margin-top:12px"><span style="flex:1"></span><button class="btn" data-close>やめる</button><button class="btn primary" id="ptSave">保存</button></div>`, () => {
+    draw();
+    const prev = () => {
+      const url = toDirectImage($('ptUrl').value);
+      if (!url) { $('ptPrev').removeAttribute('src'); $('ptMsg').textContent = ''; return; }
+      $('ptMsg').textContent = '読み込み中…';
+      $('ptPrev').onload = () => $('ptMsg').textContent = '表示できました';
+      $('ptPrev').onerror = () => $('ptMsg').textContent = '表示できません。共有設定とリンクを確認してください';
+      $('ptPrev').src = url;
+    };
+    $('ptUrl').oninput = prev;
+    $('ptAdd').onclick = () => {
+      const url = toDirectImage($('ptUrl').value); if (!url) { toast('リンクを入れてください'); return; }
+      list.push({ label: $('ptLabel').value.trim() || `立ち絵${list.length + 1}`, url });
+      $('ptUrl').value = ''; $('ptLabel').value = ''; prev(); draw();
+    };
+    $('ptList').onclick = e => { const b = e.target.closest('[data-rmpt]'); if (b) { list.splice(+b.dataset.rmpt, 1); draw(); } };
+    $('ptSave').onclick = () => { act({ type: 'setPortraits', cid, portraits: list }); closeDlg(); };
+  });
+}
+function tabDialog(room, ru, tabId) {
+  const t = tabId ? room.tabs.find(x => x.id === tabId) : null;
+  const seats = [['gm', 'GM'], ...Object.values(room.chars).filter(c => c.side === 'pc').map(c => [c.id, c.data.name])];
+  const members = new Set(t ? t.members : [ru.viewer]);
+  openDlg(`
+    <h1>${t ? 'タブの設定' : 'タブを追加'}</h1>
+    <div class="field">タブ名<input type="text" id="tbName" value="${esc(t ? t.name : '')}" placeholder="例：秘匿：HO1、作戦会議"></div>
+    ${t ? '' : `<label class="row" style="margin-bottom:8px"><input type="checkbox" id="tbSecret"> 秘匿タブにする（参加者にだけ見えます）</label>`}
+    <div id="tbMembers" ${t && t.secret ? '' : 'hidden'}>
+      <div class="muted" style="margin-bottom:4px">参加者</div>
+      <div class="seatpick">${seats.map(([id, n]) => `<label class="wchip"><input type="checkbox" value="${id}" ${members.has(id) ? 'checked' : ''}> ${esc(n)}</label>`).join('')}</div>
+      <p class="muted">${room.settings.gmSeesSecret ? 'GMは部屋の設定により、すべての秘匿タブを見られます。' : ''}</p>
+    </div>
+    <div class="row" style="margin-top:12px">${t && ru.viewer === 'gm' ? `<button class="btn danger" id="tbDel">タブを削除</button>` : ''}<span style="flex:1"></span>
+      <button class="btn" data-close>やめる</button><button class="btn primary" id="tbOk">${t ? '保存' : '追加'}</button></div>`, () => {
+    if ($('tbSecret')) $('tbSecret').onchange = e => $('tbMembers').hidden = !e.target.checked;
+    const picked = () => [...document.querySelectorAll('#tbMembers input:checked')].map(i => i.value);
+    $('tbOk').onclick = () => {
+      if (t) { act({ type: 'editTab', tab: t.id, name: $('tbName').value, members: picked() }); closeDlg(); return; }
+      const id = act({ type: 'addTab', name: $('tbName').value, secret: $('tbSecret').checked, members: picked() });
+      if (id) { roomUI(room.id).tab = id; closeDlg(); renderRoom(); }
+    };
+    if ($('tbDel')) $('tbDel').onclick = () => ask(`「${t.name}」とそのタブのログを削除します。`, 'タブを削除', () => act({ type: 'removeTab', tab: t.id }), true);
+  });
+}
+function discardDialog(room, ru) {
+  const isGm = ru.viewer === 'gm';
+  const canPick = isGm || isPcSeat(room, ru.viewer);
+  const targets = [['gm', 'GMの手札'], ...Object.values(room.chars).filter(c => c.side === 'pc').map(c => [c.id, `${c.data.name}の手札`]), ['deck', '山札の上']];
+  const draw = () => {
+    const r = curRoom();
+    $('dsList').innerHTML = r.cards.discard.length ? [...r.cards.discard].reverse().map(c => `<div class="row">${chipHtml(c)}
+      ${canPick ? `<button class="btn small primary" data-dspick="${c}">拾う</button>` : ''}
+      ${isGm ? `<select data-dsto="${c}">${targets.map(([v, n]) => `<option value="${v}">${esc(n)}</option>`).join('')}</select><button class="btn small" data-dsmove="${c}">戻す</button>` : ''}</div>`).join('') : '<p class="muted">捨て札はありません</p>';
+  };
+  openDlg(`<h1>捨て札</h1><p class="muted">新しい順に並んでいます。「拾う」は効果で捨て札からカードを手札に加えるときに使います。${isGm ? 'GMは補正として、カードを任意の手札や山札に戻すこともできます。' : ''}</p>
+    <div class="dlist" id="dsList"></div><div class="row" style="margin-top:12px"><span style="flex:1"></span><button class="btn" data-close>閉じる</button></div>`, () => {
+    draw();
+    $('dsList').onclick = e => {
+      const pk = e.target.closest('[data-dspick]');
+      if (pk) { act({ type: 'pick', card: pk.dataset.dspick }); draw(); return; }
+      const b = e.target.closest('[data-dsmove]'); if (!b) return;
+      const card = b.dataset.dsmove, to = document.querySelector(`[data-dsto="${card}"]`).value;
+      act({ type: 'moveCard', card, from: 'discard', to }); draw();
+    };
+  });
+}
+function colorDialog(current, onPick) {
+  openDlg(`<h1>名前の色</h1><p class="muted">チャットの名前とキャラクター欄の表示に使います。黒いチャットで読みやすい色を並べています。</p>
+    <div class="swatches">${NAME_COLORS.map(col => `<button class="swatch big ${col === (current || '').toUpperCase() ? 'on' : ''}" data-pick="${col}" style="background:${col}" aria-label="${col}"></button>`).join('')}</div>
+    <div class="row" style="margin-top:12px"><label class="row">その他の色<input type="color" id="colCustom" value="${isHex(current) ? current : '#5DADEC'}"></label>
+      <span style="flex:1"></span><button class="btn" data-close>閉じる</button><button class="btn primary" id="colOk">この色にする</button></div>`, () => {
+    document.querySelectorAll('#dlgBody [data-pick]').forEach(b => b.onclick = () => { onPick(b.dataset.pick); closeDlg(); });
+    $('colOk').onclick = () => { onPick($('colCustom').value); closeDlg(); };
+  });
+}
+function giveDialog(room, ru) {
+  const allies = Object.values(room.chars).filter(c => c.side === 'pc' && c.id !== ru.viewer);
+  const cards = [...ui.sel];
+  openDlg(`<h1>味方に渡す</h1><p>${cards.map(chipHtml).join(' ')} を渡します。</p>
+    <div class="field">渡す相手<select id="gvTo">${allies.map(c => `<option value="${c.id}">${esc(c.data.name)}</option>`).join('')}</select></div>
+    <div class="row"><span style="flex:1"></span><button class="btn" data-close>やめる</button><button class="btn primary" id="gvOk">渡す</button></div>`, () => {
+    $('gvOk').onclick = () => { if (act({ type: 'give', cards, to: $('gvTo').value }) !== FAIL) { ui.sel = []; closeDlg(); renderRoom(); } };
+  });
+}
+function fixCardDialog(room, card, from) {
+  const targets = [['discard', '捨て札'], ['gm', 'GMの手札'], ...Object.values(room.chars).filter(c => c.side === 'pc' && c.id !== from).map(c => [c.id, `${c.data.name}の手札`]), ['deck', '山札の上']];
+  openDlg(`<h1>カードの補正</h1><p>${chipHtml(card)}（${esc(seatName(room, from))}の手札）を移します。</p>
+    <div class="field">移動先<select id="fxTo">${targets.map(([v, n]) => `<option value="${v}">${esc(n)}</option>`).join('')}</select></div>
+    <div class="row"><span style="flex:1"></span><button class="btn" data-close>やめる</button><button class="btn primary" id="fxOk">移す</button></div>`, () => {
+    $('fxOk').onclick = () => { act({ type: 'moveCard', card, from, to: $('fxTo').value }); closeDlg(); };
+  });
+}
+function settingsDialog(room) {
+  const s = room.settings;
+  openDlg(`<h1>部屋の設定</h1>
+    <div class="field">部屋の名前<input type="text" id="stName" value="${esc(room.name)}"></div>
+    <div class="field">トランプの組数（山札を作り直したときに反映）<select id="stDecks">${[1, 2, 3, 4].map(n => `<option ${(s.decks || 1) === n ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+    <div class="field">ジョーカーの枚数（山札を作り直したときに反映）<select id="stJk">${[0, 1, 2].map(n => `<option ${s.jokers === n ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+    <div class="field">操作の記録をすべて流すタブ<select id="stOps">${room.tabs.map(t => `<option value="${t.id}" ${s.opsTab === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div>
+    <div class="field">要点（HP・TPの増減、出したカード、バリエーション変更）も表示するタブ<select id="stDigest"><option value="">表示しない</option>${room.tabs.map(t => `<option value="${t.id}" ${s.digestTab === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div>
+    <label class="row" style="margin-bottom:6px"><input type="checkbox" id="stGmSecret" ${s.gmSeesSecret ? 'checked' : ''}> GMはすべての秘匿タブを見られる</label>
+    <label class="row" style="margin-bottom:10px"><input type="checkbox" id="stLogVals" ${s.logValues !== false ? 'checked' : ''}> HPなどの数値の変更をログに残す（続けて増減した分は1行にまとめます）</label>
+    ${ONLINE ? `<div class="field">GM用リンク（別の端末でGMとして入るとき用。PLには送らないでください）<div class="row"><input type="text" readonly value="${esc(gmLink(room.id))}" style="flex:1" id="stGmLink"><button class="btn small" id="stCopyGm">コピー</button></div></div>` : ''}
+    <div class="row"><span style="flex:1"></span><button class="btn" data-close>やめる</button><button class="btn primary" id="stOk">保存</button></div>`, () => {
+    if ($('stCopyGm')) $('stCopyGm').onclick = async () => { try { await navigator.clipboard.writeText($('stGmLink').value); toast('GM用リンクをコピーしました'); } catch (err) { $('stGmLink').select(); } };
+    $('stOk').onclick = () => {
+      act({ type: 'settings', name: $('stName').value.trim() || room.name, patch: { digestTab: $('stDigest').value || null, decks: +$('stDecks').value, jokers: +$('stJk').value, opsTab: $('stOps').value, gmSeesSecret: $('stGmSecret').checked, logValues: $('stLogVals').checked } });
+      closeDlg();
+    };
+  });
+}
+
+function bindRoomStatic() {
+  $('viewer').onchange = e => {
+    const room = curRoom(), ru = roomUI(room.id);
+    ru.as = null; ui.sel = []; ui.selTok = null; ui.cmd = null;
+    if (ONLINE) { netJoin(room.id, e.target.value); return; }   // the server decides the seat
+    ru.viewer = e.target.value; renderRoom();
+  };
+  if (ONLINE) $('inviteBtn').onclick = async () => {
+    try { await navigator.clipboard.writeText(inviteLink(curRoom().id)); toast('招待リンクをコピーしました。PLに送ってください'); }
+    catch (err) { prompt('招待リンク', inviteLink(curRoom().id)); }
+  };
+  $('setBtn').onclick = () => settingsDialog(curRoom());
+  $('undoBtn').onclick = () => {
+    const prev = ui.history.pop(); if (!prev) return;
+    const r = JSON.parse(prev); DB.rooms[r.id] = r; persist(); renderRoom(); toast('1つ前の状態に戻しました');
+  };
+  $('asSel').onchange = e => { roomUI(curRoom().id).as = e.target.value; renderRoom(); };
+  $('ptSel').onchange = e => { const ru = roomUI(curRoom().id); act({ type: 'setPortrait', cid: ru.as, label: e.target.value }); };
+  $('freeName').oninput = e => { roomUI(curRoom().id).name = e.target.value; saveU(); };
+  const send = () => {
+    const room = curRoom(), ru = roomUI(room.id), text = $('sayText').value;
+    if (!text.trim()) return;
+    const c = room.chars[ru.as];
+    const cmd = ui.cmd && c && ui.cmd.cid === c.id ? ui.cmd : null;
+    const spend = cmd && cmd.tp ? cmd.tp : null;
+    const r = act({ type: 'say', tab: ru.tab, as: c ? c.id : null, name: c ? null : ($('freeName').value.trim() || seatName(room, ru.viewer)), color: c ? null : (ru.freeColor || null), portrait: c ? c.portrait : null, text,
+      cmd: cmd ? cmd.name : null, spendTP: Number.isFinite(spend) ? spend : null });
+    if (r !== FAIL) { $('sayText').value = ''; ui.cmd = null; renderRoom(); }
+    $('sayText').focus();
+  };
+  $('sayBtn').onclick = send;
+  $('palBtn').onclick = () => openModal('cmd');
+  $('colorBtn').onclick = () => {
+    const room = curRoom(), ru = roomUI(room.id), c = room.chars[ru.as];
+    if (c) colorDialog(c.color, col => act({ type: 'setColor', cid: c.id, color: col }));
+    else colorDialog(ru.freeColor, col => { ru.freeColor = col; saveU(); renderRoom(); });
+  };
+  $('cmdClear').onclick = () => { ui.cmd = null; $('sayText').value = ''; renderRoom(); };
+  $('sayText').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
+  $('copyLog').onclick = async () => {
+    const room = curRoom(), ru = roomUI(room.id);
+    const text = logsForTab(room, ru.tab).map(l => viewLog(room, l, ru.viewer)).filter(Boolean).map(l => logPlain(room, l)).join('\n');
+    try { await navigator.clipboard.writeText(text); toast('ログをコピーしました'); } catch (e) { toast('コピーできませんでした'); }
+  };
+}
+
+document.addEventListener('click', e => {
+  const t = e.target, q = s => t.closest(s);
+  const room = curRoom();
+  let el;
+  if ((el = q('[data-export]'))) { const r = DB.rooms[el.dataset.export]; download(`${r.name}.json`, JSON.stringify(r, null, 1)); return; }
+  if ((el = q('[data-delroom]'))) { const r = DB.rooms[el.dataset.delroom]; ask(`「${r.name}」を削除します。ログもすべて消えます。`, '部屋を削除', () => { delete DB.rooms[r.id]; persist(); renderList(); }, true); return; }
+  if (!room && (el = q('[data-forget]'))) { forgetRoom(el.dataset.forget); renderList(); return; }
+  if (!room && q('[data-theme-toggle]')) { U.theme = (U.theme || 'dark') === 'dark' ? 'light' : 'dark'; saveU(); applyTheme(); return; }
+  if (!room || !t.isConnected || t.closest('dialog')) return;
+  const ru = roomUI(room.id);
+
+  // map
+  if ((el = q('[data-setturn]'))) { act({ type: 'setTurn', cid: el.dataset.setturn }); return; }
+  if (q('[data-nextturn]')) { act({ type: 'nextTurn' }); return; }
+  if (q('[data-endround]')) { act({ type: 'endRound' }); return; }
+  if (q('[data-resetround]')) { ask('ラウンド数を1に戻し、SS値がいちばん大きいキャラの手番から始めます。', '戦闘を開始', () => act({ type: 'resetRound' })); return; }
+  // a selected token + a tap on a cell (even one holding another token) = move there
+  if ((el = q('[data-cell]')) && ui.selTok && !(q('[data-tok]') && q('[data-tok]').dataset.tok === ui.selTok)) {
+    const [x, y] = el.dataset.cell.split(',').map(Number);
+    if (act({ type: 'move', cid: ui.selTok, x, y }, { silent: true }) !== FAIL) ui.selTok = null;
+    renderRoom(); return;
+  }
+  if ((el = q('[data-tok]'))) { const id = el.dataset.tok; ui.selTok = ui.selTok === id ? null : id; renderMap(room, ru); return; }
+  if (q('[data-offboard]')) { if (act({ type: 'move', cid: ui.selTok, x: null, y: null }, { silent: true }) !== FAIL) ui.selTok = null; renderRoom(); return; }
+  if (q('[data-unsel]')) { ui.selTok = null; renderMap(room, ru); return; }
+
+  // cards
+  if ((el = q('[data-pick]'))) { const c = el.dataset.pick; ui.sel = ui.sel.includes(c) ? ui.sel.filter(x => x !== c) : [...ui.sel, c]; renderCards(room, ru); return; }
+  if (q('[data-sort]')) { ru.sort = ru.sort === 'rank' ? 'suit' : 'rank'; saveU(); renderCards(room, ru); return; }
+  if ((el = q('[data-play]'))) {
+    const cards = [...ui.sel], memo = ui.memo;
+    if (act({ type: 'play', cards, kind: el.dataset.play, memo }, { silent: true }) !== FAIL) { ui.sel = []; ui.memo = ''; }
+    renderRoom(); return;
+  }
+  if ((el = q('[data-drawstep]'))) { ui.drawN = Math.max(1, Math.min(20, ui.drawN + +el.dataset.drawstep)); renderCards(room, ru); return; }
+  if (q('[data-draw]')) { act({ type: 'draw', n: ui.drawN }); return; }
+  if (q('[data-shuffleback]')) { act({ type: 'shuffleBack' }); return; }
+  if (q('[data-adddeck]')) { ask('トランプをもう1組、今の山札に混ぜてシャッフルします。', 'トランプを追加', () => act({ type: 'addDeck' })); return; }
+  if (q('[data-resetdeck]')) { ask(`全員の手札と捨て札を回収し、${room.settings.decks || 1}組で山札を作り直します。`, '山札を作り直す', () => act({ type: 'resetDeck' }), true); return; }
+  if (q('[data-discards]')) { discardDialog(room, ru); return; }
+  if (q('[data-give]')) { giveDialog(room, ru); return; }
+  if ((el = q('[data-fixcard]'))) { fixCardDialog(room, el.dataset.fixcard, el.dataset.from); return; }
+
+  // characters
+  if (q('[data-import]')) { importDialog(room, ru); return; }
+  if ((el = q('[data-editchar]'))) { importDialog(room, ru, el.dataset.editchar); return; }
+  if ((el = q('[data-colorpick]'))) { const c = room.chars[el.dataset.colorpick]; colorDialog(c.color, col => act({ type: 'setColor', cid: c.id, color: col })); return; }
+  if ((el = q('[data-sheetopen]'))) { openModal('sheet', el.dataset.sheetopen); return; }
+  if ((el = q('[data-portraits]'))) { portraitDialog(room, el.dataset.portraits); return; }
+  if ((el = q('[data-delchar]'))) { const c = room.chars[el.dataset.delchar]; ask(`${c.data.name}を部屋から外します。手札は捨て札に移ります。`, 'キャラクターを外す', () => act({ type: 'removeChar', cid: c.id }), true); return; }
+  if ((el = q('[data-vstep]'))) { const c = room.chars[el.dataset.cid], k = el.dataset.key; act({ type: 'setValue', cid: c.id, key: k, value: c.cur[k] + +el.dataset.vstep }); return; }
+
+  if (q('[data-opensettings]')) { settingsDialog(room); return; }
+  if (q('[data-theme-toggle]')) { U.theme = (U.theme || 'dark') === 'dark' ? 'light' : 'dark'; saveU(); applyTheme(); return; }
+  if ((el = q('.mnav [data-pane]'))) {
+    ru.pane = el.dataset.pane; renderRoom();
+    if (ru.pane === 'chat') { const box = $('chatLog'); box.scrollTop = box.scrollHeight; }
+    window.scrollTo(0, 0); return;
+  }
+  // chat
+  if ((el = q('[data-tab]'))) { ru.tab = el.dataset.tab; renderRoom(); return; }
+  if (q('[data-addtab]')) { tabDialog(room, ru); return; }
+  if ((el = q('[data-edittab]'))) { tabDialog(room, ru, el.dataset.edittab); return; }
+});
+document.addEventListener('change', e => {
+  const room = curRoom(); if (!room || !e.target.isConnected || e.target.closest('dialog')) return;
+  const t = e.target;
+  if (t.matches('[data-vset]')) act({ type: 'setValue', cid: t.dataset.cid, key: t.dataset.key, value: t.value });
+  if (t.matches('[data-variation]')) act({ type: 'variation', cid: t.dataset.variation, idx: +t.value });
+  if (t.matches('[data-used]')) act({ type: 'toggleUsed', cid: t.dataset.used, group: t.dataset.group, idx: +t.dataset.idx });
+});
+document.addEventListener('input', e => { if (e.target.id === 'memo') ui.memo = e.target.value; });
+document.addEventListener('toggle', e => {
+  const d = e.target; if (!(d instanceof HTMLDetailsElement) || !d.dataset.sheet) return;
+  if (d.open) ui.openSheets.add(d.dataset.sheet); else ui.openSheets.delete(d.dataset.sheet);
+}, true);
+
+function applyTheme() {
+  const t = U.theme || 'dark';
+  document.documentElement.dataset.theme = t;
+  document.querySelectorAll('[data-theme-toggle]').forEach(b => b.textContent = t === 'dark' ? '明るい表示' : '暗い表示');
+}
+function render() { applyTheme(); if (ONLINE) netConnect(); const r = route(); if (r.view === 'room') renderRoom(); else renderList(); }
+window.addEventListener('hashchange', () => {
+  ui.sel = []; ui.selTok = null; ui.history = [];
+  if (ONLINE && route().view !== 'room') { NET.roomId = null; DB.rooms = {}; }
+  render();
+});
+render();
+</script>
+</body>
+</html>
