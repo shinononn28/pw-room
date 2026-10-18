@@ -948,11 +948,109 @@ input[type=range]{width:100%;accent-color:var(--pink)}
 .charHead .mtitle h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .charHead .swatch{flex:none}
 .charHead .mclose{flex:none;width:36px;height:36px;padding:0;border-radius:50%;font-size:1rem;display:inline-flex;align-items:center;justify-content:center}
-.mactions{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.mactions{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 12px}
 .mactions:empty{display:none}
+/* the sticky dialog header stays above everything that scrolls under it (order badges, selected weapons, cards) */
+dialog .mhead{z-index:8 !important}
 .mhead.charHead{box-shadow:0 8px 8px -8px rgba(10,13,30,.35)}
 /* phones: name and actions first; the large portrait goes to the end (the small one is in the title row) */
 @media (max-width:720px){ .charGrid.hasPt .charSide{order:2 !important;position:static} .charGrid.hasPt .charSide .bigpt{max-width:220px} }
+
+/* weapon range: orange outline on the board, foes within range ringed; the move bar's picker */
+.cell.rng{box-shadow:inset 0 0 0 2px #FF9F1C;background-image:linear-gradient(rgba(255,159,28,.16),rgba(255,159,28,.16))}
+.cell.rng.reach{background-image:linear-gradient(rgba(255,92,150,.30),rgba(255,92,150,.30))}
+.tok.aimed{box-shadow:0 0 0 3px #FF9F1C,0 0 12px 3px rgba(255,159,28,.7) !important}
+.rangePick{flex:0 1 auto;min-width:0;max-width:11em;font-size:.76rem;padding:2px 4px;height:28px}
+.selbar .rangePick{max-width:14em}
+/* weapon dialog: a small board with the range, and 射程内/外 on each target */
+.rangeBox{display:flex;align-items:center;gap:10px;margin:2px 0 8px;font-size:.78rem}
+.rangeMini{display:grid;grid-template-columns:repeat(8,1fr);width:136px;aspect-ratio:1;flex:none;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.rangeMini .rc{display:flex;align-items:center;justify-content:center;background:#E8EEF8;font-size:.55rem;font-weight:800;color:#fff;line-height:1}
+.rangeMini .rc.alt{background:#D3DDEE}
+.rangeMini .rc.in{background:#FFD08A}
+.rangeMini .rc.in.alt{background:#FFC46A}
+.rangeMini .rc.me{background:var(--pink);border-radius:50%}
+.rangeMini .rc.foe{background:#3B2D7A;border-radius:50%}
+.rangeMini .rc.foe.in,.rangeMini .rc.in.foe{box-shadow:0 0 0 2px #FF9F1C inset}
+.rangeMini .rc.ally{background:#4FA3E0;border-radius:50%}
+.mchip .rtag{font-size:.66rem;font-weight:800;padding:0 6px;border-radius:999px;margin-left:2px}
+.mchip.inR .rtag{background:#FF9F1C;color:#2A1C00}
+.mchip.outR{opacity:.6}
+.mchip.outR .rtag{background:var(--line);color:var(--ink-2)}
+/* a joker ready for クロスユニゾン */
+.card.joker.unisonOk{box-shadow:0 0 0 2px var(--gold),0 0 12px 2px color-mix(in srgb,var(--gold) 60%,transparent);animation:turnTag 1.6s ease-in-out infinite}
+.card .uTag{position:absolute;left:50%;bottom:3px;transform:translateX(-50%);font-size:.5rem;font-weight:800;color:#2A1C00;background:var(--gold);border-radius:999px;padding:0 4px;white-space:nowrap;writing-mode:horizontal-tb;letter-spacing:0}
+@media (prefers-reduced-motion:reduce){.card.joker.unisonOk{animation:none}}
+
+/* lasting effects: chips on the list card, a count on tokens and on the folded phone strip, the panel section */
+.ofx{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px}
+.fxc{display:inline-flex;align-items:center;gap:3px;max-width:100%;font-size:.62rem;font-weight:800;line-height:1.5;padding:0 6px;border-radius:999px;background:#E9E2FF;color:#3B2D7A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fxc b{color:#B0124F}
+.fxc.nextOwn{background:#FFE7C2;color:#6A3B00}
+.fxc.round{background:#D7F2E6;color:#14532D}
+.fxc.manual{background:#E3E7EF;color:#334}
+:root:not([data-theme="light"]) .fxc{background:#3B3170;color:#E9E2FF} :root:not([data-theme="light"]) .fxc b{color:#FFB3CF}
+:root:not([data-theme="light"]) .fxc.nextOwn{background:#5A3B12;color:#FFE7C2} :root:not([data-theme="light"]) .fxc.round{background:#174A35;color:#D7F2E6} :root:not([data-theme="light"]) .fxc.manual{background:#3A3F4E;color:#E3E7EF}
+.ofxN{display:none}
+/* the token clips to its circle, so the count sits on the square's corner */
+.cell{position:relative}
+.cell .cfx{position:absolute;top:2px;right:2px;min-width:15px;height:15px;border-radius:8px;background:#7C5CFF;color:#fff;font-size:.58rem;font-weight:800;line-height:15px;text-align:center;padding:0 3px;box-shadow:0 0 0 2px #fff;z-index:3;pointer-events:none}
+@media (max-width:720px){
+  .mapwrap:not(.ordOpen) .ofx{display:none}
+  .mapwrap:not(.ordOpen) .ofxN{display:block;position:absolute;right:0;top:0;min-width:14px;height:14px;border-radius:7px;background:#7C5CFF;color:#fff;font-size:.55rem;font-weight:800;line-height:14px;text-align:center;padding:0 3px}
+}
+.afxList{display:flex;flex-direction:column;gap:2px;margin-top:10px}
+.afxRow{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:4px 10px;padding:7px 4px;border-top:1px dashed var(--line);cursor:pointer}
+.afxRow input{width:18px;height:18px}
+.afxName{font-weight:800;min-width:0}
+.afxName .attr{margin-left:6px;font-size:.66rem}
+.afxNote{color:var(--pink);font-weight:800;font-size:.82rem;white-space:nowrap}
+.afxDur{font-size:.76rem;color:var(--ink-2);white-space:nowrap}
+.afxTgt{background:#FFE7C2 !important;color:#6A3B00 !important}
+.rangeWarn{margin-top:14px;padding:10px 12px;border:1.5px solid #FF9F1C;border-radius:10px;font-size:.84rem;display:flex;flex-direction:column;gap:4px}
+.rangeWarn ul{margin:4px 0 0;padding-left:1.2em}
+@media (max-width:520px){ .afxRow{grid-template-columns:auto minmax(0,1fr) auto} .afxRow .afxDur{grid-column:2 / -1;margin-top:-4px} }
+.fxPanel{margin:10px 0 4px;padding:10px 12px;border:1px solid var(--line);border-radius:10px}
+.fxHead{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
+.fxRow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:4px 8px;padding:5px 0;border-top:1px dashed var(--line)}
+.fxRow .fxName{font-weight:800;min-width:0}
+.fxRow .fxName b{margin-left:6px;color:var(--pink)}
+.fxRow .fxDur{font-size:.74rem;color:var(--ink-2);white-space:nowrap}
+.fxRow .fxText{grid-column:1 / -1;font-size:.74rem;color:var(--ink-2);line-height:1.5}
+.fxAdd{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.fxAdd input{flex:1 1 8em;min-width:0}
+.fxAdd select{flex:0 1 auto}
+
+/* initiative: acted characters dim with 済, tied ones glow with a 動く button */
+.oitem.acted{opacity:.55}
+.oitem.acted::after{content:"済";position:absolute;top:4px;right:22px;font-size:.6rem;font-weight:800;color:var(--ink-2);border:1px solid var(--line);border-radius:4px;padding:0 4px;background:var(--cloud)}
+.oitem.tied{box-shadow:inset 0 0 0 2px #7C5CFF,0 0 12px rgba(124,92,255,.45) !important;animation:turnTag 1.6s ease-in-out infinite}
+.oitem .pickGo{position:absolute;right:6px;bottom:6px;z-index:2;padding:2px 10px !important}
+@media (max-width:720px){ .mapwrap:not(.ordOpen) .oitem .pickGo{display:none} .mapwrap:not(.ordOpen) .oitem.acted::after{top:auto;bottom:2px;right:2px;font-size:.5rem;padding:0 2px} }
+@media (prefers-reduced-motion:reduce){ .oitem.tied{animation:none} }
+.pickList{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.pickBtn{display:flex;align-items:center;gap:10px;padding:8px 12px;border:1.5px solid var(--line);border-radius:12px;background:var(--mist);color:var(--ink);font:inherit;font-weight:800;cursor:pointer;text-align:left}
+.pickBtn .pt{width:36px;height:36px;border-radius:50%}
+.pickBtn small{margin-left:auto;font-size:.7rem;color:var(--ink-2)}
+.pickBtn:hover:not(:disabled){border-color:var(--pink)}
+.pickBtn:disabled{opacity:.5;cursor:default}
+
+/* round: status line (wide screens) / chip (phones) */
+.roundBar{display:flex;align-items:center;gap:2px;width:100%;margin:0 0 4px;padding:3px 8px;border:1px solid var(--line);border-radius:8px;background:var(--cloud);color:var(--ink-2);font:inherit;font-size:.78rem;font-weight:800;text-align:left;cursor:default;white-space:nowrap;overflow:hidden}
+.roundBar[data-roundmenu]{cursor:pointer}
+.roundBar[data-roundmenu]:hover{border-color:var(--pink)}
+.roundBar.on{color:var(--ink)}
+.roundBar b{font-family:var(--num);font-size:1.05rem;color:var(--gold);margin:0 2px}
+.roundBar .rbTurn{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.roundBar .rbTurn i{font-style:normal}
+.roundBar .rbMenu{margin-left:auto;padding-left:6px;color:var(--ink-2)}
+#mapP .order > .roundBar{grid-column:1 / -1;height:30px;min-height:30px;align-self:start;box-sizing:border-box}
+.roundChip{flex:none !important;height:30px;padding:0 8px;border:1px solid var(--line);border-radius:999px;background:var(--cloud);color:var(--ink-2);font:inherit;font-size:.74rem;font-weight:800;white-space:nowrap}
+.roundChip.on{color:var(--ink)}
+.roundChip b{font-family:var(--num);color:var(--gold);font-size:.95rem;margin:0 1px}
+.roundMenu{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.roundMenu .btn{display:flex;flex-direction:column;align-items:flex-start;text-align:left;padding:8px 14px}
+.roundMenu .btn small{font-weight:600;font-size:.74rem;opacity:.8;margin-top:2px}
 
 /* notice under the chat tabs (floats over the log, so nothing moves) */
 .chat{position:relative}
@@ -1167,10 +1265,12 @@ function normalizeChar(raw) {
   // values: {HP:{max:20}} / {SS値:{value:3}} / {HP:20} (shorthand = max for HP/TP, value otherwise)
   const stats = {};
   for (const [k, v] of Object.entries(raw.values || {})) {
+    // empty (null / "") means the character does not have that value, not 0
+    const n = x => x != null && x !== '' && Number.isFinite(Number(x));
     if (v && typeof v === 'object') {
-      if (Number.isFinite(Number(v.max))) stats[k] = { max: Number(v.max) };
-      else if (Number.isFinite(Number(v.value))) stats[k] = { value: Number(v.value) };
-    } else if (Number.isFinite(Number(v))) stats[k] = (k === 'HP' || k === 'TP') ? { max: Number(v) } : { value: Number(v) };
+      if (n(v.max)) stats[k] = { max: Number(v.max) };
+      else if (n(v.value)) stats[k] = { value: Number(v.value) };
+    } else if (n(v)) stats[k] = (k === 'HP' || k === 'TP') ? { max: Number(v) } : { value: Number(v) };
   }
   // weapons: {common:[2], slots:[4 by suit]}; a v1 array becomes common weapons
   const w = raw.weapons;
@@ -1198,7 +1298,9 @@ function normalizeChar(raw) {
     variations: Array.isArray(raw.variations) ? raw.variations.map(v => ({ name: String(v?.name || 'バリエーション'), slots: slotsFrom(v?.slots), portrait: v?.portrait ? String(v.portrait) : null })) : [],
     basePortrait: raw.basePortrait ? String(raw.basePortrait) : null,
     wingDrive: raw.wingDrive ? item(raw.wingDrive) : null,
-    portraits: Array.isArray(raw.portraits) ? raw.portraits.filter(p => p && p.url).map(p => ({ label: String(p.label || '立ち絵'), url: toDirectImage(p.url) })) : [],
+    // {label, url}; a plain URL string (older sheets) gets a numbered label
+    portraits: Array.isArray(raw.portraits) ? raw.portraits.map((p, i) => typeof p === 'string' ? { label: `立ち絵${i + 1}`, url: p } : p)
+      .filter(p => p && typeof p.url === 'string' && p.url.trim()).map(p => ({ label: String(p.label || '立ち絵'), url: toDirectImage(p.url) })) : [],
     memo: String(raw.memo || ''),
   };
   dropStaleFormPortraits(data);
@@ -1213,6 +1315,118 @@ function dropStaleFormPortraits(d) {
 // the 立ち絵 linked to variation i (-1 = 基本), or null
 const formPortrait = (ch, i) => (i === -1 ? ch.data.basePortrait : (ch.data.variations[i] || {}).portrait) || null;
 const portraitUrl = (ch, label) => (ch.data.portraits.find(p => p.label === label) || {}).url || null;
+// クロスユニゾン (an all-out attack): every PC lines up in the effect, the declarer first
+const UNISON = /クロスユニゾン/;
+// クロスユニゾン and the ウイングドライブ are once per scenario: declaring them ticks their 使用済み box
+// ----- lasting effects (buffs / debuffs) -----
+// Read from the effect text by how long it lasts, which the rules always write the same way:
+//   phase   このアクションフェイズの間 / アクションフェイズが終わるまで → until the turn passes
+//   nextOwn 次の自分のアクションフェイズまで                      → until this character's next turn
+//   round   1ターンの間 / このラウンドの間                           → until the round ends
+//   manual  added by hand                                           → until removed
+// ===== reading rules shared with the character sheet tool (princess-wing-sheet.html): keep both copies the same =====
+const EFFECT_DUR = { phase: 'この手番の間', nextOwn: '次の自分の手番まで', round: 'ラウンド終了まで', manual: '外すまで' };
+const DUR_RE = { nextOwn: /次の自分のアクションフェイズまで/, phase: /このアクションフェイズ(の間|中(?!に)|が終わるまで)|アクションフェイズが終わるまで/, round: /1ターンの間|このターンの間|このラウンド(の間|中)|ラウンド(が)?終了(する)?まで/ };
+function effectDuration(text) {
+  const t = String(text || '').normalize('NFKC');
+  return ['nextOwn', 'phase', 'round'].find(k => DUR_RE[k].test(t)) || null;
+}
+// who the lasting effect is on: 'target' when its sentence is about 対象 (e.g. 対象は、1ターンの間…), otherwise the user
+function effectTarget(text) {
+  const t = String(text || '').normalize('NFKC');
+  const d = effectDuration(t); if (!d) return null;
+  const sentence = t.split(/[。\n]/).find(x => DUR_RE[d].test(x)) || '';
+  return /対象(は|の|が)/.test(sentence) && !/自分は/.test(sentence) ? 'target' : 'self';
+}
+// 射程: "2" / "1～2" are read; "－", "効果参照" and empty mean no range; anything else cannot be shown on the board
+const RANGE_NONE = /^(|[-－―—ー]|効果参照|なし|自身)$/;
+function parseRangeText(r) {
+  const t = String(r ?? '').normalize('NFKC').trim();
+  let m = t.match(/^(\d+)\s*[~〜～\-－―]\s*(\d+)$/);
+  if (m) return { min: Math.min(+m[1], +m[2]), max: Math.max(+m[1], +m[2]) };
+  m = t.match(/^(\d+)$/);
+  return m ? { min: +m[1], max: +m[1] } : null;
+}
+const rangeIssue = r => { const t = String(r ?? '').normalize('NFKC').trim(); return RANGE_NONE.test(t) || parseRangeText(t) ? null : t; };
+// ===== end of shared rules =====
+// a short summary for the chip: 威力+3 / 回避+1 / 武装+3回 (empty when nothing simple is found)
+function effectNote(text) {
+  const t = String(text || '').normalize('NFKC');
+  const out = [];
+  let m;
+  if ((m = t.match(/威力に?(?:すべて)?\s*\+\s*(\d+)/))) out.push(`威力+${m[1]}`);
+  if ((m = t.match(/回避コスト[^。]*?\+\s*(\d+)/))) out.push(`回避+${m[1]}`);
+  if ((m = t.match(/移動値[^。]*?\+\s*(\d+)/))) out.push(`移動+${m[1]}`);
+  if ((m = t.match(/追加で(\d+)回/))) out.push(`武装+${m[1]}回`);
+  return out.join(' ');
+}
+function addEffect(room, ch, { name, note, dur, text, by }) {
+  if (!ch) return;
+  ch.effects = (ch.effects || []).filter(e => e.name !== name);        // using it again refreshes it
+  ch.effects.push({ id: uid('e'), name: String(name).slice(0, 30), note: String(note || '').slice(0, 30), dur: EFFECT_DUR[dur] ? dur : 'manual',
+    text: String(text || '').slice(0, 300), turn: room.turn.current || null, seq: room.turn.seq || 0 });
+}
+// after the turn moves (次の手番, 手番の指定, ラウンド): drop what has run out, with a log line each
+function expireEffects(room, by, roundEnded) {
+  room.turn.seq = (room.turn.seq || 0) + 1;
+  for (const ch of Object.values(room.chars)) {
+    const gone = [];
+    ch.effects = (ch.effects || []).filter(e => {
+      const out = e.dur === 'phase' ? (roundEnded || room.turn.current !== e.turn)
+        : e.dur === 'nextOwn' ? room.turn.current === ch.id && room.turn.seq > e.seq
+        : e.dur === 'round' ? roundEnded : false;
+      if (out) gone.push(e.name);
+      return !out;
+    });
+    if (gone.length) log(room, { tab: opsTab(room), type: 'sys', by, cid: ch.id, text: `${ch.data.name}の「${gone.join('」「')}」の効果が切れました` });
+  }
+}
+// a declaration (コマンド or 武装を使う) whose text has a duration starts a lasting effect on the declarer,
+// but only for the items the player confirmed when importing (ch.autoFx: names; reading the text can be wrong)
+function effectsFromText(room, ch, name, text, by, targets) {
+  const dur = effectDuration(text);
+  if (!ch || !dur || !(ch.autoFx || []).includes(name)) return;
+  // on the 対象: the targets chosen in 武装を使う (nothing to attach to without them)
+  const on = effectTarget(text) === 'target' ? (targets || []).map(id => room.chars[id]).filter(Boolean) : [ch];
+  on.forEach(c => addEffect(room, c, { name, note: effectNote(text), dur, text, by }));
+}
+// every item of a sheet whose text has a duration: what the import asks about
+function detectEffects(d) {
+  const out = [], seen = new Set();
+  const add = (grp, it) => { if (!it || !it.name || seen.has(it.name)) return; const dur = effectDuration(it.text); if (dur) { seen.add(it.name); out.push({ grp, name: it.name, note: effectNote(it.text), dur, target: effectTarget(it.text) }); } };
+  (d.skills || []).forEach(it => add('特技', it));
+  (d.core?.functions || []).forEach(it => add('特殊機能', it));
+  add('ウイングドライブ', d.wingDrive);
+  (d.weapons?.common || []).forEach(it => add('武装', it));
+  [d.weapons?.slots || [], ...(d.variations || []).map(v => v.slots || [])].forEach(sl => sl.forEach(it => add('武装', it)));
+  return out;
+}
+// weapons whose 射程 cannot be read (shown before import, so it can be fixed in the sheet)
+function rangeProblems(d) {
+  const out = [];
+  [d.weapons?.common || [], d.weapons?.slots || [], ...(d.variations || []).map(v => v.slots || [])].forEach(l => l.forEach(w => {
+    const bad = w && w.name && rangeIssue(w.attrs?.['射程']);
+    if (bad && !out.some(x => x.name === w.name)) out.push({ name: w.name, range: bad });
+  }));
+  return out;
+}
+const cleanAutoFx = list => Array.isArray(list) ? [...new Set(list.map(String))].slice(0, 60) : null;
+// end of a round: hand exchange, the round number goes up, the top of the order acts, round-long effects end
+function nextRound(room, by) {
+  log(room, { tab: opsTab(room), type: 'round', by, text: `第${room.turn.round}ラウンド終了（手札交換のタイミングです）` });
+  room.turn.round += 1;
+  room.turn.done = [];
+  const next = seatNext(room);
+  expireEffects(room, by, true);
+  log(room, { tab: opsTab(room), type: 'round', by, start: room.turn.round, cid: room.turn.current || undefined, text: `第${room.turn.round}ラウンド開始${next ? `：${next}` : ''}` });
+}
+function markOncePerScenario(ch, { unison, wd }) {
+  if (!ch) return;
+  if (unison) ch.data.weapons.common.forEach((w, i) => { if (UNISON.test(w.name || '')) ch.used[`common:${i}`] = true; });
+  if (wd && ch.data.wingDrive) ch.used['wingDrive:0'] = true;
+}
+const unisonMembers = (room, firstId) => Object.values(room.chars).filter(c => c.side === 'pc').sort((x, y) => (x.id === firstId ? -1 : 0) - (y.id === firstId ? -1 : 0))
+  .map(c => ({ name: c.data.name, color: c.color, url: portraitUrl(c, c.portrait) || (c.data.portraits[0] || {}).url || null }));
 const statStart = s => s.max ?? s.value;
 const currentSlots = ch => ch.variation >= 0 && ch.data.variations[ch.variation] ? ch.data.variations[ch.variation].slots : ch.data.weapons.slots;
 const ssOf = ch => Number.isFinite(ch.cur['SS値']) ? ch.cur['SS値'] : (ch.data.stats['SS値'] ? statStart(ch.data.stats['SS値']) : -Infinity);
@@ -1224,6 +1438,21 @@ function turnOrder(room) {
     .map(x => x.c);
 }
 
+// SS値 is the initiative: the next to act is the highest SS値 among those who have not acted this round
+// (room.turn.done). A tie is not decided by the table order: the players choose (room.turn.pick).
+function nextActors(room) {
+  const done = new Set(room.turn.done || []);
+  const left = turnOrder(room).filter(c => !done.has(c.id));
+  return left.length ? left.filter(c => ssOf(c) === ssOf(left[0])) : [];
+}
+const tieText = g => `SS値${ssOf(g[0])}が同値：${g.map(c => c.data.name).join('、')}から次に動くキャラを選びます`;
+// put the next actor (or the tie to choose from) in place; returns the log text for it
+function seatNext(room) {
+  const g = nextActors(room);
+  room.turn.current = g.length === 1 ? g[0].id : null;
+  room.turn.pick = g.length > 1 ? g.map(c => c.id) : null;
+  return g.length === 1 ? `${g[0].data.name}の手番です` : g.length ? tieText(g) : '';
+}
 function newRoom(name) {
   return {
     id: uid('r'), name: name || '新しい部屋', createdAt: Date.now(),
@@ -1296,7 +1525,7 @@ function applyInner(room, a, by, pid) {
       const colors = NAME_COLORS.slice(0, 8);
       room.chars[id] = { id, side: a.side, data, dv: 1, cur, used: {}, variation: -1, x: null, y: null, portrait: data.portraits[0]?.label || null,
         color: a.side === 'enemy' ? '#FF7A7A' : colors[Object.keys(room.chars).filter(k => room.chars[k].side !== 'enemy').length % colors.length],
-        owner: by === 'gm' ? 'gm' : (pid && pid !== by ? pid : id) };
+        owner: by === 'gm' ? 'gm' : (pid && pid !== by ? pid : id), autoFx: cleanAutoFx(a.autoFx) || [] };
       if (a.side === 'pc' || a.side === 'npc') room.cards.hands[id] = room.cards.hands[id] || [];
       log(room, { tab: opsTab(room), type: 'sys', by, text: `${data.name}（${{ pc: 'PC', enemy: '敵', npc: 'NPC' }[a.side]}）が参加しました` });
       return id;
@@ -1309,11 +1538,33 @@ function applyInner(room, a, by, pid) {
       data.variations.forEach((v, i) => { const rv = (Array.isArray(a.data.variations) ? a.data.variations : [])[i]; if (!(rv && typeof rv === 'object' && 'portrait' in rv)) v.portrait = (ch.data.variations.find(o => o.name === v.name) || {}).portrait || null; });
       if (!Array.isArray(a.data.portraits)) data.portraits = ch.data.portraits;
       dropStaleFormPortraits(data);
+      if (cleanAutoFx(a.autoFx)) ch.autoFx = cleanAutoFx(a.autoFx);
       for (const [k, s] of Object.entries(data.stats)) if (!(k in ch.cur)) ch.cur[k] = statStart(s);
       ch.data = data; ch.dv = (ch.dv || 1) + 1;
       if (!(ch.variation < data.variations.length)) ch.variation = -1;
       if (ch.portrait && !data.portraits.some(p => p.label === ch.portrait)) ch.portrait = data.portraits[0]?.label || null;
       log(room, { tab: opsTab(room), type: 'sys', by, text: `${data.name}のデータを更新しました` });
+      return;
+    }
+    case 'setAutoFx': {
+      need(ch && canControlChar(room, by, a.cid), 'このキャラクターは操作できません');
+      ch.autoFx = cleanAutoFx(a.names) || [];
+      return;
+    }
+    case 'addEffect': {
+      need(ch && canControlChar(room, by, a.cid), 'このキャラクターは操作できません');
+      const nm = String(a.name || '').trim();
+      need(nm, '効果の名前を入れてください');
+      addEffect(room, ch, { name: nm, note: a.note, dur: a.dur, text: a.text, by });
+      log(room, { tab: opsTab(room), type: 'sys', by, cid: ch.id, text: `${ch.data.name}に「${nm}」（${EFFECT_DUR[a.dur] || EFFECT_DUR.manual}）を付けました` });
+      return;
+    }
+    case 'removeEffect': {
+      need(ch && canControlChar(room, by, a.cid), 'このキャラクターは操作できません');
+      const e = (ch.effects || []).find(x => x.id === a.eid);
+      need(e, 'その効果は見つかりません');
+      ch.effects = ch.effects.filter(x => x.id !== a.eid);
+      log(room, { tab: opsTab(room), type: 'sys', by, cid: ch.id, text: `${ch.data.name}の「${e.name}」を外しました` });
       return;
     }
     case 'removeChar': {
@@ -1398,31 +1649,49 @@ function applyInner(room, a, by, pid) {
       need(by === 'gm', '手番を指定できるのはGMだけです');
       need(a.cid === null || room.chars[a.cid], 'キャラクターが見つかりません');
       room.turn.current = a.cid && room.turn.current !== a.cid ? a.cid : null;   // pressing the current one again clears it
+      room.turn.pick = null;
       if (room.turn.current) log(room, { tab: opsTab(room), type: 'turn', by, cid: room.turn.current, text: `${room.chars[room.turn.current].data.name}の手番です` });
+      expireEffects(room, by, false);
       return;
     }
     case 'nextTurn': {
       need(by === 'gm' || by === room.turn.current, '手番を進められるのは、GMか手番のキャラだけです');
-      const order = turnOrder(room);
-      need(order.length, 'キャラクターがいません');
-      const i = order.findIndex(c => c.id === room.turn.current);
-      const next = order[i + 1] || order[0];          // no rounds: after the last one, back to the top
-      room.turn.current = next.id;
-      log(room, { tab: opsTab(room), type: 'turn', by, cid: next.id, text: `${next.data.name}の手番です` });
+      need(turnOrder(room).length, 'キャラクターがいません');
+      need(!(room.turn.pick || []).length, '同値のキャラから、次に動くキャラを選んでください');
+      if (room.turn.current) room.turn.done = [...new Set([...(room.turn.done || []), room.turn.current])];
+      if (!nextActors(room).length) { nextRound(room, by); return; }       // everyone has acted: the round ends
+      const text = seatNext(room);
+      log(room, { tab: opsTab(room), type: 'turn', by, cid: room.turn.current || undefined, text });
+      expireEffects(room, by, false);
+      return;
+    }
+    case 'pickTurn': { // a tie on SS値: one of the tied characters goes now
+      need((room.turn.pick || []).includes(a.cid), 'そのキャラクターは今は選べません');
+      need(canControlChar(room, by, a.cid), '選べるのはGMか、そのキャラの持ち主だけです');
+      room.turn.current = a.cid; room.turn.pick = null;
+      log(room, { tab: opsTab(room), type: 'turn', by, cid: a.cid, text: `${room.chars[a.cid].data.name}の手番です` });
+      expireEffects(room, by, false);
       return;
     }
     case 'endRound': {
       need(by === 'gm', 'ラウンドを進められるのはGMだけです');
-      log(room, { tab: opsTab(room), type: 'round', by, text: `第${room.turn.round}ラウンド終了（手札交換のタイミングです）` });
-      room.turn.round += 1;
-      room.turn.current = turnOrder(room)[0]?.id || null;
-      log(room, { tab: opsTab(room), type: 'round', by, start: room.turn.round, cid: room.turn.current, text: `第${room.turn.round}ラウンド開始${room.turn.current ? `：${room.chars[room.turn.current].data.name}の手番です` : ''}` });
+      nextRound(room, by);
+      return;
+    }
+    case 'endCombat': {
+      need(by === 'gm', '戦闘を終えられるのはGMだけです');
+      room.turn.current = null; room.turn.pick = null; room.turn.done = [];
+      room.turn.seq = (room.turn.seq || 0) + 1;
+      for (const c of Object.values(room.chars)) c.effects = (c.effects || []).filter(e => e.dur === 'manual');
+      log(room, { tab: opsTab(room), type: 'round', by, text: `戦闘終了（第${room.turn.round}ラウンド）` });
       return;
     }
     case 'resetRound': {
       need(by === 'gm', 'ラウンドを戻せるのはGMだけです');
-      room.turn = { round: 1, current: turnOrder(room)[0]?.id || null };
-      log(room, { tab: opsTab(room), type: 'round', by, text: `戦闘開始：第1ラウンド${room.turn.current ? `、${room.chars[room.turn.current].data.name}の手番です` : ''}` });
+      room.turn = { round: 1, current: null, seq: (room.turn.seq || 0), done: [], pick: null };
+      const first = seatNext(room);
+      for (const c of Object.values(room.chars)) c.effects = (c.effects || []).filter(e => e.dur === 'manual');
+      log(room, { tab: opsTab(room), type: 'round', by, start: 1, cid: room.turn.current || undefined, text: `戦闘開始：第1ラウンド${first ? `、${first}` : ''}` });
       return;
     }
 
@@ -1510,12 +1779,12 @@ function applyInner(room, a, by, pid) {
       need(ws.length, '武装を選んでください');
       room.cards.hands[seat] = hand.filter(x => !cards.includes(x));
       room.cards.discard.push(...cards);
+      markOncePerScenario(ch, { unison: ws.some(w => UNISON.test(w.name)) });
+      ws.forEach(w => effectsFromText(room, ch, w.name, w.text, by, Array.isArray(a.targets) ? a.targets.filter(id => room.chars[id]) : []));
       log(room, { tab: opsTab(room), type: 'weapon', by, seat, cid: ch.id, charName: ch.data.name,
         weapons: ws.map(w => ({ name: w.name, suit: w.suit || null, attrs: { ...(w.attrs || {}) }, text: w.text || '' })),
         cards, targets: (Array.isArray(a.targets) ? a.targets : []).map(id => room.chars[id]?.data.name).filter(Boolean), memo: String(a.memo || '').trim(), offForm,
-        // クロスユニゾン (an all-out attack): every PC lines up in the effect, the declarer first
-        ...(ws.some(w => /クロスユニゾン/.test(w.name)) ? { fx: 'unison', members: Object.values(room.chars).filter(c => c.side === 'pc').sort((x, y) => (x.id === ch.id ? -1 : 0) - (y.id === ch.id ? -1 : 0))
-          .map(c => ({ name: c.data.name, color: c.color, url: portraitUrl(c, c.portrait) || (c.data.portraits[0] || {}).url || null })) } : {}) });
+        ...(ws.some(w => UNISON.test(w.name)) ? { fx: 'unison', members: unisonMembers(room, ch.id) } : {}) });
       return;
     }
     case 'shuffleBack': {
@@ -1593,7 +1862,12 @@ function applyInner(room, a, by, pid) {
       const pUrl = a.as ? (room.chars[a.as].data.portraits.find(p => p.label === a.portrait) || {}).url || null : null;
       const dice = parseDice(text);
       const color = a.as ? room.chars[a.as].color : (isHex(a.color) ? a.color : null);
-      log(room, { tab: tab.id, type: 'say', by, as: a.as || null, name: a.as ? room.chars[a.as].data.name : freeName, color, portrait: a.portrait || null, portraitUrl: pUrl, text, cmd: a.cmd || null, dice, fx: a.fx === 'wd' ? 'wd' : undefined, reply });
+      const unison = UNISON.test(a.cmd || '') || /^【武装】[^\n]*クロスユニゾン/.test(text);
+      const wdChar = a.as && room.chars[a.as];
+      const wd = a.fx === 'wd' || !!(wdChar && wdChar.data.wingDrive && a.cmd && a.cmd === wdChar.data.wingDrive.name);
+      markOncePerScenario(wdChar, { unison, wd });
+      if (wdChar && a.cmd) effectsFromText(room, wdChar, a.cmd, text, by);
+      log(room, { tab: tab.id, type: 'say', by, as: a.as || null, name: a.as ? room.chars[a.as].data.name : freeName, color, portrait: a.portrait || null, portraitUrl: pUrl, text, cmd: a.cmd || null, dice, fx: unison ? 'unison' : a.fx === 'wd' ? 'wd' : undefined, members: unison ? unisonMembers(room, a.as) : undefined, reply });
       if (tpCh) {
         const before = tpCh.cur.TP;
         tpCh.cur.TP = before - a.spendTP;
@@ -1778,7 +2052,7 @@ function viewRoom(room, seat, pid) {
   return r;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
+  module.exports = { rangeProblems, effectTarget, rangeIssue, nextActors, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
 }
 // =====================================================================
 // local storage + UI
@@ -1810,7 +2084,7 @@ const curRoom = () => { const r = route(); return r.view === 'room' ? DB.rooms[r
 const FAIL = Symbol('fail');
 // online, these show on screen at once: they are applied to a local copy and re-applied on top of each state
 // the server sends until it confirms them (ack). Draws and other deck/random actions wait for the server.
-const OPTIMISTIC = new Set(['setValue', 'toggleUsed', 'setColor', 'setPortrait', 'variation', 'setTurn', 'nextTurn', 'move', 'play', 'useWeapons', 'give', 'pick', 'say']);
+const OPTIMISTIC = new Set(['addEffect', 'removeEffect', 'setValue', 'toggleUsed', 'setColor', 'setPortrait', 'variation', 'setTurn', 'nextTurn', 'move', 'play', 'useWeapons', 'give', 'pick', 'say']);
 // a copy to try actions on: the room deep, the logs only one level (actions touch log fields, never deeper)
 const roomCopy = room => { const { logs, ...rest } = room; const r = JSON.parse(JSON.stringify(rest)); r.logs = (logs || []).map(l => ({ ...l })); return r; };
 function act(a, opts = {}) {
@@ -1893,6 +2167,7 @@ function fxMode() {
 // a character this browser plays (online: owns it; local: the seat being viewed)
 const playsChar = (room, c) => !!c && isPcSeat(room, c.id) && (ONLINE ? c.owner === myPid() : roomUI(room.id).viewer === c.id);
 const isTurnLog = l => (l.type === 'turn' && l.cid) || (l.type === 'round' && l.start);
+const isUnisonLog = l => l.fx === 'unison' || (l.type === 'weapon' && (l.weapons || []).some(w => UNISON.test(w.name))) || (l.type === 'say' && UNISON.test(l.cmd || ''));
 // turn / round cut-in: a band sweeps across with the portrait; "あなたの手番です" when it is your character
 function playTurn(room, l) {
   if (ui.fxSeen.has(l.id)) return;
@@ -1938,7 +2213,12 @@ function playFx(room, l) {
   ui.fxSeen.add(l.id);
   const mode = fxMode();
   if (mode === 'off' || Date.now() - l.t > 15000) return;
-  if (l.fx === 'unison') { if (U.fxWho !== 'mine' || (l.members || []).some(x => x.name === (room.chars[roomUI(room.id).viewer] || { data: {} }).data.name) || l.pid === myPid()) playUnison(l, mode); return; }
+  if (isUnisonLog(l)) {
+    const members = l.members && l.members.length ? l.members : unisonMembers(room, l.cid || l.as);
+    const by = l.charName || (room.chars[l.cid || l.as] || { data: {} }).data.name || l.name || '';
+    if (U.fxWho !== 'mine' || l.pid === myPid() || members.some(x => x.name === (room.chars[roomUI(room.id).viewer] || { data: {} }).data.name)) playUnison({ ...l, members, charName: by }, mode);
+    return;
+  }
   if (U.fxWho === 'mine' && !(ONLINE ? l.pid === myPid() : l.by === roomUI(room.id).viewer)) return;
   const c = room.chars[l.cid || l.as];
   const p = c && (c.data.portraits.find(x => x.label === c.portrait) || c.data.portraits[0]);
@@ -2153,9 +2433,11 @@ function renderRoom() {
   computeUnread(room, ru);
   // play effects for 換装 / ウイングドライブ lines that arrived since the last draw (never for old ones)
   if (!ui.fxInit) { ui.fxInit = true; room.logs.forEach(l => ui.fxSeen.add(l.id)); }
-  else for (const l of room.logs.slice(-8)) if ((l.fx || isTurnLog(l)) && !ui.fxSeen.has(l.id) && viewLog(room, l, ru.viewer, myPid())) (l.fx ? playFx : playTurn)(room, l);
+  else for (const l of room.logs.slice(-8)) if ((l.fx || isTurnLog(l) || isUnisonLog(l)) && !ui.fxSeen.has(l.id) && viewLog(room, l, ru.viewer, myPid())) (isTurnLog(l) ? playTurn : playFx)(room, l);
   renderMap(room, ru); renderCards(room, ru); renderChat(room, ru);
   ui.chatAtBottom = null;
+  if (ui.expectPick && (room.turn.pick || []).length && !$('dlg').open) { ui.expectPick = false; pickMenu(room, ru); }
+  else if (ui.expectPick && room.turn.current) ui.expectPick = false;
   if (typeof refreshModal === 'function' && ui.modal && $('dlg').open) refreshModal();
   const total = ui.unreadTotal;
   $('unread').hidden = total <= 0; $('unread').textContent = total > 99 ? '99+' : total;
@@ -2183,17 +2465,34 @@ function computeUnread(room, ru) {
 }
 
 // ---------------- map ----------------
+// lasting effects as small chips (name + summary); the tooltip has how long it lasts and the full text
+const fxChips = c => (c.effects || []).length ? `<div class="ofx">${c.effects.map(e => `<span class="fxc ${e.dur}" title="${esc(`${e.name}${e.note ? '（' + e.note + '）' : ''}：${EFFECT_DUR[e.dur] || ''}${e.text ? '\n' + e.text : ''}`)}">${esc(e.name)}${e.note ? `<b>${esc(e.note)}</b>` : ''}</span>`).join('')}</div>` : '';
 // a diagonal step counts as 2 squares
 const dist = (room, a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
-function tokHtml(c, sel) {
+// 射程 "1～2" / "1-2" / "2" → {min, max}; text such as 効果参照 has no range
+const rangeOf = w => parseRangeText(w && w.attrs && w.attrs['射程']);
+const rangeText = r => r.min === r.max ? `${r.max}` : `${r.min}～${r.max}`;
+// the weapons a character can use now (共通 + the equipped variation), each with a key and its range
+const weaponsNow = c => [...c.data.weapons.common.map((w, i) => ['c' + i, w]), ...currentSlots(c).map((w, i) => ['s' + i, w])]
+  .filter(([, w]) => w && w.name).map(([k, w]) => ({ k, w, r: rangeOf(w) }));
+const inRange = (from, to, r) => from.x != null && to.x != null && r && (d => d >= r.min && d <= r.max)(Math.abs(from.x - to.x) + Math.abs(from.y - to.y));
+const foes = (room, c) => Object.values(room.chars).filter(o => o.id !== c.id && (c.side === 'enemy' ? o.side !== 'enemy' : o.side === 'enemy'));
+// クロスユニゾン still unused by one of these characters → a joker in hand is worth showing off
+const unisonReady = chars => chars.some(c => c.data.weapons.common.some((w, i) => /クロスユニゾン/.test(w.name || '') && !c.used[`common:${i}`]));
+function tokHtml(c, sel, aimed) {
   const p = c.data.portraits.find(x => x.label === c.portrait) || c.data.portraits[0];
   const down = Object.keys(c.cur).includes('HP') && c.cur.HP <= 0;
-  return `<div class="tok ${c.side === 'enemy' ? 'enemy' : 'pc'} ${sel ? 'sel' : ''} ${down ? 'down' : ''} ${curRoom() && curRoom().turn.current === c.id ? 'turn' : ''}" data-tok="${c.id}" title="${esc(c.data.name)}" style="${c.side !== 'enemy' ? `background:${c.color};color:${inkOn(c.color)}` : ''}">${p ? `<img src="${esc(p.url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createTextNode(${esc(JSON.stringify(c.data.name.slice(0, 2)))}))">` : esc(c.data.name.slice(0, 2))}</div>`;
+  const nfx = (c.effects || []).length;
+  return `<div class="tok ${c.side === 'enemy' ? 'enemy' : 'pc'} ${sel ? 'sel' : ''} ${aimed ? 'aimed' : ''} ${down ? 'down' : ''} ${nfx ? 'hasfx' : ''} ${curRoom() && curRoom().turn.current === c.id ? 'turn' : ''}" ${nfx ? `data-nfx="${nfx}"` : ''} data-tok="${c.id}" title="${esc(c.data.name)}${nfx ? `（効果：${esc(c.effects.map(e => e.name).join('・'))}）` : ''}" style="${c.side !== 'enemy' ? `background:${c.color};color:${inkOn(c.color)}` : ''}">${p ? `<img src="${esc(p.url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createTextNode(${esc(JSON.stringify(c.data.name.slice(0, 2)))}))">` : esc(c.data.name.slice(0, 2))}</div>`;
 }
 function boardCells(room) {
   const chars = Object.values(room.chars);
   const sel = ui.selTok && room.chars[ui.selTok];
   const mv = sel ? Number(sel.cur['移動値']) : NaN;
+  // a weapon chosen in the move bar: its range is outlined and foes within it are ringed
+  const rw = sel && ui.rangeW && ui.rangeW.cid === sel.id ? weaponsNow(sel).find(x => x.k === ui.rangeW.k) : null;
+  const rng = rw && rw.r && sel.x != null ? rw.r : null;
+  const foeIds = rng ? new Set(foes(room, sel).filter(o => inRange(sel, o, rng)).map(o => o.id)) : null;
   const at = {}; chars.forEach(c => { if (c.x != null) (at[c.x + ',' + c.y] = at[c.x + ',' + c.y] || []).push(c); });
   let cells = '';
   for (let y = 0; y < 8; y++) {
@@ -2203,8 +2502,9 @@ function boardCells(room) {
       const d = sel && sel.x != null ? dist(room, sel, { x, y }) : null;
       // squares within 移動値 are highlighted; moving further is still allowed
       const reach = d != null && d > 0 && Number.isFinite(mv) && d <= mv && !list.length;
-      cells += `<div class="cell ${(x + y) % 2 ? 'alt' : ''} ${list.length > 1 ? 'multi' : ''} ${sel && !list.length ? 'target' : ''} ${reach ? 'reach' : ''}" data-cell="${x},${y}" aria-label="${coordName(x, y)}${reach ? '（移動値の範囲内）' : ''}">
-        ${list.map(c => tokHtml(c, sel && c.id === sel.id)).join('')}${d != null && d > 0 ? `<span class="dist">${d}</span>` : ''}</div>`;
+      const inR = rng && d != null && d >= rng.min && d <= rng.max;
+      cells += `<div class="cell ${(x + y) % 2 ? 'alt' : ''} ${list.length > 1 ? 'multi' : ''} ${sel && !list.length ? 'target' : ''} ${reach ? 'reach' : ''} ${inR ? 'rng' : ''}" data-cell="${x},${y}" aria-label="${coordName(x, y)}${reach ? '（移動値の範囲内）' : ''}${inR ? '（射程内）' : ''}">
+        ${list.map(c => tokHtml(c, sel && c.id === sel.id, foeIds && foeIds.has(c.id))).join('')}${(n => n ? `<span class="cfx" title="効果${n}件">${n}</span>` : '')(list.reduce((a, c) => a + (c.effects || []).length, 0))}${d != null && d > 0 ? `<span class="dist">${d}</span>` : ''}</div>`;
     }
   }
   cells += `<div></div>` + [...'ABCDEFGH'].map(l => `<div class="coord">${l}</div>`).join('');
@@ -2233,24 +2533,43 @@ function renderMap(room, ru) {
   const cells = boardCells(room);
   const order = turnOrder(room), npcs = Object.values(room.chars).filter(c => c.side === 'npc');
   const v = ru.viewer, cur = room.turn.current, phone = isPhone();
+  const done = new Set(room.turn.done || []), pick = room.turn.pick || [];
+  const canPick = c => pick.includes(c.id) && canControlChar(room, v, c.id);
   const item = (c, i) => `
-    <div class="oitem ${c.id === cur ? 'now' : ''} ${ui.selTok === c.id ? 'sel' : ''} ${c.side}" data-charopen="${c.id}" role="button" tabindex="0" title="${esc(c.data.name)}の詳細を開く">
-      <div class="ohead">${i != null ? `<span class="onum">${i + 1}</span>` : ''}${ptImg(c, null, 'pt')}
+    <div class="oitem ${c.id === cur ? 'now' : ''} ${ui.selTok === c.id ? 'sel' : ''} ${done.has(c.id) && c.id !== cur ? 'acted' : ''} ${pick.includes(c.id) ? 'tied' : ''} ${c.side}" data-charopen="${c.id}" role="button" tabindex="0" title="${esc(c.data.name)}の詳細を開く">
+      ${canPick(c) ? `<button class="btn small primary pickGo" data-pickturn="${c.id}">動く</button>` : ''}
+      <div class="ohead">${i != null ? `<span class="onum">${i + 1}</span>` : ''}${ptImg(c, null, 'pt')}${(c.effects || []).length ? `<span class="ofxN" title="効果${c.effects.length}件">${c.effects.length}</span>` : ''}
         <div class="otext"><span class="oname" style="${nameCss(c.color)}">${esc(c.data.name)}</span>
           ${v === 'gm' && c.side !== 'npc' ? `<button class="oset" data-setturn="${c.id}" title="${c.id === cur ? '手番を外す' : 'このキャラの手番にする'}" aria-label="${esc(c.data.name)}の手番にする">▶</button>` : ''}
           <span class="ometa">${'HP' in c.cur ? `<span class="phoneOnly ${c.data.stats.HP && c.data.stats.HP.max && c.cur.HP / c.data.stats.HP.max <= 0.5 ? 'hpLow' : ''}">HP${c.cur.HP}${'TP' in c.cur ? ` TP${c.cur.TP}` : ''}<br></span>` : ''}${c.data.stats['SS値'] ? `SS${c.cur['SS値']}` : ''}${c.data.stats['移動値'] ? `　移${c.cur['移動値']}` : ''}${c.x == null ? '　盤外' : `　${coordName(c.x, c.y)}`}</span></div>
 </div>
-      ${statLine(room, ru, c, 'HP')}${statLine(room, ru, c, 'TP')}
+      ${statLine(room, ru, c, 'HP')}${statLine(room, ru, c, 'TP')}${fxChips(c)}
     </div>`;
   const canNext = cur && (v === 'gm' || v === cur);
-  const tools = `<button class="btn small" data-import>＋ キャラ</button>${canNext ? `<button class="btn small primary" data-nextturn title="次のキャラの手番へ">次の手番 ›</button>` : v === 'gm' || isPcSeat(room, v) ? '<span class="btn small primary slot" aria-hidden="true">次の手番 ›</span>' : ''}${v === 'gm' ? `<button class="btn small ghost mobileOnly" data-opensettings>設定</button>` : ''}`;
-  const moving = sel ? `<span class="mvname">${esc(sel.data.name)}を移動中${Number.isFinite(sel.cur['移動値']) ? `<span class="mvtag">移動値${sel.cur['移動値']}</span>` : ''}</span><button class="btn small" data-offboard>盤外へ</button><button class="btn small" data-unsel>やめる</button>` : '';
+  // the last one yet to act ends the round with the same button; a tie on SS値 asks who goes
+  const lastUp = cur && !order.some(c => c.id !== cur && !done.has(c.id));
+  const pickable = pick.length && (v === 'gm' || pick.includes(v));
+  const nextBtn = pickable ? '<button class="btn small primary" data-pickmenu title="SS値が同値のキャラから選ぶ">誰が動く？</button>'
+    : canNext ? `<button class="btn small primary" data-nextturn title="${lastUp ? 'ラウンドを終えて次のラウンドへ' : '次のキャラの手番へ'}">${lastUp ? 'ラウンド終了 ›' : '次の手番 ›'}</button>`
+    : !cur && v === 'gm' && order.length ? '<button class="btn small primary" data-resetround title="第1ラウンド、SS値がいちばん大きいキャラから">戦闘開始</button>'
+    : v === 'gm' || isPcSeat(room, v) ? '<span class="btn small primary slot" aria-hidden="true">次の手番 ›</span>' : '';
+  const tools = `<button class="btn small" data-import>＋ キャラ</button>${nextBtn}${v === 'gm' ? `<button class="btn small ghost mobileOnly" data-opensettings>設定</button>` : ''}`;
+  // round: a status line on wide screens, a chip in the phone tool row; the GM opens the round menu from it
+  const curCh = cur && room.chars[cur];
+  const roundAttrs = v === 'gm' ? 'data-roundmenu title="ラウンドの操作"' : 'tabindex="-1"';
+  const inCombat = cur || pick.length;
+  const roundBar = `<button class="roundBar ${inCombat ? 'on' : ''}" ${roundAttrs}>${inCombat ? `第<b>${room.turn.round}</b>ラウンド<span class="rbTurn">${curCh ? `・<i style="${nameCss(curCh.color)}">${esc(curCh.data.name)}</i>の手番` : pick.length ? `・SS値${ssOf(room.chars[pick[0]])}が同値：選択中` : ''}</span>` : '戦闘前'}${v === 'gm' ? '<span class="rbMenu">▾</span>' : ''}</button>`;
+  const roundChip = `<button class="roundChip ${inCombat ? 'on' : ''}" ${roundAttrs}>${inCombat ? `第<b>${room.turn.round}</b>R` : '戦闘前'}</button>`;
+  const ranged = sel && canControlChar(room, v, sel.id) && sel.x != null ? weaponsNow(sel).filter(x => x.r) : [];
+  const rk = sel && ui.rangeW && ui.rangeW.cid === sel.id ? ui.rangeW.k : '';
+  const rangePick = ranged.length ? `<select class="rangePick" data-rangew="${sel.id}" aria-label="射程を表示する武装"><option value="">射程</option>${ranged.map(x => `<option value="${x.k}" ${x.k === rk ? 'selected' : ''}>${x.w.suit ? SUIT[x.w.suit] : ''}${esc(x.w.name)}（${rangeText(x.r)}）</option>`).join('')}</select>` : '';
+  const moving = sel ? `<span class="mvname">${esc(sel.data.name)}を移動中${Number.isFinite(sel.cur['移動値']) ? `<span class="mvtag">移動値${sel.cur['移動値']}</span>` : ''}</span>${rangePick}<button class="btn small" data-offboard>盤外へ</button><button class="btn small" data-unsel>やめる</button>` : '';
   const open = !!U.ordOpen;
   setHtml($('mapP'), `
     <div class="mapwrap ${open ? 'ordOpen' : ''}">
-      ${phone ? `<div class="phoneTool ${sel ? 'moving' : ''}">${sel ? moving : tools}</div>` : ''}
+      ${phone ? `<div class="phoneTool ${sel ? 'moving' : ''}">${sel ? moving : roundChip + tools}</div>` : ''}
       <div class="order" aria-label="キャラクター（SS値の大きい順）">
-        ${phone ? `<button class="ordToggle" data-ordtoggle aria-expanded="${open}" title="${open ? '行動順を閉じる' : '行動順を開く'}">${open ? '◀' : '▶'}</button>` : `<div class="ohd">${tools}</div>`}
+        ${phone ? `<button class="ordToggle" data-ordtoggle aria-expanded="${open}" title="${open ? '行動順を閉じる' : '行動順を開く'}">${open ? '◀' : '▶'}</button>` : `${roundBar}<div class="ohd">${tools}</div>`}
         ${order.map(item).join('') || (phone ? '' : '<p class="muted">「＋ キャラ」から読み込むと、SS値の順に並びます</p>')}
         ${npcs.length ? `<div class="grp">NPC</div>${npcs.map(c => item(c)).join('')}` : ''}</div>
       <div class="boardCol">
@@ -2286,6 +2605,7 @@ function renderCards(room, ru) {
   }
   const n = ui.sel.length;
   const tc = room.chars[room.turn.current];
+  const jokerUp = unisonReady(mySeat === 'gm' ? Object.values(room.chars).filter(c => gmOwned(c) && c.side !== 'enemy') : [room.chars[mySeat]].filter(Boolean));
   const turnTag = !tc ? '' : mySeat === tc.id ? '<span class="myTurn">あなたの手番</span>'
     : mySeat === 'gm' && (tc.side !== 'pc' || gmOwned(tc)) ? `<span class="myTurn">${esc(tc.data.name)}の手番</span>` : '';
   setHtml($('cardsP'), `
@@ -2295,7 +2615,7 @@ function renderCards(room, ru) {
       <span class="grow"></span>
       ${piles}
     </div>
-    <div class="cards" id="myHand" style="--n:${myHand.length}">${myHand.map(c => cardHtml(c, { sel: ui.sel.includes(c), attr: `data-pick="${c}"` })).join('') || '<span class="muted">手札はありません</span>'}</div>
+    <div class="cards" id="myHand" style="--n:${myHand.length}">${myHand.map(c => { const h = cardHtml(c, { sel: ui.sel.includes(c), attr: `data-pick="${c}"` }); return jokerUp && cardOf(c).joker ? h.replace('class="card joker', 'class="card joker unisonOk').replace('>JOKER<', ' title="クロスユニゾンに使えます">JOKER<span class="uTag">ユニゾン</span><') : h; }).join('') || '<span class="muted">手札はありません</span>'}</div>
     ${othersRow}
     <div class="trayRow acts">
       <button class="btn primary" data-weapon>武装を使う</button>
@@ -2839,6 +3159,68 @@ function mapModalHtml(room, ru) {
       <button class="btn small" data-offboard>盤外へ</button><button class="btn small" data-unsel>選択をやめる</button>`
       : `<span class="muted">コマか上の名前をタップで選択、マスをタップで移動。数字は選んだコマからの距離（斜めは2マス）です。</span>`}</div>`;
 }
+// which effects attach themselves when used: asked at import, changeable later from the character panel.
+// current: the names chosen before (null = first time: everything ticked)
+function autoFxDialog(name, found, current, done, ranges = []) {
+  const on = n => current ? current.includes(n) : true;
+  openDlg(`<h1>${ranges.length ? '取り込み前の確認' : '効果の自動付与'}</h1>
+    ${found.length ? `<p class="muted">${esc(name)}の効果文から、期限のある効果が見つかりました。チェックしたものは、コマンドや「武装を使う」で使ったときに自動で付き、期限が来ると自動で消えます。「対象に付く」ものは、「武装を使う」で選んだ対象に付きます。<br>読み取りが違うもの（要約や期限がおかしいもの）はチェックを外してください。あとからキャラ画面の「効果」欄で変えられます。</p>
+    <div class="afxList">${found.map((f, i) => `<label class="afxRow"><input type="checkbox" data-afx="${i}" ${on(f.name) ? 'checked' : ''}>
+      <span class="afxName">${esc(f.name)}<span class="attr">${esc(f.grp)}</span>${f.target === 'target' ? '<span class="attr afxTgt">対象に付く</span>' : ''}</span>
+      <span class="afxNote">${f.note ? esc(f.note) : '<span class="muted">要約なし</span>'}</span><span class="afxDur">${esc(EFFECT_DUR[f.dur])}</span></label>`).join('')}</div>` : ''}
+    ${ranges.length ? `<div class="rangeWarn"><b>射程が読み取れない武装</b><span class="muted">盤面の射程表示に使えません。「1」「1～2」のように書くと表示されます（「－」「効果参照」はそのままで大丈夫です）。</span>
+      <ul>${ranges.map(r => `<li>${esc(r.name)}：射程「${esc(r.range)}」</li>`).join('')}</ul></div>` : ''}
+    <div class="row" style="margin-top:14px;flex-wrap:wrap;gap:8px"><button class="btn" data-close>やめる</button><span style="flex:1"></span>
+      ${found.length ? '<button class="btn" id="afxNone">自動で付けない</button><button class="btn primary" id="afxOk">チェックしたものを自動で付ける</button>' : '<button class="btn primary" id="afxNone">このまま取り込む</button>'}</div>`, () => {
+    $('afxNone').onclick = () => done([]);
+    if ($('afxOk')) $('afxOk').onclick = () => done(found.filter((f, i) => document.querySelector(`[data-afx="${i}"]`).checked).map(f => f.name));
+  });
+}
+// a tie on SS値: choose who acts now (the GM: anyone of them; a player: their own character)
+function pickMenu(room, ru) {
+  const pick = (room.turn.pick || []).map(id => room.chars[id]).filter(Boolean);
+  if (!pick.length) return;
+  const v = ru.viewer;
+  openDlg(`<h1>誰が動く？</h1>
+    <p class="muted">SS値${ssOf(pick[0])}が同値です。次に動くキャラを選んでください。残りのキャラは、このあとまた選びます。</p>
+    <div class="pickList">${pick.map(c => `<button class="pickBtn" data-pickgo="${c.id}" ${canControlChar(room, v, c.id) ? '' : 'disabled title="GMか持ち主が選びます"'}>${ptImg(c, null, 'pt')}<span style="${nameCss(c.color)}">${esc(c.data.name)}</span><small>${{ pc: 'PC', enemy: '敵', npc: 'NPC' }[c.side]}</small></button>`).join('')}</div>
+    <div class="row" style="margin-top:12px"><span style="flex:1"></span><button class="btn" data-close>あとで</button></div>`, () => {
+    document.querySelectorAll('#dlgBody [data-pickgo]').forEach(b => b.onclick = () => { closeDlg(); act({ type: 'pickTurn', cid: b.dataset.pickgo }); });
+  });
+}
+// GM: what to do with the round
+function roundMenu(room) {
+  const cur = (room.turn.current && room.chars[room.turn.current]) || ((room.turn.pick || []).length ? { data: { name: '（同値から選択中）' } } : null);
+  openDlg(`<h1>ラウンド</h1>
+    <p class="muted">${cur ? `第${room.turn.round}ラウンド・${esc(cur.data.name)}の手番です。` : '戦闘前です。'}最後のキャラが「ラウンド終了」を押すと、次のラウンドに進みます。</p>
+    <div class="roundMenu">
+      ${cur ? `<button class="btn" data-endround>ラウンドを終える<small>第${room.turn.round + 1}ラウンドへ（手札交換のタイミング）</small></button>` : ''}
+      <button class="btn ${cur ? '' : 'primary'}" data-resetround>${cur ? '戦闘を最初から' : '戦闘開始'}<small>第1ラウンド、SS値がいちばん大きいキャラから</small></button>
+      ${cur ? '<button class="btn danger" data-endcombat>戦闘を終える<small>手番をなくし、期限のある効果を外す</small></button>' : ''}
+    </div>
+    <div class="row" style="margin-top:12px"><span style="flex:1"></span><button class="btn" data-close>閉じる</button></div>`, () => {
+    // a plain dialog does not go through the page's click handler: wire the buttons here
+    const on = (sel, f) => { const b = document.querySelector(`#dlgBody ${sel}`); if (b) b.onclick = f; };
+    on('[data-endround]', () => { closeDlg(); act({ type: 'endRound' }); });
+    on('[data-resetround]', () => { closeDlg(); ask('ラウンド数を1に戻し、SS値がいちばん大きいキャラの手番から始めます。', '戦闘を開始', () => act({ type: 'resetRound' })); });
+    on('[data-endcombat]', () => { closeDlg(); ask('手番をなくし、期限のある効果（手動で付けたもの以外）を外します。ラウンド数はそのまま残ります。', '戦闘を終える', () => act({ type: 'endCombat' })); });
+  });
+}
+// lasting effects in the character panel; the add form keeps what was typed across re-renders (ui.fxDraft)
+function fxPanel(c, can) {
+  const list = c.effects || [];
+  if (!list.length && !can) return '';
+  const d = ui.fxDraft && ui.fxDraft.cid === c.id ? ui.fxDraft : { cid: c.id, name: '', note: '', dur: 'phase' };
+  const auto = can ? detectEffects(c.data) : [];
+  const nAuto = auto.filter(f => (c.autoFx || []).includes(f.name)).length;
+  return `<div class="fxPanel"><div class="fxHead"><b>効果</b><span class="muted">期限が来ると自動で消えます</span><span style="flex:1"></span>${auto.length ? `<button class="btn small" data-autofx="${c.id}">自動で付ける効果（${nAuto}/${auto.length}）</button>` : ''}</div>
+    ${list.map(e => `<div class="fxRow ${e.dur}"><span class="fxName">${esc(e.name)}${e.note ? `<b>${esc(e.note)}</b>` : ''}</span><span class="fxDur">${esc(EFFECT_DUR[e.dur] || '')}</span>
+      ${can ? `<button class="btn small" data-fxdel="${e.id}" data-cid="${c.id}" aria-label="${esc(e.name)}を外す">外す</button>` : ''}
+      ${e.text ? `<div class="fxText">${esc(e.text)}</div>` : ''}</div>`).join('') || `<p class="muted" style="margin:2px 0 6px">今はありません。${nAuto ? '自動で付ける設定にした効果は、使うと自動で付きます。' : ''}</p>`}
+    ${can ? `<div class="fxAdd"><input type="text" id="fxName" placeholder="効果の名前（例：かばう）" value="${esc(d.name)}"><input type="text" id="fxNote" placeholder="メモ（例：威力+2）" value="${esc(d.note)}">
+      <select id="fxDur" aria-label="期限">${Object.entries(EFFECT_DUR).map(([k, v]) => `<option value="${k}" ${k === d.dur ? 'selected' : ''}>${v}</option>`).join('')}</select>
+      <button class="btn small primary" data-fxadd="${c.id}">付ける</button></div>` : ''}</div>`;
+}
 function charModalHtml(room, ru, cid) {
   const c = room.chars[cid]; if (!c) return '<p>キャラクターがいません</p><button class="btn" data-close>閉じる</button>';
   const v = ru.viewer, can = canControlChar(room, v, c.id);
@@ -2863,6 +3245,7 @@ function charModalHtml(room, ru, cid) {
     ${can && c.data.variations.length ? `<div class="formBar"><span class="muted">換装</span>${[-1, ...c.data.variations.map((_, i) => i)].map(i =>
       i === c.variation ? `<span class="formNow">${esc(i === -1 ? '基本' : c.data.variations[i].name)}（装備中）</span>`
         : `<button class="btn small" data-formchange="${c.id}" data-idx="${i}">${esc(i === -1 ? '基本' : c.data.variations[i].name)}に換装</button>`).join('')}</div>` : ''}
+    ${fxPanel(c, can)}
     <div class="vals">${keys.map(k => {
       const st = c.data.stats[k] || {};
       if (st.max == null) return `<span class="val">${esc(k)} ${can && v === 'gm' ? `<input type="number" value="${c.cur[k]}" data-vset data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(k)}">` : `<b>${c.cur[k]}</b>`}</span>`;
@@ -2887,6 +3270,20 @@ function weaponModalHtml(room, ru) {
   const picked = w.weapons.map(k => list.find(([kk]) => kk === k)).filter(Boolean);   // in the order they were chosen
   const suits = new Set(picked.map(([, x]) => x.suit).filter(Boolean));
   const others = Object.values(room.chars).filter(c => c.id !== ch.id).sort((a, b) => (a.side === ch.side) - (b.side === ch.side));
+  const pickedR = picked.map(([, x]) => rangeOf(x)).filter(Boolean);
+  const anyIn = o => pickedR.some(r => inRange(ch, o, r));
+  const showRange = pickedR.length && ch.x != null;
+  const unisonPicked = picked.some(([, x]) => /クロスユニゾン/.test(x.name));
+  const rangeBoard = !showRange ? '' : (() => {
+    const at = {}; Object.values(room.chars).forEach(o => { if (o.x != null) at[o.x + ',' + o.y] = o; });
+    let cells = '';
+    for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
+      const d = Math.abs(ch.x - x) + Math.abs(ch.y - y), o = at[x + ',' + y];
+      const inR = pickedR.some(r => d >= r.min && d <= r.max);
+      cells += `<span class="rc ${(x + y) % 2 ? 'alt' : ''} ${inR ? 'in' : ''} ${o ? (o.id === ch.id ? 'me' : o.side === 'enemy' ? 'foe' : 'ally') : ''}" ${o ? `title="${esc(o.data.name)}"` : ''}>${o ? esc(o.data.name.slice(0, 1)) : ''}</span>`;
+    }
+    return `<div class="rangeBox"><div class="rangeMini">${cells}</div><span class="muted">射程 ${pickedR.map(rangeText).join('・')}（${esc(ch.data.name)}から）</span></div>`;
+  })();
   const preview = picked.length ? `${esc(ch.data.name)}：${picked.map(([, x]) => (x.suit ? SUIT[x.suit] : '') + esc(x.name)).join('＋')}${w.cards.length ? `　${w.cards.map(cardText).join(' → ')}` : ''}${w.targets.length ? ` → ${w.targets.map(id => esc(room.chars[id]?.data.name || '')).join('、')}` : ''}` : '武装を選んでください';
   return `<div class="mhead"><h1>武装を使う</h1>
       ${actors.length > 1 ? `<select data-wactor aria-label="使うキャラクター">${actors.map(c => `<option value="${c.id}" ${c.id === w.cid ? 'selected' : ''}>${esc(c.data.name)}</option>`).join('')}</select>` : `<span class="muted">${esc(ch.data.name)}</span>`}
@@ -2900,11 +3297,12 @@ function weaponModalHtml(room, ru) {
           <span class="wstats">${['威力', '射程', '回避'].filter(a => x.attrs[a] != null).map(a => `${a}<b>${esc(x.attrs[a])}</b>`).join('')}</span>
         </button>`).join('')}</div></section>
       <section><h2>出すカード（押した順に並びます）${suits.size ? `<span class="muted">　${[...suits].map(s => SUIT[s]).join('')} のカードを強調中・どれでも選べます</span>` : ''}</h2>
-        <div class="cards">${hand.map(x => { const k = cardOf(x); const hint = !k.joker && suits.has(k.s); let h = cardHtml(x, { sel: w.cards.includes(x), attr: `data-wcard="${x}"` }).replace('class="card', `class="card ${hint ? 'hint' : ''}`);
+        <div class="cards">${hand.map(x => { const k = cardOf(x); const hint = k.joker ? unisonPicked : suits.has(k.s); let h = cardHtml(x, { sel: w.cards.includes(x), attr: `data-wcard="${x}"` }).replace('class="card', `class="card ${hint ? 'hint' : ''}`);
           if (w.cards.includes(x)) h = h.replace(/<\/button>$/, `<span class="ord">${w.cards.indexOf(x) + 1}</span></button>`);
           return h; }).join('') || '<span class="muted">手札はありません</span>'}</div>
         <h2 style="margin-top:12px">対象</h2>
-        <div class="seatpick">${others.map(c => `<button class="mchip" data-wtarget="${c.id}" aria-pressed="${w.targets.includes(c.id)}">${ptImg(c, null, 'pt')}${esc(c.data.name)}</button>`).join('') || '<span class="muted">ほかにキャラクターがいません</span>'}</div>
+        ${rangeBoard}
+        <div class="seatpick">${others.map(c => `<button class="mchip ${showRange && c.x != null ? (anyIn(c) ? 'inR' : 'outR') : ''}" data-wtarget="${c.id}" aria-pressed="${w.targets.includes(c.id)}">${ptImg(c, null, 'pt')}${esc(c.data.name)}${showRange && c.x != null ? `<span class="rtag">${anyIn(c) ? '射程内' : '射程外'}</span>` : ''}</button>`).join('') || '<span class="muted">ほかにキャラクターがいません</span>'}</div>
         <input type="text" id="wMemo" placeholder="メモ（例：コンボ1回目）" value="${esc(w.memo)}" style="width:100%;margin-top:10px">
       </section>
     </div>
@@ -2963,7 +3361,10 @@ $('dlgBody').addEventListener('click', e => {
   const it = e.target.closest('[data-ci]');
   if (it) useCommand(+it.dataset.ci, false);
 });
-$('dlgBody').addEventListener('input', e => { if (e.target.id === 'wMemo' && ui.w) ui.w.memo = e.target.value; });
+$('dlgBody').addEventListener('input', e => {
+  if (e.target.id === 'wMemo' && ui.w) ui.w.memo = e.target.value;
+  if (['fxName', 'fxNote', 'fxDur'].includes(e.target.id)) { const b = document.querySelector('[data-fxadd]'); ui.fxDraft = { cid: b && b.dataset.fxadd, name: $('fxName').value, note: $('fxNote').value, dur: $('fxDur').value }; }
+});
 function weaponClick(t, room, ru) {
   const w = ui.w; let el;
   const tog = (arr, x) => arr.includes(x) ? arr.filter(y => y !== x) : [...arr, x];
@@ -3021,15 +3422,25 @@ function importDialog(room, ru, editCid) {
     <div class="field">または貼り付け<textarea id="impText" rows="8" placeholder='{"format":"pw-character", ...}'>${editing ? esc(JSON.stringify(editing.data, null, 2)) : ''}</textarea></div>
     <div class="row"><button class="btn small" id="impSample">サンプルを入れる</button><span style="flex:1"></span>
       <button class="btn" data-close>やめる</button><button class="btn primary" id="impOk">${editing ? '更新する' : '取り込む'}</button></div>`, () => {
-    $('impFile').onchange = async e => { const f = e.target.files[0]; if (f) $('impText').value = await f.text(); };
+    // a sheet made as an enemy (kind: "enemy") comes in as 敵
+    const sideFromJson = () => { try { const j = JSON.parse($('impText').value); const sel = $('impSide'); if (sel && j && j.kind === 'enemy' && [...sel.options].some(o => o.value === 'enemy')) sel.value = 'enemy'; } catch (e) {} };
+    $('impText').addEventListener('input', sideFromJson);
+    $('impFile').onchange = async e => { const f = e.target.files[0]; if (f) { $('impText').value = await f.text(); sideFromJson(); } };
     $('impSample').onclick = () => { $('impText').value = JSON.stringify(SAMPLE, null, 2); };
     $('impOk').onclick = () => {
       let data; try { data = JSON.parse($('impText').value); } catch (e) { toast('JSONとして読めませんでした'); return; }
+      let nd; try { nd = normalizeChar(data); } catch (e) { toast(e.message || '読み込めませんでした'); return; }
       const side = editing ? null : $('impSide').value;
-      const r = editing ? act({ type: 'updateCharData', cid: editCid, data }) : act({ type: 'addChar', side, data });
-      if (r === FAIL) return;
-      closeDlg();
-      // online: the server gives this browser the PC's seat key and seats a spectator in it
+      const go = autoFx => {
+        const r = editing ? act({ type: 'updateCharData', cid: editCid, data, autoFx }) : act({ type: 'addChar', side, data, autoFx });
+        if (r === FAIL) return;
+        closeDlg();
+        // online: the server gives this browser the PC's seat key and seats a spectator in it
+      };
+      // before import: which effects should attach themselves, and weapons whose 射程 the board cannot read
+      const found = detectEffects(nd), ranges = rangeProblems(nd);
+      if (!found.length && !ranges.length) { go([]); return; }
+      autoFxDialog(nd.name, found, editing ? editing.autoFx : null, go, ranges);
     };
   });
 }
@@ -3403,9 +3814,21 @@ function mapClick(t, room, ru) {
   const q = s => t.closest(s);
   let el;
   if ((el = q('[data-zoom]'))) { stepZoom(+el.dataset.zoom); return true; }
+  if ((el = q('[data-autofx]'))) {
+    const c = room.chars[el.dataset.autofx];
+    autoFxDialog(c.data.name, detectEffects(c.data), c.autoFx || [], names => { act({ type: 'setAutoFx', cid: c.id, names }); openModal('char', c.id); });
+    return true;
+  }
+  if ((el = q('[data-fxdel]'))) { act({ type: 'removeEffect', cid: el.dataset.cid, eid: el.dataset.fxdel }); return true; }
+  if ((el = q('[data-fxadd]'))) {
+    if (act({ type: 'addEffect', cid: el.dataset.fxadd, name: $('fxName').value, note: $('fxNote').value, dur: $('fxDur').value }) !== FAIL) ui.fxDraft = null;
+    return true;
+  }
   if ((el = q('[data-movechar]'))) { ui.selTok = el.dataset.movechar; closeDlg(); renderRoom(); if (isPhone()) $('board').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return true; }
   if ((el = q('[data-setturn]'))) { act({ type: 'setTurn', cid: el.dataset.setturn }); return true; }
-  if (q('[data-nextturn]')) { act({ type: 'nextTurn' }); return true; }
+  if (q('[data-nextturn]')) { ui.expectPick = true; act({ type: 'nextTurn' }); return true; }
+  if (q('[data-roundmenu]')) { roundMenu(room); return true; }
+  if (q('[data-pickmenu]')) { pickMenu(room, ru); return true; }
   if (q('[data-endround]')) { act({ type: 'endRound' }); return true; }
   if (q('[data-resetround]')) { ask('ラウンド数を1に戻し、SS値がいちばん大きいキャラの手番から始めます。', '戦闘を開始', () => act({ type: 'resetRound' })); return true; }
   // a selected token + a tap on an empty square = move there (a square holds one piece; tapping a piece selects it)
@@ -3431,6 +3854,8 @@ document.addEventListener('click', e => {
   if (!room || !t.isConnected || t.closest('dialog')) return;
   const ru = roomUI(room.id);
 
+  if ((el = q('[data-pickturn]'))) { act({ type: 'pickTurn', cid: el.dataset.pickturn }); return; }
+  if (q('[data-pickmenu]')) { pickMenu(room, ru); return; }
   if (t.closest('[data-vstep],[data-setturn]') && t.closest('[data-charopen]')) { /* buttons inside the list row act, the row does not open */ }
   else if ((el = q('[data-charopen]'))) { openModal('char', el.dataset.charopen); return; }
   if (q('[data-weapon]')) { ui.w = { cid: isPcSeat(room, ru.viewer) ? ru.viewer : (room.turn.current && room.chars[room.turn.current]?.side === 'enemy' ? room.turn.current : null), weapons: [], cards: [...ui.sel], targets: [], memo: ui.memo }; openModal('weapon'); return; }
@@ -3486,6 +3911,7 @@ document.addEventListener('change', e => {
   const room = curRoom(); if (!room || !e.target.isConnected || e.target.closest('dialog')) return;
   const t = e.target;
   if (t.matches('[data-vset]')) act({ type: 'setValue', cid: t.dataset.cid, key: t.dataset.key, value: t.value });
+  if (t.matches('[data-rangew]')) { ui.rangeW = t.value ? { cid: t.dataset.rangew, k: t.value } : null; renderRoom(); return; }
 
   if (t.matches('[data-used]')) act({ type: 'toggleUsed', cid: t.dataset.used, group: t.dataset.group, idx: +t.dataset.idx });
 });

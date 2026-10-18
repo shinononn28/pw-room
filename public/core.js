@@ -63,10 +63,12 @@ function normalizeChar(raw) {
   // values: {HP:{max:20}} / {SS値:{value:3}} / {HP:20} (shorthand = max for HP/TP, value otherwise)
   const stats = {};
   for (const [k, v] of Object.entries(raw.values || {})) {
+    // empty (null / "") means the character does not have that value, not 0
+    const n = x => x != null && x !== '' && Number.isFinite(Number(x));
     if (v && typeof v === 'object') {
-      if (Number.isFinite(Number(v.max))) stats[k] = { max: Number(v.max) };
-      else if (Number.isFinite(Number(v.value))) stats[k] = { value: Number(v.value) };
-    } else if (Number.isFinite(Number(v))) stats[k] = (k === 'HP' || k === 'TP') ? { max: Number(v) } : { value: Number(v) };
+      if (n(v.max)) stats[k] = { max: Number(v.max) };
+      else if (n(v.value)) stats[k] = { value: Number(v.value) };
+    } else if (n(v)) stats[k] = (k === 'HP' || k === 'TP') ? { max: Number(v) } : { value: Number(v) };
   }
   // weapons: {common:[2], slots:[4 by suit]}; a v1 array becomes common weapons
   const w = raw.weapons;
@@ -94,7 +96,9 @@ function normalizeChar(raw) {
     variations: Array.isArray(raw.variations) ? raw.variations.map(v => ({ name: String(v?.name || 'バリエーション'), slots: slotsFrom(v?.slots), portrait: v?.portrait ? String(v.portrait) : null })) : [],
     basePortrait: raw.basePortrait ? String(raw.basePortrait) : null,
     wingDrive: raw.wingDrive ? item(raw.wingDrive) : null,
-    portraits: Array.isArray(raw.portraits) ? raw.portraits.filter(p => p && p.url).map(p => ({ label: String(p.label || '立ち絵'), url: toDirectImage(p.url) })) : [],
+    // {label, url}; a plain URL string (older sheets) gets a numbered label
+    portraits: Array.isArray(raw.portraits) ? raw.portraits.map((p, i) => typeof p === 'string' ? { label: `立ち絵${i + 1}`, url: p } : p)
+      .filter(p => p && typeof p.url === 'string' && p.url.trim()).map(p => ({ label: String(p.label || '立ち絵'), url: toDirectImage(p.url) })) : [],
     memo: String(raw.memo || ''),
   };
   dropStaleFormPortraits(data);
@@ -109,6 +113,118 @@ function dropStaleFormPortraits(d) {
 // the 立ち絵 linked to variation i (-1 = 基本), or null
 const formPortrait = (ch, i) => (i === -1 ? ch.data.basePortrait : (ch.data.variations[i] || {}).portrait) || null;
 const portraitUrl = (ch, label) => (ch.data.portraits.find(p => p.label === label) || {}).url || null;
+// クロスユニゾン (an all-out attack): every PC lines up in the effect, the declarer first
+const UNISON = /クロスユニゾン/;
+// クロスユニゾン and the ウイングドライブ are once per scenario: declaring them ticks their 使用済み box
+// ----- lasting effects (buffs / debuffs) -----
+// Read from the effect text by how long it lasts, which the rules always write the same way:
+//   phase   このアクションフェイズの間 / アクションフェイズが終わるまで → until the turn passes
+//   nextOwn 次の自分のアクションフェイズまで                      → until this character's next turn
+//   round   1ターンの間 / このラウンドの間                           → until the round ends
+//   manual  added by hand                                           → until removed
+// ===== reading rules shared with the character sheet tool (princess-wing-sheet.html): keep both copies the same =====
+const EFFECT_DUR = { phase: 'この手番の間', nextOwn: '次の自分の手番まで', round: 'ラウンド終了まで', manual: '外すまで' };
+const DUR_RE = { nextOwn: /次の自分のアクションフェイズまで/, phase: /このアクションフェイズ(の間|中(?!に)|が終わるまで)|アクションフェイズが終わるまで/, round: /1ターンの間|このターンの間|このラウンド(の間|中)|ラウンド(が)?終了(する)?まで/ };
+function effectDuration(text) {
+  const t = String(text || '').normalize('NFKC');
+  return ['nextOwn', 'phase', 'round'].find(k => DUR_RE[k].test(t)) || null;
+}
+// who the lasting effect is on: 'target' when its sentence is about 対象 (e.g. 対象は、1ターンの間…), otherwise the user
+function effectTarget(text) {
+  const t = String(text || '').normalize('NFKC');
+  const d = effectDuration(t); if (!d) return null;
+  const sentence = t.split(/[。\n]/).find(x => DUR_RE[d].test(x)) || '';
+  return /対象(は|の|が)/.test(sentence) && !/自分は/.test(sentence) ? 'target' : 'self';
+}
+// 射程: "2" / "1～2" are read; "－", "効果参照" and empty mean no range; anything else cannot be shown on the board
+const RANGE_NONE = /^(|[-－―—ー]|効果参照|なし|自身)$/;
+function parseRangeText(r) {
+  const t = String(r ?? '').normalize('NFKC').trim();
+  let m = t.match(/^(\d+)\s*[~〜～\-－―]\s*(\d+)$/);
+  if (m) return { min: Math.min(+m[1], +m[2]), max: Math.max(+m[1], +m[2]) };
+  m = t.match(/^(\d+)$/);
+  return m ? { min: +m[1], max: +m[1] } : null;
+}
+const rangeIssue = r => { const t = String(r ?? '').normalize('NFKC').trim(); return RANGE_NONE.test(t) || parseRangeText(t) ? null : t; };
+// ===== end of shared rules =====
+// a short summary for the chip: 威力+3 / 回避+1 / 武装+3回 (empty when nothing simple is found)
+function effectNote(text) {
+  const t = String(text || '').normalize('NFKC');
+  const out = [];
+  let m;
+  if ((m = t.match(/威力に?(?:すべて)?\s*\+\s*(\d+)/))) out.push(`威力+${m[1]}`);
+  if ((m = t.match(/回避コスト[^。]*?\+\s*(\d+)/))) out.push(`回避+${m[1]}`);
+  if ((m = t.match(/移動値[^。]*?\+\s*(\d+)/))) out.push(`移動+${m[1]}`);
+  if ((m = t.match(/追加で(\d+)回/))) out.push(`武装+${m[1]}回`);
+  return out.join(' ');
+}
+function addEffect(room, ch, { name, note, dur, text, by }) {
+  if (!ch) return;
+  ch.effects = (ch.effects || []).filter(e => e.name !== name);        // using it again refreshes it
+  ch.effects.push({ id: uid('e'), name: String(name).slice(0, 30), note: String(note || '').slice(0, 30), dur: EFFECT_DUR[dur] ? dur : 'manual',
+    text: String(text || '').slice(0, 300), turn: room.turn.current || null, seq: room.turn.seq || 0 });
+}
+// after the turn moves (次の手番, 手番の指定, ラウンド): drop what has run out, with a log line each
+function expireEffects(room, by, roundEnded) {
+  room.turn.seq = (room.turn.seq || 0) + 1;
+  for (const ch of Object.values(room.chars)) {
+    const gone = [];
+    ch.effects = (ch.effects || []).filter(e => {
+      const out = e.dur === 'phase' ? (roundEnded || room.turn.current !== e.turn)
+        : e.dur === 'nextOwn' ? room.turn.current === ch.id && room.turn.seq > e.seq
+        : e.dur === 'round' ? roundEnded : false;
+      if (out) gone.push(e.name);
+      return !out;
+    });
+    if (gone.length) log(room, { tab: opsTab(room), type: 'sys', by, cid: ch.id, text: `${ch.data.name}の「${gone.join('」「')}」の効果が切れました` });
+  }
+}
+// a declaration (コマンド or 武装を使う) whose text has a duration starts a lasting effect on the declarer,
+// but only for the items the player confirmed when importing (ch.autoFx: names; reading the text can be wrong)
+function effectsFromText(room, ch, name, text, by, targets) {
+  const dur = effectDuration(text);
+  if (!ch || !dur || !(ch.autoFx || []).includes(name)) return;
+  // on the 対象: the targets chosen in 武装を使う (nothing to attach to without them)
+  const on = effectTarget(text) === 'target' ? (targets || []).map(id => room.chars[id]).filter(Boolean) : [ch];
+  on.forEach(c => addEffect(room, c, { name, note: effectNote(text), dur, text, by }));
+}
+// every item of a sheet whose text has a duration: what the import asks about
+function detectEffects(d) {
+  const out = [], seen = new Set();
+  const add = (grp, it) => { if (!it || !it.name || seen.has(it.name)) return; const dur = effectDuration(it.text); if (dur) { seen.add(it.name); out.push({ grp, name: it.name, note: effectNote(it.text), dur, target: effectTarget(it.text) }); } };
+  (d.skills || []).forEach(it => add('特技', it));
+  (d.core?.functions || []).forEach(it => add('特殊機能', it));
+  add('ウイングドライブ', d.wingDrive);
+  (d.weapons?.common || []).forEach(it => add('武装', it));
+  [d.weapons?.slots || [], ...(d.variations || []).map(v => v.slots || [])].forEach(sl => sl.forEach(it => add('武装', it)));
+  return out;
+}
+// weapons whose 射程 cannot be read (shown before import, so it can be fixed in the sheet)
+function rangeProblems(d) {
+  const out = [];
+  [d.weapons?.common || [], d.weapons?.slots || [], ...(d.variations || []).map(v => v.slots || [])].forEach(l => l.forEach(w => {
+    const bad = w && w.name && rangeIssue(w.attrs?.['射程']);
+    if (bad && !out.some(x => x.name === w.name)) out.push({ name: w.name, range: bad });
+  }));
+  return out;
+}
+const cleanAutoFx = list => Array.isArray(list) ? [...new Set(list.map(String))].slice(0, 60) : null;
+// end of a round: hand exchange, the round number goes up, the top of the order acts, round-long effects end
+function nextRound(room, by) {
+  log(room, { tab: opsTab(room), type: 'round', by, text: `第${room.turn.round}ラウンド終了（手札交換のタイミングです）` });
+  room.turn.round += 1;
+  room.turn.done = [];
+  const next = seatNext(room);
+  expireEffects(room, by, true);
+  log(room, { tab: opsTab(room), type: 'round', by, start: room.turn.round, cid: room.turn.current || undefined, text: `第${room.turn.round}ラウンド開始${next ? `：${next}` : ''}` });
+}
+function markOncePerScenario(ch, { unison, wd }) {
+  if (!ch) return;
+  if (unison) ch.data.weapons.common.forEach((w, i) => { if (UNISON.test(w.name || '')) ch.used[`common:${i}`] = true; });
+  if (wd && ch.data.wingDrive) ch.used['wingDrive:0'] = true;
+}
+const unisonMembers = (room, firstId) => Object.values(room.chars).filter(c => c.side === 'pc').sort((x, y) => (x.id === firstId ? -1 : 0) - (y.id === firstId ? -1 : 0))
+  .map(c => ({ name: c.data.name, color: c.color, url: portraitUrl(c, c.portrait) || (c.data.portraits[0] || {}).url || null }));
 const statStart = s => s.max ?? s.value;
 const currentSlots = ch => ch.variation >= 0 && ch.data.variations[ch.variation] ? ch.data.variations[ch.variation].slots : ch.data.weapons.slots;
 const ssOf = ch => Number.isFinite(ch.cur['SS値']) ? ch.cur['SS値'] : (ch.data.stats['SS値'] ? statStart(ch.data.stats['SS値']) : -Infinity);
@@ -120,6 +236,21 @@ function turnOrder(room) {
     .map(x => x.c);
 }
 
+// SS値 is the initiative: the next to act is the highest SS値 among those who have not acted this round
+// (room.turn.done). A tie is not decided by the table order: the players choose (room.turn.pick).
+function nextActors(room) {
+  const done = new Set(room.turn.done || []);
+  const left = turnOrder(room).filter(c => !done.has(c.id));
+  return left.length ? left.filter(c => ssOf(c) === ssOf(left[0])) : [];
+}
+const tieText = g => `SS値${ssOf(g[0])}が同値：${g.map(c => c.data.name).join('、')}から次に動くキャラを選びます`;
+// put the next actor (or the tie to choose from) in place; returns the log text for it
+function seatNext(room) {
+  const g = nextActors(room);
+  room.turn.current = g.length === 1 ? g[0].id : null;
+  room.turn.pick = g.length > 1 ? g.map(c => c.id) : null;
+  return g.length === 1 ? `${g[0].data.name}の手番です` : g.length ? tieText(g) : '';
+}
 function newRoom(name) {
   return {
     id: uid('r'), name: name || '新しい部屋', createdAt: Date.now(),
@@ -192,7 +323,7 @@ function applyInner(room, a, by, pid) {
       const colors = NAME_COLORS.slice(0, 8);
       room.chars[id] = { id, side: a.side, data, dv: 1, cur, used: {}, variation: -1, x: null, y: null, portrait: data.portraits[0]?.label || null,
         color: a.side === 'enemy' ? '#FF7A7A' : colors[Object.keys(room.chars).filter(k => room.chars[k].side !== 'enemy').length % colors.length],
-        owner: by === 'gm' ? 'gm' : (pid && pid !== by ? pid : id) };
+        owner: by === 'gm' ? 'gm' : (pid && pid !== by ? pid : id), autoFx: cleanAutoFx(a.autoFx) || [] };
       if (a.side === 'pc' || a.side === 'npc') room.cards.hands[id] = room.cards.hands[id] || [];
       log(room, { tab: opsTab(room), type: 'sys', by, text: `${data.name}（${{ pc: 'PC', enemy: '敵', npc: 'NPC' }[a.side]}）が参加しました` });
       return id;
@@ -205,11 +336,33 @@ function applyInner(room, a, by, pid) {
       data.variations.forEach((v, i) => { const rv = (Array.isArray(a.data.variations) ? a.data.variations : [])[i]; if (!(rv && typeof rv === 'object' && 'portrait' in rv)) v.portrait = (ch.data.variations.find(o => o.name === v.name) || {}).portrait || null; });
       if (!Array.isArray(a.data.portraits)) data.portraits = ch.data.portraits;
       dropStaleFormPortraits(data);
+      if (cleanAutoFx(a.autoFx)) ch.autoFx = cleanAutoFx(a.autoFx);
       for (const [k, s] of Object.entries(data.stats)) if (!(k in ch.cur)) ch.cur[k] = statStart(s);
       ch.data = data; ch.dv = (ch.dv || 1) + 1;
       if (!(ch.variation < data.variations.length)) ch.variation = -1;
       if (ch.portrait && !data.portraits.some(p => p.label === ch.portrait)) ch.portrait = data.portraits[0]?.label || null;
       log(room, { tab: opsTab(room), type: 'sys', by, text: `${data.name}のデータを更新しました` });
+      return;
+    }
+    case 'setAutoFx': {
+      need(ch && canControlChar(room, by, a.cid), 'このキャラクターは操作できません');
+      ch.autoFx = cleanAutoFx(a.names) || [];
+      return;
+    }
+    case 'addEffect': {
+      need(ch && canControlChar(room, by, a.cid), 'このキャラクターは操作できません');
+      const nm = String(a.name || '').trim();
+      need(nm, '効果の名前を入れてください');
+      addEffect(room, ch, { name: nm, note: a.note, dur: a.dur, text: a.text, by });
+      log(room, { tab: opsTab(room), type: 'sys', by, cid: ch.id, text: `${ch.data.name}に「${nm}」（${EFFECT_DUR[a.dur] || EFFECT_DUR.manual}）を付けました` });
+      return;
+    }
+    case 'removeEffect': {
+      need(ch && canControlChar(room, by, a.cid), 'このキャラクターは操作できません');
+      const e = (ch.effects || []).find(x => x.id === a.eid);
+      need(e, 'その効果は見つかりません');
+      ch.effects = ch.effects.filter(x => x.id !== a.eid);
+      log(room, { tab: opsTab(room), type: 'sys', by, cid: ch.id, text: `${ch.data.name}の「${e.name}」を外しました` });
       return;
     }
     case 'removeChar': {
@@ -294,31 +447,49 @@ function applyInner(room, a, by, pid) {
       need(by === 'gm', '手番を指定できるのはGMだけです');
       need(a.cid === null || room.chars[a.cid], 'キャラクターが見つかりません');
       room.turn.current = a.cid && room.turn.current !== a.cid ? a.cid : null;   // pressing the current one again clears it
+      room.turn.pick = null;
       if (room.turn.current) log(room, { tab: opsTab(room), type: 'turn', by, cid: room.turn.current, text: `${room.chars[room.turn.current].data.name}の手番です` });
+      expireEffects(room, by, false);
       return;
     }
     case 'nextTurn': {
       need(by === 'gm' || by === room.turn.current, '手番を進められるのは、GMか手番のキャラだけです');
-      const order = turnOrder(room);
-      need(order.length, 'キャラクターがいません');
-      const i = order.findIndex(c => c.id === room.turn.current);
-      const next = order[i + 1] || order[0];          // no rounds: after the last one, back to the top
-      room.turn.current = next.id;
-      log(room, { tab: opsTab(room), type: 'turn', by, cid: next.id, text: `${next.data.name}の手番です` });
+      need(turnOrder(room).length, 'キャラクターがいません');
+      need(!(room.turn.pick || []).length, '同値のキャラから、次に動くキャラを選んでください');
+      if (room.turn.current) room.turn.done = [...new Set([...(room.turn.done || []), room.turn.current])];
+      if (!nextActors(room).length) { nextRound(room, by); return; }       // everyone has acted: the round ends
+      const text = seatNext(room);
+      log(room, { tab: opsTab(room), type: 'turn', by, cid: room.turn.current || undefined, text });
+      expireEffects(room, by, false);
+      return;
+    }
+    case 'pickTurn': { // a tie on SS値: one of the tied characters goes now
+      need((room.turn.pick || []).includes(a.cid), 'そのキャラクターは今は選べません');
+      need(canControlChar(room, by, a.cid), '選べるのはGMか、そのキャラの持ち主だけです');
+      room.turn.current = a.cid; room.turn.pick = null;
+      log(room, { tab: opsTab(room), type: 'turn', by, cid: a.cid, text: `${room.chars[a.cid].data.name}の手番です` });
+      expireEffects(room, by, false);
       return;
     }
     case 'endRound': {
       need(by === 'gm', 'ラウンドを進められるのはGMだけです');
-      log(room, { tab: opsTab(room), type: 'round', by, text: `第${room.turn.round}ラウンド終了（手札交換のタイミングです）` });
-      room.turn.round += 1;
-      room.turn.current = turnOrder(room)[0]?.id || null;
-      log(room, { tab: opsTab(room), type: 'round', by, start: room.turn.round, cid: room.turn.current, text: `第${room.turn.round}ラウンド開始${room.turn.current ? `：${room.chars[room.turn.current].data.name}の手番です` : ''}` });
+      nextRound(room, by);
+      return;
+    }
+    case 'endCombat': {
+      need(by === 'gm', '戦闘を終えられるのはGMだけです');
+      room.turn.current = null; room.turn.pick = null; room.turn.done = [];
+      room.turn.seq = (room.turn.seq || 0) + 1;
+      for (const c of Object.values(room.chars)) c.effects = (c.effects || []).filter(e => e.dur === 'manual');
+      log(room, { tab: opsTab(room), type: 'round', by, text: `戦闘終了（第${room.turn.round}ラウンド）` });
       return;
     }
     case 'resetRound': {
       need(by === 'gm', 'ラウンドを戻せるのはGMだけです');
-      room.turn = { round: 1, current: turnOrder(room)[0]?.id || null };
-      log(room, { tab: opsTab(room), type: 'round', by, text: `戦闘開始：第1ラウンド${room.turn.current ? `、${room.chars[room.turn.current].data.name}の手番です` : ''}` });
+      room.turn = { round: 1, current: null, seq: (room.turn.seq || 0), done: [], pick: null };
+      const first = seatNext(room);
+      for (const c of Object.values(room.chars)) c.effects = (c.effects || []).filter(e => e.dur === 'manual');
+      log(room, { tab: opsTab(room), type: 'round', by, start: 1, cid: room.turn.current || undefined, text: `戦闘開始：第1ラウンド${first ? `、${first}` : ''}` });
       return;
     }
 
@@ -406,12 +577,12 @@ function applyInner(room, a, by, pid) {
       need(ws.length, '武装を選んでください');
       room.cards.hands[seat] = hand.filter(x => !cards.includes(x));
       room.cards.discard.push(...cards);
+      markOncePerScenario(ch, { unison: ws.some(w => UNISON.test(w.name)) });
+      ws.forEach(w => effectsFromText(room, ch, w.name, w.text, by, Array.isArray(a.targets) ? a.targets.filter(id => room.chars[id]) : []));
       log(room, { tab: opsTab(room), type: 'weapon', by, seat, cid: ch.id, charName: ch.data.name,
         weapons: ws.map(w => ({ name: w.name, suit: w.suit || null, attrs: { ...(w.attrs || {}) }, text: w.text || '' })),
         cards, targets: (Array.isArray(a.targets) ? a.targets : []).map(id => room.chars[id]?.data.name).filter(Boolean), memo: String(a.memo || '').trim(), offForm,
-        // クロスユニゾン (an all-out attack): every PC lines up in the effect, the declarer first
-        ...(ws.some(w => /クロスユニゾン/.test(w.name)) ? { fx: 'unison', members: Object.values(room.chars).filter(c => c.side === 'pc').sort((x, y) => (x.id === ch.id ? -1 : 0) - (y.id === ch.id ? -1 : 0))
-          .map(c => ({ name: c.data.name, color: c.color, url: portraitUrl(c, c.portrait) || (c.data.portraits[0] || {}).url || null })) } : {}) });
+        ...(ws.some(w => UNISON.test(w.name)) ? { fx: 'unison', members: unisonMembers(room, ch.id) } : {}) });
       return;
     }
     case 'shuffleBack': {
@@ -489,7 +660,12 @@ function applyInner(room, a, by, pid) {
       const pUrl = a.as ? (room.chars[a.as].data.portraits.find(p => p.label === a.portrait) || {}).url || null : null;
       const dice = parseDice(text);
       const color = a.as ? room.chars[a.as].color : (isHex(a.color) ? a.color : null);
-      log(room, { tab: tab.id, type: 'say', by, as: a.as || null, name: a.as ? room.chars[a.as].data.name : freeName, color, portrait: a.portrait || null, portraitUrl: pUrl, text, cmd: a.cmd || null, dice, fx: a.fx === 'wd' ? 'wd' : undefined, reply });
+      const unison = UNISON.test(a.cmd || '') || /^【武装】[^\n]*クロスユニゾン/.test(text);
+      const wdChar = a.as && room.chars[a.as];
+      const wd = a.fx === 'wd' || !!(wdChar && wdChar.data.wingDrive && a.cmd && a.cmd === wdChar.data.wingDrive.name);
+      markOncePerScenario(wdChar, { unison, wd });
+      if (wdChar && a.cmd) effectsFromText(room, wdChar, a.cmd, text, by);
+      log(room, { tab: tab.id, type: 'say', by, as: a.as || null, name: a.as ? room.chars[a.as].data.name : freeName, color, portrait: a.portrait || null, portraitUrl: pUrl, text, cmd: a.cmd || null, dice, fx: unison ? 'unison' : a.fx === 'wd' ? 'wd' : undefined, members: unison ? unisonMembers(room, a.as) : undefined, reply });
       if (tpCh) {
         const before = tpCh.cur.TP;
         tpCh.cur.TP = before - a.spendTP;
@@ -674,5 +850,5 @@ function viewRoom(room, seat, pid) {
   return r;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
+  module.exports = { rangeProblems, effectTarget, rangeIssue, nextActors, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
 }
