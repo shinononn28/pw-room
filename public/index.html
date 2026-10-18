@@ -906,6 +906,18 @@ input[type=range]{width:100%;accent-color:var(--pink)}
 .onum{font-family:var(--num);font-size:.62rem;font-weight:700;color:var(--ink-2);min-width:.9em;text-align:center;flex:none}
 .phoneTool,.ordToggle{display:none}
 
+/* ===== wide screens: the board column is exactly as wide as the board (plus the zoom strip);
+   the turn-order list gets all the rest, in two columns when there is room ===== */
+@media (min-width:960px){
+  #mapP{container-type:size}
+  #mapP .mapwrap{grid-template-columns:minmax(200px,1fr) calc(min(100cqh, 100cqw - 246px) + 40px) !important;gap:6px !important}
+  #mapP .order{display:grid !important;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));align-content:start;gap:4px !important;overflow-x:hidden !important}
+  #mapP .order > .ohd,#mapP .order > .grp,#mapP .order > p{grid-column:1 / -1}
+  .ohd{flex-wrap:nowrap}
+  .ohd .btn{flex:none;white-space:nowrap}
+  .boardBox .board{margin:0 !important}
+}
+
 /* ===== phones: board operated in place, turn order as a ▶ fold-out column beside it, hand right under ===== */
 @media (max-width:720px){
   #mapP .mapwrap{display:grid !important;grid-template-columns:46px minmax(0,1fr) !important;grid-template-rows:auto auto;gap:6px !important;align-items:stretch}
