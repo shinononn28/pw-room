@@ -110,6 +110,7 @@ function turnOrder(room) {
 function newRoom(name) {
   return {
     id: uid('r'), name: name || '新しい部屋', createdAt: Date.now(),
+    players: {},
     settings: { jokers: 2, decks: 1, opsTab: 'battle', digestTab: 'main', gmSeesSecret: true, logValues: true },
     turn: { round: 1, current: null },
     chars: {},
@@ -124,7 +125,10 @@ function newRoom(name) {
 }
 
 // seats: 'gm', each PC character id, 'obs'
-const isPcSeat = (room, seat) => !!(room.chars[seat] && room.chars[seat].side === 'pc');
+// a character seat (PC or NPC): it has its own hand and can be sat in
+const isPcSeat = (room, seat) => !!(room.chars[seat] && (room.chars[seat].side === 'pc' || room.chars[seat].side === 'npc'));
+// characters the GM added and has not handed to a player yet
+const gmOwned = ch => !!ch && ch.owner === 'gm';
 function seatName(room, seat) {
   if (seat === 'gm') return 'GM';
   if (seat === 'obs') return '観戦';
@@ -137,7 +141,7 @@ function need(cond, msg) { if (!cond) throw new ActionError(msg); }
 
 function log(room, entry) {
   // names are stored at the time of logging, so old logs stay readable after a character leaves
-  const extra = { byName: seatName(room, entry.by) };
+  const extra = { byName: seatName(room, entry.by), pid: room._pid || null };
   if (entry.seat) extra.seatName = seatName(room, entry.seat);
   room.logs.push({ id: uid('l'), t: Date.now(), ...extra, ...entry });
   if (room.logs.length > 5000) room.logs.splice(0, room.logs.length - 5000);
@@ -156,7 +160,13 @@ function logsForTab(room, tabId) {
 }
 const opsTab = room => room.tabs.some(t => t.id === room.settings.opsTab) ? room.settings.opsTab : room.tabs[0].id;
 
-function apply(room, a, by) {
+function apply(room, a, by, pid) {
+  pid = pid || by;
+  room.players = room.players || {};
+  room._pid = pid;
+  try { return applyInner(room, a, by, pid); } finally { delete room._pid; }
+}
+function applyInner(room, a, by, pid) {
   const name = seatName(room, by);
   const ch = a.cid ? room.chars[a.cid] : null;
   switch (a.type) {
@@ -168,8 +178,9 @@ function apply(room, a, by) {
       const cur = {}; for (const [k, s] of Object.entries(data.stats)) cur[k] = statStart(s);
       const colors = NAME_COLORS.slice(0, 8);
       room.chars[id] = { id, side: a.side, data, dv: 1, cur, used: {}, variation: -1, x: null, y: null, portrait: data.portraits[0]?.label || null,
-        color: a.side === 'enemy' ? '#FF7A7A' : colors[Object.keys(room.chars).filter(k => room.chars[k].side !== 'enemy').length % colors.length], owner: by };
-      if (a.side === 'pc') room.cards.hands[id] = room.cards.hands[id] || [];
+        color: a.side === 'enemy' ? '#FF7A7A' : colors[Object.keys(room.chars).filter(k => room.chars[k].side !== 'enemy').length % colors.length],
+        owner: by === 'gm' ? 'gm' : id };
+      if (a.side === 'pc' || a.side === 'npc') room.cards.hands[id] = room.cards.hands[id] || [];
       log(room, { tab: opsTab(room), type: 'sys', by, text: `${data.name}（${{ pc: 'PC', enemy: '敵', npc: 'NPC' }[a.side]}）が参加しました` });
       return id;
     }
@@ -241,7 +252,7 @@ function apply(room, a, by) {
       need(i === -1 || ch.data.variations[i], 'そのバリエーションはありません');
       if (ch.variation === i) return;
       ch.variation = i;
-      log(room, { tab: opsTab(room), type: 'variation', by, cid: a.cid, text: `${ch.data.name}の武装を「${i === -1 ? '基本' : ch.data.variations[i].name}」に切り替えました` });
+      log(room, { tab: opsTab(room), type: 'variation', by, cid: a.cid, fx: 'form', formName: i === -1 ? '基本' : ch.data.variations[i].name, text: `${ch.data.name}の武装を「${i === -1 ? '基本' : ch.data.variations[i].name}」に切り替えました` });
       return;
     }
 
@@ -249,17 +260,18 @@ function apply(room, a, by) {
     case 'setTurn': {
       need(by === 'gm', '手番を指定できるのはGMだけです');
       need(a.cid === null || room.chars[a.cid], 'キャラクターが見つかりません');
-      room.turn.current = a.cid;
-      if (a.cid) log(room, { tab: opsTab(room), type: 'turn', by, text: `${room.chars[a.cid].data.name}の手番です` });
+      room.turn.current = a.cid && room.turn.current !== a.cid ? a.cid : null;   // pressing the current one again clears it
+      if (room.turn.current) log(room, { tab: opsTab(room), type: 'turn', by, text: `${room.chars[room.turn.current].data.name}の手番です` });
       return;
     }
     case 'nextTurn': {
-      need(by === 'gm' || by === room.turn.current, '手番を進められるのは、GMか手番のPCだけです');
+      need(by === 'gm' || by === room.turn.current, '手番を進められるのは、GMか手番のキャラだけです');
       const order = turnOrder(room);
+      need(order.length, 'キャラクターがいません');
       const i = order.findIndex(c => c.id === room.turn.current);
-      const next = order[i + 1] || null;
-      room.turn.current = next ? next.id : null;
-      log(room, { tab: opsTab(room), type: 'turn', by, text: next ? `${next.data.name}の手番です` : '全員の手番が終わりました。ラウンド終了です' });
+      const next = order[i + 1] || order[0];          // no rounds: after the last one, back to the top
+      room.turn.current = next.id;
+      log(room, { tab: opsTab(room), type: 'turn', by, text: `${next.data.name}の手番です` });
       return;
     }
     case 'endRound': {
@@ -282,7 +294,13 @@ function apply(room, a, by) {
       need(ch && canControlChar(room, by, a.cid), 'このコマは動かせません');
       const from = ch.x == null ? '盤外' : coordName(ch.x, ch.y);
       if (a.x == null) { ch.x = ch.y = null; }
-      else { need(a.x >= 0 && a.x < 8 && a.y >= 0 && a.y < 8, 'マップの外です'); ch.x = a.x; ch.y = a.y; }
+      else {
+        need(a.x >= 0 && a.x < 8 && a.y >= 0 && a.y < 8, 'マップの外です');
+        // one piece per square
+        const occ = Object.values(room.chars).find(o => o.id !== ch.id && o.x === a.x && o.y === a.y);
+        if (occ) throw new ActionError(`${coordName(a.x, a.y)}にはすでに${occ.data.name}がいます`);
+        ch.x = a.x; ch.y = a.y;
+      }
       const to = ch.x == null ? '盤外' : coordName(ch.x, ch.y);
       if (from !== to) log(room, { tab: opsTab(room), type: 'move', by, text: `${ch.data.name}：${from} → ${to}` });
       return;
@@ -326,7 +344,7 @@ function apply(room, a, by) {
     case 'give': { // hand cards to an ally (e.g. end-of-round exchange)
       const seat = a.seat || by;
       need(seat === by || by === 'gm', '他の人の手札は渡せません');
-      need(isPcSeat(room, seat) && isPcSeat(room, a.to) && seat !== a.to, '渡せるのは味方のPC同士だけです');
+      need(isPcSeat(room, seat) && isPcSeat(room, a.to) && seat !== a.to, '渡せるのは味方のキャラ同士だけです');
       const hand = room.cards.hands[seat] || [];
       need(a.cards.length && a.cards.every(c => hand.includes(c)), '手札にないカードが含まれています');
       room.cards.hands[seat] = hand.filter(c => !a.cards.includes(c));
@@ -336,18 +354,28 @@ function apply(room, a, by) {
     }
     case 'useWeapons': { // declare one or more weapons at once, discarding any cards (suits are not enforced)
       need(ch && canControlChar(room, by, a.cid), 'このキャラクターは操作できません');
+      need(!(by === 'gm' && ch.side === 'pc' && !gmOwned(ch)), 'GMはPLのキャラの武装を使えません');
       const seat = ch.side === 'pc' ? ch.id : 'gm';
       const hand = room.cards.hands[seat] || [];
       const cards = Array.isArray(a.cards) ? a.cards : [];
       need(cards.every(x => hand.includes(x)) && new Set(cards).size === cards.length, '手札にないカードが含まれています');
-      const pool = { c: ch.data.weapons.common, s: currentSlots(ch) };
-      const ws = (Array.isArray(a.weapons) ? a.weapons : []).map(k => pool[String(k)[0]]?.[+String(k).slice(1)]).filter(w => w && w.name);
+      // keys: c<i> common, s<i> current variation, v<n>_<i> slot i of variation n (-1 = 基本)
+      const slotsOf = n => n === -1 ? ch.data.weapons.slots : (ch.data.variations[n] || {}).slots || [];
+      let offForm = false;
+      const ws = (Array.isArray(a.weapons) ? a.weapons : []).map(k => {
+        k = String(k);
+        if (k[0] === 'c') return ch.data.weapons.common[+k.slice(1)];
+        if (k[0] === 's') return currentSlots(ch)[+k.slice(1)];
+        const m = k.match(/^v(-?\d+)_(\d+)$/); if (!m) return null;
+        if (+m[1] !== ch.variation) offForm = true;
+        return slotsOf(+m[1])[+m[2]];
+      }).filter(w => w && w.name);
       need(ws.length, '武装を選んでください');
       room.cards.hands[seat] = hand.filter(x => !cards.includes(x));
       room.cards.discard.push(...cards);
       log(room, { tab: opsTab(room), type: 'weapon', by, seat, cid: ch.id, charName: ch.data.name,
         weapons: ws.map(w => ({ name: w.name, suit: w.suit || null, attrs: { ...(w.attrs || {}) }, text: w.text || '' })),
-        cards, targets: (Array.isArray(a.targets) ? a.targets : []).map(id => room.chars[id]?.data.name).filter(Boolean), memo: String(a.memo || '').trim() });
+        cards, targets: (Array.isArray(a.targets) ? a.targets : []).map(id => room.chars[id]?.data.name).filter(Boolean), memo: String(a.memo || '').trim(), offForm });
       return;
     }
     case 'shuffleBack': {
@@ -396,10 +424,17 @@ function apply(room, a, by) {
     case 'say': {
       const tab = room.tabs.find(t => t.id === a.tab);
       need(tab, 'タブが見つかりません');
-      need(canSeeTab(room, tab, by), 'このタブには発言できません');
+      need(canSeeTab(room, tab, by, pid), 'このタブには発言できません');
       const text = (a.text || '').trim();
       need(text, '空の発言は送れません');
-      if (a.as) need(room.chars[a.as] && canControlChar(room, by, a.as), 'そのキャラクターとしては発言できません');
+      // who may speak as whom: a PL only as their own PC (or as themselves), the GM as GM / NPC / enemies — never as a PC
+      if (a.as) {
+        const sc = room.chars[a.as];
+        need(sc, 'そのキャラクターはいません');
+        if (by === 'gm') need(sc.side !== 'pc' || gmOwned(sc), 'GMはPLのキャラとして発言できません');
+        else need(by === a.as, '自分のキャラクターとしてだけ発言できます');
+      }
+      const freeName = speakerName(room, by, a.name, pid);
       // a 特技 command spends its TP automatically; refuse before anything is logged if TP is short
       let tpCh = null;
       if (a.as && Number.isFinite(a.spendTP) && a.spendTP > 0) {
@@ -410,7 +445,7 @@ function apply(room, a, by) {
       const pUrl = a.as ? (room.chars[a.as].data.portraits.find(p => p.label === a.portrait) || {}).url || null : null;
       const dice = parseDice(text);
       const color = a.as ? room.chars[a.as].color : (isHex(a.color) ? a.color : null);
-      log(room, { tab: tab.id, type: 'say', by, as: a.as || null, name: a.as ? room.chars[a.as].data.name : (a.name || name), color, portrait: a.portrait || null, portraitUrl: pUrl, text, cmd: a.cmd || null, dice });
+      log(room, { tab: tab.id, type: 'say', by, as: a.as || null, name: a.as ? room.chars[a.as].data.name : freeName, color, portrait: a.portrait || null, portraitUrl: pUrl, text, cmd: a.cmd || null, dice, fx: a.fx === 'wd' ? 'wd' : undefined });
       if (tpCh) {
         const before = tpCh.cur.TP;
         tpCh.cur.TP = before - a.spendTP;
@@ -421,7 +456,7 @@ function apply(room, a, by) {
     case 'editSay': { // fix the text of one's own message later (dice results are never re-rolled)
       const l = room.logs.find(x => x.id === a.id);
       need(l && l.type === 'say', 'その発言は見つかりません');
-      need(l.by === by, '自分の発言だけ編集できます');
+      need(l.pid ? l.pid === pid : l.by === by, '自分の発言だけ編集できます');
       need(!l.dice, 'ダイスの発言は結果が変わってしまうので編集できません');
       const text = String(a.text || '').trim();
       need(text, '空にはできません');
@@ -430,17 +465,28 @@ function apply(room, a, by) {
       return;
     }
     case 'addTab': {
-      need((a.name || '').trim(), 'タブ名を入れてください');
-      const t = { id: typeof a.id === 'string' && /^t[0-9a-z]{6,30}$/.test(a.id) && !room.tabs.some(x => x.id === a.id) ? a.id : uid('t'), name: a.name.trim() };
-      if (a.secret) { t.secret = true; t.members = [...new Set([...(a.members || []), by])]; }
+      const members = a.secret ? [...new Set([...(a.members || []), pid])] : null;
+      let name = String(a.name || '').trim().slice(0, 24);
+      if (!name) {
+        const names = (members || []).map(p => room.players[p]?.name || seatName(room, p)).filter(Boolean);
+        name = a.secret ? `秘匿：${names.join('・') || room.tabs.filter(t => t.secret).length + 1}`.slice(0, 24) : `タブ${room.tabs.length + 1}`;
+      }
+      const t = { id: typeof a.id === 'string' && /^t[0-9a-z]{6,30}$/.test(a.id) && !room.tabs.some(x => x.id === a.id) ? a.id : uid('t'), name };
+      if (a.secret) { t.secret = true; t.members = members; }
       room.tabs.push(t);
       return t.id;
     }
     case 'editTab': {
       const t = room.tabs.find(x => x.id === a.tab); need(t, 'タブが見つかりません');
-      need(by === 'gm' || (t.members || []).includes(by), 'このタブは編集できません');
-      if (a.name) t.name = a.name.trim();
+      need(by === 'gm' || (t.members || []).includes(pid) || (t.members || []).includes(by), 'このタブは編集できません');
+      if (a.name && a.name.trim()) t.name = a.name.trim().slice(0, 24);
       if (t.secret && a.members) t.members = [...new Set(a.members)];
+      return;
+    }
+    case 'setPlayer': { // a person's display name in this room
+      const name = String(a.name || '').trim().slice(0, 20);
+      need(name, '名前を入れてください');
+      room.players[pid] = { ...(room.players[pid] || {}), name };
       return;
     }
     case 'removeTab': {
@@ -462,12 +508,15 @@ function apply(room, a, by) {
 // upgrade rooms saved by an older version
 function migrateRoom(room) {
   room.turn = room.turn || { round: 1, current: null };
+  room.players = room.players || {};
   room.settings.decks = room.settings.decks || 1;
   if (!('digestTab' in room.settings)) room.settings.digestTab = 'main';
   for (const ch of Object.values(room.chars)) {
     if (!ch.data.stats || ch.data.skills.some(s => !('tp' in s))) { try { ch.data = normalizeChar({ ...ch.data, values: ch.data.stats ? Object.fromEntries(Object.entries(ch.data.stats)) : ch.data.values }); } catch (e) {} }
     if (ch.variation == null) ch.variation = -1;
     if (!ch.dv) ch.dv = 1;
+    if (ch.owner !== 'gm') ch.owner = ch.id;          // older rooms stored the importer's seat here
+    if ((ch.side === 'pc' || ch.side === 'npc') && !room.cards.hands[ch.id]) room.cards.hands[ch.id] = [];
   }
   return room;
 }
@@ -524,13 +573,28 @@ function parseDice(raw) {
 }
 
 // A1 is the bottom-left square (rows are counted upward); y=0 is the top row on screen
+// the name used when not speaking as a character: GM may name NPCs freely (but not after a PC);
+// a PL speaks as "<player or PC>（PL）"; spectators are just spectators
+function speakerName(room, by, wanted, pid) {
+  const pname = room.players && pid && room.players[pid] ? room.players[pid].name : '';
+  if (by === 'gm') {
+    const n = String(wanted || 'GM').trim().slice(0, 30) || 'GM';
+    const pcNames = Object.values(room.chars).filter(c => c.side === 'pc' && !gmOwned(c)).map(c => c.data.name);
+    need(!pcNames.includes(n), 'PCと同じ名前では発言できません');
+    return n;
+  }
+  if (isPcSeat(room, by)) { const d = room.chars[by].data; return `${pname || d.player || d.name}（PL）`; }
+  return pname ? `${pname}（観戦）` : '観戦者';
+}
 const coordName = (x, y) => 'ABCDEFGH'[x] + (8 - y);
 
 // ----- visibility -----
-function canSeeTab(room, tab, seat) {
+// secret tabs belong to players (people), not seats: switching characters keeps what you can see
+function canSeeTab(room, tab, seat, pid) {
   if (!tab.secret) return true;
   if (seat === 'gm' && room.settings.gmSeesSecret) return true;
-  return (tab.members || []).includes(seat);
+  const m = tab.members || [];
+  return m.includes(pid || seat) || m.includes(seat);
 }
 // hands: the PC side sees every PC hand; GM's hand is only a count for everyone else
 function viewHand(room, owner, viewer) {
@@ -538,23 +602,23 @@ function viewHand(room, owner, viewer) {
   if (owner === 'gm') return viewer === 'gm' ? hand : null;
   return hand;
 }
-function viewLog(room, l, viewer) {
+function viewLog(room, l, viewer, pid) {
   const tab = room.tabs.find(t => t.id === l.tab);
-  if (!tab || !canSeeTab(room, tab, viewer)) return null;
+  if (!tab || !canSeeTab(room, tab, viewer, pid)) return null;
   if (l.type === 'draw' && l.secretCards && viewer !== 'gm') return { ...l, cards: null };
-  if (l.type === 'say' && l.dice && l.dice.secret && viewer !== 'gm' && viewer !== l.by) return { ...l, text: '', dice: { secret: true, hidden: true } };
+  if (l.type === 'say' && l.dice && l.dice.secret && viewer !== 'gm' && viewer !== l.by && (!pid || pid !== l.pid)) return { ...l, text: '', dice: { secret: true, hidden: true } };
   return l;
 }
 
 // what one seat may receive (server -> browser). Logs are sent separately through viewLog.
-function viewRoom(room, seat) {
+function viewRoom(room, seat, pid) {
   const { logs, ...rest } = room;
   const r = JSON.parse(JSON.stringify(rest));
   r.cards.deck = Array(room.cards.deck.length).fill('?');
   if (seat !== 'gm') r.cards.hands.gm = Array((room.cards.hands.gm || []).length).fill('?');
-  r.tabs = r.tabs.filter(t => canSeeTab(room, t, seat));
+  r.tabs = r.tabs.filter(t => canSeeTab(room, t, seat, pid));
   return r;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, ActionError, normalizeChar };
+  module.exports = { apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar };
 }

@@ -65,6 +65,15 @@ setInterval(async () => {
   for (const [id, e] of rooms) if (!e.clients.size && Date.now() - e.idleSince > 15 * 60 * 1000) { await saveNow(id, e); rooms.delete(id); }
 }, 60 * 1000);
 
+// ---------- BGM: the GM's uploaded file lives in memory only (never stored) ----------
+const BGM_MAX = 20 * 1024 * 1024;
+const bgmInfo = e => ({ name: e.bgm.name, token: e.bgm.token, loop: e.bgm.loop, at: e.bgm.at });
+function readRaw(req, max) {
+  return new Promise((res, rej) => { const chunks = []; let n = 0;
+    req.on('data', c => { n += c.length; if (n > max) { rej(new Error('too_big')); req.destroy(); } else chunks.push(c); });
+    req.on('end', () => res(Buffer.concat(chunks))); req.on('error', rej); });
+}
+
 // ---------- http ----------
 function readJson(req) {
   return new Promise((res, rej) => { let b = ''; req.on('data', c => { b += c; if (b.length > 1e5) req.destroy(); }); req.on('end', () => { try { res(b ? JSON.parse(b) : {}); } catch (e) { rej(e); } }); });
@@ -79,6 +88,23 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' }); res.end(fs.readFileSync(path.join(__dirname, 'public', 'core.js'))); return;
     }
     if (req.method === 'GET' && url.pathname === '/healthz') { res.writeHead(200); res.end('ok'); return; }
+    if (req.method === 'POST' && url.pathname === '/api/bgm') {
+      const entry = rooms.get(String(url.searchParams.get('room') || ''));
+      if (!entry || sha(req.headers['x-gm-key'] || '') !== entry.gmKeyHash) { res.writeHead(403, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'BGMを流せるのはGMだけです' })); return; }
+      let buf; try { buf = await readRaw(req, BGM_MAX); } catch (e) { res.writeHead(413, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'ファイルが大きすぎます（20MBまで）' })); return; }
+      const type = String(req.headers['content-type'] || '');
+      if (!/^audio\//.test(type)) { res.writeHead(415, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: '音声ファイルを選んでください' })); return; }
+      entry.bgm = { buf, type, name: decodeURIComponent(String(req.headers['x-name'] || 'BGM')).slice(0, 80), token: randomId('b', 12), loop: true, at: Date.now() };
+      for (const c of entry.clients) send(c.ws, { t: 'bgm', bgm: bgmInfo(entry) });
+      res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"ok":true}'); return;
+    }
+    const bm = url.pathname.match(/^\/api\/bgm\/([a-z0-9]+)\/([a-z0-9]+)$/);
+    if (req.method === 'GET' && bm) {
+      const entry = rooms.get(bm[1]);
+      if (!entry || !entry.bgm || entry.bgm.token !== bm[2]) { res.writeHead(404); res.end(); return; }
+      res.writeHead(200, { 'content-type': entry.bgm.type, 'content-length': entry.bgm.buf.length, 'cache-control': 'private, max-age=3600' });
+      res.end(entry.bgm.buf); return;
+    }
     if (req.method === 'GET' && url.pathname === '/api/status') {
       try { storeStatus = await store.check(); } catch (e) { storeStatus = { ok: false, detail: explain(e) }; }
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
@@ -115,19 +141,27 @@ function issueSeatKey(entry, cid, conn) {
 function seatFor(entry, seat, gmKey, seatKey, conn) {
   const isGm = !!gmKey && sha(gmKey) === entry.gmKeyHash;
   if (seat === 'gm') return isGm ? { seat: 'gm' } : { seat: 'obs', why: 'GMキーが違うため、観戦で入りました' };
-  // the GM never takes a player's seat (a PC the GM imported is handed over with its seat link)
-  if (isGm && seat && seat !== 'obs') return { seat: 'gm', why: 'GMはPLの席には座れません' };
   if (seat && core.isPcSeat(entry.room, seat)) {
+    const ch = entry.room.chars[seat];
+    // the GM may sit in characters it still holds, never in a player's
+    if (isGm) return core.gmOwned(ch) ? { seat } : { seat: 'gm', why: 'GMはPLのキャラの席には座れません' };
     const h = entry.seatKeyHashes[seat];
-    if (!h) { issueSeatKey(entry, seat, conn); return { seat }; }
-    if (seatKey && sha(seatKey) === h) return { seat };
+    if (!h) {
+      if (core.gmOwned(ch)) return { seat: 'obs', why: 'GMのキャラです。GMから席のリンクをもらってください' };
+      issueSeatKey(entry, seat, conn); return { seat };
+    }
+    if (seatKey && sha(seatKey) === h) {
+      // a player opening the seat link of a GM-held character takes it over
+      if (core.gmOwned(ch)) { ch.owner = ch.id; entry.ownerChanged = true; saveSoon(entry.room.id, entry); }
+      return { seat };
+    }
     return { seat: 'obs', why: 'このキャラの席の鍵がないため、観戦で入りました。持ち主かGMに「席のリンク」をもらってください' };
   }
   return { seat: 'obs' };
 }
 function sendState(conn) {
   const { room } = conn.entry;
-  const v = core.viewRoom(room, conn.seat);
+  const v = core.viewRoom(room, conn.seat, conn.pid);
   conn.sentDv = conn.sentDv || {};
   for (const [cid, ch] of Object.entries(v.chars)) {
     if (conn.sentDv[cid] === ch.dv) delete ch.data;      // the browser keeps the sheet it already has
@@ -139,9 +173,10 @@ const JOIN_LOGS = 1000;   // older lines stay in the store; the room opens with 
 function sendJoined(conn) {
   const { room } = conn.entry;
   conn.sentDv = Object.fromEntries(Object.values(room.chars).map(c => [c.id, c.dv]));
-  const logs = room.logs.map(l => core.viewLog(room, l, conn.seat)).filter(Boolean);
-  send(conn.ws, { t: 'joined', seat: conn.seat, room: core.viewRoom(room, conn.seat), locked: Object.keys(conn.entry.seatKeyHashes),
+  const logs = room.logs.map(l => core.viewLog(room, l, conn.seat, conn.pid)).filter(Boolean);
+  send(conn.ws, { t: 'joined', seat: conn.seat, pid: conn.pid, room: core.viewRoom(room, conn.seat, conn.pid), locked: Object.keys(conn.entry.seatKeyHashes),
     logs: logs.slice(-JOIN_LOGS), olderLogs: Math.max(0, logs.length - JOIN_LOGS) });
+  if (conn.entry.bgm) send(conn.ws, { t: 'bgm', bgm: bgmInfo(conn.entry) });
 }
 function broadcast(entry, diff) {
   const { room } = entry;
@@ -149,8 +184,8 @@ function broadcast(entry, diff) {
     // a PC seat whose character left falls back to spectating
     if (conn.seat !== 'gm' && conn.seat !== 'obs' && !core.isPcSeat(room, conn.seat)) conn.seat = 'obs';
     sendState(conn);
-    if (diff.reset) { send(conn.ws, { t: 'logs', room: room.id, reset: true, add: room.logs.map(l => core.viewLog(room, l, conn.seat)).filter(Boolean) }); continue; }
-    const v = l => core.viewLog(room, l, conn.seat);
+    if (diff.reset) { send(conn.ws, { t: 'logs', room: room.id, reset: true, add: room.logs.map(l => core.viewLog(room, l, conn.seat, conn.pid)).filter(Boolean) }); continue; }
+    const v = l => core.viewLog(room, l, conn.seat, conn.pid);
     const add = diff.added.map(v).filter(Boolean), update = diff.updated.map(v).filter(Boolean);
     if (add.length || update.length || diff.removed.length) send(conn.ws, { t: 'logs', room: room.id, add, update, remove: diff.removed });
   }
@@ -163,7 +198,7 @@ async function handleAct(conn, a) {
   const tail = new Map(room.logs.slice(-6).map(l => [l.id, JSON.stringify(l)]));
   const allIds = a.type === 'removeTab' ? new Set(room.logs.map(l => l.id)) : null;
   let ret;
-  try { ret = core.apply(room, a, conn.seat); }
+  try { ret = core.apply(room, a, conn.seat, conn.pid); }
   catch (e) {
     if (e instanceof core.ActionError || (e && e.message)) return send(conn.ws, { t: 'error', message: e.message || '操作できませんでした' });
     throw e;
@@ -178,12 +213,13 @@ async function handleAct(conn, a) {
   if (a.type === 'editSay') { const l = room.logs.find(x => x.id === a.id); if (l && !updated.includes(l)) updated.push(l); }
   let deleted = removed;
   if (allIds) { const still = new Set(room.logs.map(l => l.id)); deleted = [...allIds].filter(id => !still.has(id)); }
-  if (a.type === 'addChar' && a.side === 'pc' && typeof ret === 'string') {
+  if (a.type === 'addChar' && (a.side === 'pc' || a.side === 'npc') && typeof ret === 'string') {
     issueSeatKey(entry, ret, conn);                       // whoever imported the PC holds its seat key
     if (conn.seat === 'obs') conn.seat = ret;              // a spectator who imports a PC sits in it
   }
   if (a.type === 'removeChar') delete entry.seatKeyHashes[a.cid];
-  broadcast(entry, { added, updated, removed, reset: !!allIds });
+  const reset = !!allIds || a.type === 'editTab' || a.type === 'addTab';
+  broadcast(entry, { added, updated, removed, reset });
   saveSoon(room.id, entry);
   const put = [...added, ...updated];
   if (put.length) store.putLogs(room.id, put).catch(e => console.error('log save failed', e.message));
@@ -200,16 +236,48 @@ wss.on('connection', ws => {
         if (!entry) return send(ws, { t: 'error', code: 'not_found', message: 'この部屋は見つかりません' });
         if (conn.entry && conn.entry !== entry) { conn.entry.clients.delete(conn); if (!conn.entry.clients.size) conn.entry.idleSince = Date.now(); }
         conn.entry = entry; entry.clients.add(conn);
+        // the person behind the connection: a browser-made id plus a display name
+        const p = m.player || {};
+        conn.pid = typeof p.id === 'string' && /^p[0-9a-z]{8,40}$/.test(p.id) ? p.id : randomId('p', 16);
+        conn.isGm = !!m.gmKey && sha(m.gmKey) === entry.gmKeyHash;
+        const pname = String(p.name || '').trim().slice(0, 20);
+        const players = entry.room.players = entry.room.players || {};
+        const nameChanged = pname && (!players[conn.pid] || players[conn.pid].name !== pname);
+        if (nameChanged) { players[conn.pid] = { name: pname }; saveSoon(entry.room.id, entry); }
         const r = seatFor(entry, m.seat, m.gmKey, m.seatKey, conn);
         conn.seat = r.seat;
         if (r.why) send(ws, { t: 'error', message: r.why });
         sendJoined(conn);
+        if (nameChanged) for (const c of entry.clients) if (c !== conn) sendState(c);
+        if (entry.ownerChanged) {
+          entry.ownerChanged = false;
+          for (const c of entry.clients) if (c !== conn) {
+            if (c.seat === m.seat && c.seat !== 'obs') { c.seat = 'gm'; send(c.ws, { t: 'error', message: `${entry.room.chars[m.seat].data.name}はPLに渡りました` }); }
+            sendState(c);
+          }
+        }
       } else if (m.t === 'act') await handleAct(conn, m.a);
+      else if (m.t === 'typing') {
+        // "○○が入力中…": relayed (not stored) to people who can see that tab, at most once a second
+        const entry = conn.entry; if (!entry) return;
+        const now = Date.now(); if (now - (conn.lastTyping || 0) < 1000) return; conn.lastTyping = now;
+        const tab = entry.room.tabs.find(t => t.id === m.tab); if (!tab) return;
+        const name = (entry.room.players[conn.pid] || {}).name || '誰か';
+        for (const c of entry.clients) if (c !== conn && core.canSeeTab(entry.room, tab, c.seat, c.pid)) send(c.ws, { t: 'typing', tab: tab.id, name, pid: conn.pid });
+      }
+      else if (m.t === 'bgmStop' || m.t === 'bgmLoop') {
+        const entry = conn.entry; if (!entry || !conn.isGm) return send(ws, { t: 'error', message: 'BGMを操作できるのはGMだけです' });
+        if (m.t === 'bgmStop') entry.bgm = null; else if (entry.bgm) entry.bgm.loop = !!m.loop;
+        for (const c of entry.clients) send(c.ws, { t: 'bgm', bgm: entry.bgm ? bgmInfo(entry) : null });
+      }
       else if (m.t === 'reissueSeat') {
         // GM: make a new seat key for a PC (lost device / hand-over). Old key holders drop to spectating.
         const entry = conn.entry;
         if (!entry || conn.seat !== 'gm' || !core.isPcSeat(entry.room, m.cid)) return send(ws, { t: 'error', message: '席の鍵を作り直せるのはGMだけです' });
         issueSeatKey(entry, m.cid, conn);
+        entry.room.chars[m.cid].owner = 'gm';          // back in the GM's hands until someone opens the new link
+        for (const c of entry.clients) sendState(c);
+        saveSoon(entry.room.id, entry);
         for (const c of entry.clients) if (c !== conn && c.seat === m.cid) { c.seat = 'obs'; send(c.ws, { t: 'error', message: 'GMが席の鍵を作り直したため、観戦に戻りました' }); sendJoined(c); }
         send(ws, { t: 'reissued', cid: m.cid });
       }
