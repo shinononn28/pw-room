@@ -751,7 +751,15 @@ dialog.mapDlg{overflow:auto}
 .composer,.speak{min-width:0}
 .speak select{min-width:0}
 /* typing line */
-.typing{min-height:1.2em;font-size:.74rem;color:#9A9A9E;padding:2px 4px 0}
+.typing{height:1.5em;line-height:1.5em;font-size:.74rem;color:#9A9A9E;padding:0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;transform:translateY(3px);transition:opacity .25s ease,transform .25s ease}
+.typing.on{opacity:1;transform:none}
+.typing .tpen{margin-right:4px}
+.typing .tdots{display:inline-flex;gap:2px;margin-left:3px;vertical-align:middle}
+.typing .tdots i{width:3px;height:3px;border-radius:50%;background:currentColor;animation:tdot 1.2s infinite ease-in-out}
+.typing .tdots i:nth-child(2){animation-delay:.15s}
+.typing .tdots i:nth-child(3){animation-delay:.3s}
+@keyframes tdot{0%,60%,100%{opacity:.25;transform:none}30%{opacity:1;transform:translateY(-2px)}}
+@media (prefers-reduced-motion:reduce){.typing{transition:none}.typing .tdots i{animation:none;opacity:.7}}
 /* links / BGM */
 .linkRow{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
 .linkRow > div{flex:1;min-width:0}
@@ -761,6 +769,14 @@ dialog.mapDlg{overflow:auto}
 input[type=range]{width:100%;accent-color:var(--pink)}
 .formNote{font-size:.74rem;font-weight:700;color:var(--gold);margin-left:6px}
 .formNote.on{color:var(--ok)}
+.swapPics{display:inline-flex;align-items:center;gap:4px;margin-left:8px;vertical-align:middle;color:#9A9A9E}
+.swapPics img{width:24px;height:32px;object-fit:cover;object-position:top;border-radius:3px}
+.ptFormsH{font-size:.95rem;margin:16px 0 2px}
+.ptForms{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.ptFormRow{display:grid;grid-template-columns:minmax(0,1fr) 36px minmax(0,1.2fr);align-items:center;gap:8px}
+.ptFormRow .fname{font-weight:700;font-size:.86rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ptFormRow img,.ptFormRow .ptNone{width:36px;height:48px;object-fit:cover;object-position:top;border-radius:4px;background:var(--mist);display:flex;align-items:center;justify-content:center;color:var(--ink-2)}
+.ptFormRow select{min-width:0;width:100%}
 
 /* ===== effects: 換装 / WING DRIVE (transform + opacity only) ===== */
 .fx{position:fixed;inset:0;pointer-events:none;z-index:60;display:flex;align-items:center;justify-content:center;overflow:hidden}
@@ -839,6 +855,70 @@ input[type=range]{width:100%;accent-color:var(--pink)}
 @keyframes fxPtFlow{0%{opacity:0;transform:translateX(-60vw)}22%{opacity:.95;transform:translateX(-6vw)}72%{opacity:.95;transform:translateX(2vw)}100%{opacity:0;transform:translateX(60vw)}}
 @keyframes fxTextFlow{0%{opacity:0;transform:translateX(45vw)}22%{opacity:1;transform:translateX(3vw)}72%{opacity:1;transform:translateX(-2vw)}100%{opacity:0;transform:translateX(-45vw)}}
 .fx-simple .fxStreak{display:none}
+
+/* 換装 with a new 立ち絵: before → white-out → flash, ring and sparks → after (3.2 s) */
+.fx-swap{--sw:3.2s}
+.swShade{position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,rgba(5,8,20,.25),rgba(5,8,20,.72));opacity:0;animation:swShade var(--sw) ease forwards}
+.swStage{position:relative;height:min(66vh,520px);aspect-ratio:3/4;max-width:92vw}
+.swStage img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;object-position:center bottom;opacity:0}
+.swOld{animation:swOld var(--sw) ease forwards}
+.swNew{animation:swNew var(--sw) ease forwards}
+.swFlash{position:absolute;left:50%;top:50%;width:40%;aspect-ratio:1;margin:-20% 0 0 -20%;border-radius:50%;background:radial-gradient(circle,#fff 0%,color-mix(in srgb,var(--fxc) 60%,#fff) 35%,transparent 70%);opacity:0;animation:swFlash var(--sw) ease-out forwards}
+.swRing{position:absolute;left:50%;top:50%;width:40vmin;height:40vmin;margin:-20vmin 0 0 -20vmin;border-radius:50%;border:3px solid color-mix(in srgb,var(--fxc) 55%,#fff);box-shadow:0 0 24px var(--fxc),inset 0 0 24px var(--fxc);opacity:0;animation:swRing var(--sw) ease-out forwards}
+.swRing.r2{animation-delay:.14s;border-width:2px}
+.swSparks{position:absolute;left:50%;top:50%;width:0;height:0}
+.swSparks i{position:absolute;left:-3px;top:-14px;width:6px;height:28px;border-radius:3px;background:linear-gradient(#fff,var(--fxc));opacity:0;transform:rotate(var(--a));animation:swSpark var(--sw) ease-out forwards;animation-delay:var(--d)}
+.fx-swap .swText{position:absolute;bottom:9vh;left:0;right:0;animation:swText var(--sw) ease-out forwards}
+.fx-swap .fxBurst{animation:swBurst var(--sw) ease-out forwards}
+@keyframes swShade{0%{opacity:0}10%{opacity:1}88%{opacity:1}100%{opacity:0}}
+@keyframes swOld{0%{opacity:0;transform:translateX(-5%) scale(.97)}12%{opacity:1;transform:none;filter:none}28%{opacity:1;transform:scale(1.02);filter:brightness(1.3) drop-shadow(0 0 12px var(--fxc))}40%{opacity:1;transform:scale(1.05);filter:brightness(4) saturate(0) drop-shadow(0 0 30px #fff)}47%{opacity:0;transform:scale(1.12);filter:brightness(5) saturate(0)}100%{opacity:0}}
+@keyframes swNew{0%,41%{opacity:0;transform:scale(1.14);filter:brightness(5) saturate(0)}50%{opacity:1;transform:scale(1.04);filter:brightness(3) saturate(.3) drop-shadow(0 0 30px #fff)}64%{opacity:1;transform:none;filter:brightness(1) drop-shadow(0 0 16px var(--fxc))}88%{opacity:1;transform:none;filter:drop-shadow(0 0 10px var(--fxc))}100%{opacity:0;transform:translateY(-2%);filter:none}}
+@keyframes swFlash{0%,36%{opacity:0;transform:scale(.2)}44%{opacity:1;transform:scale(2.6)}60%{opacity:0;transform:scale(5)}100%{opacity:0}}
+@keyframes swRing{0%,38%{opacity:0;transform:scale(.2)}46%{opacity:1}76%{opacity:0;transform:scale(2.6)}100%{opacity:0}}
+@keyframes swSpark{0%,40%{opacity:0;transform:rotate(var(--a)) translateY(0) scaleY(.4)}48%{opacity:1}76%{opacity:0;transform:rotate(var(--a)) translateY(-36vmin) scaleY(1)}100%{opacity:0}}
+@keyframes swText{0%,44%{opacity:0;transform:translateY(14px) scale(.96)}54%{opacity:1;transform:none}88%{opacity:1}100%{opacity:0;transform:translateY(-6px)}}
+@keyframes swBurst{0%,38%{opacity:0;transform:scale(.1)}48%{opacity:.8}80%{opacity:0;transform:scale(1)}100%{opacity:0}}
+/* still version (reduce motion / 簡易表示): a plain cross-fade from before to after */
+.fx-swap.fx-simple .swRing,.fx-swap.fx-simple .swSparks,.fx-swap.fx-simple .swFlash,.fx-swap.fx-simple .fxBurst{display:none}
+.fx-swap.fx-simple .swOld{animation:swOldS var(--sw) ease forwards}
+.fx-swap.fx-simple .swNew{animation:swNewS var(--sw) ease forwards}
+.fx-swap.fx-simple .swText{opacity:1;transform:none;animation:fxFade var(--sw) ease forwards}
+@keyframes swOldS{0%{opacity:0}10%{opacity:1}35%{opacity:1}50%{opacity:0}100%{opacity:0}}
+@keyframes swNewS{0%,35%{opacity:0}50%{opacity:1}88%{opacity:1}100%{opacity:0}}
+
+/* a reserved place for a button that is not usable right now (keeps the layout from shifting) */
+.btn.slot{visibility:hidden;pointer-events:none}
+/* phones: the board takes the full width and the turn order sits under it as two columns of cards,
+   each with its HP/TP bars; nothing in them changes size when the turn or a value changes */
+@media (max-width:720px){
+  #mapP .mapwrap{display:flex !important;flex-direction:column;align-items:stretch;gap:10px}
+  #mapP .boardCol,#mapP .boardBox{width:100%}
+  #mapP .boardCol{order:1}
+  #mapP .order{order:2;display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 6px !important;overflow:visible !important;max-height:none;padding:0 !important}
+  #mapP .order > .ohd,#mapP .order > .grp,#mapP .order > p{grid-column:1 / -1}
+  #mapP .order > .grp{margin:2px 0 -4px}
+  .ohd{flex-direction:row !important;flex-wrap:nowrap;gap:6px;margin:0}
+  .ohd .btn{font-size:.8rem !important;padding:6px 8px !important;white-space:nowrap;justify-content:center;text-align:center}
+  .oitem{padding:7px 8px 7px 10px !important;min-width:0}
+  .ohead{gap:8px}
+  .ohead .pt{width:34px !important;height:34px !important}
+  .ohead .oname{font-size:.86rem}
+  .oitem .ometa{font-size:.72rem;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .oitem .phoneOnly{display:none !important}
+  /* no +/- here (too small to tap safely); tapping the card opens the detail with them */
+  .oitem .ostat{display:grid !important;grid-template-columns:22px auto auto minmax(16px,1fr);column-gap:4px;margin-top:3px}
+  .oitem .ostat .step{display:none}
+  .ostat i{font-size:.7rem}
+  .ostat b{font-size:.88rem}
+  .ostat em{font-size:.7rem}
+  .ostat .bar{height:6px;border-radius:3px;margin-left:4px}
+}
+@media (max-width:400px){
+  .top{gap:4px !important}
+  .viewsel select{max-width:30vw !important}
+  .top .back{padding:3px 6px !important}
+  .top h1{display:none}
+}
 </style>
 </head>
 <body>
@@ -931,19 +1011,32 @@ function normalizeChar(raw) {
   // 特殊機能 may sit in core.functions or at the top level (functions)
   const fnSrc = Array.isArray(raw.core?.functions) ? raw.core.functions : Array.isArray(raw.functions) ? raw.functions : [];
   const core = raw.core || fnSrc.length ? { ...item(raw.core || { name: '' }), functions: fnSrc.map(item) } : null;
-  return {
+  const data = {
     format: 'pw-character', version: 2,
     name: raw.name, player: String(raw.player || ''),
     core, stats,
     // tp: TP consumed when the 特技 is used (cost is accepted as an older name)
     skills: Array.isArray(raw.skills) ? raw.skills.map(x => { const t = x?.tp ?? x?.cost; return { ...item(x), tp: t != null && Number.isFinite(Number(t)) ? Number(t) : null }; }) : [],
     weapons,
-    variations: Array.isArray(raw.variations) ? raw.variations.map(v => ({ name: String(v?.name || 'バリエーション'), slots: slotsFrom(v?.slots) })) : [],
+    // portrait: the 立ち絵 (by label) the character switches to when changing into that variation; basePortrait for 基本
+    variations: Array.isArray(raw.variations) ? raw.variations.map(v => ({ name: String(v?.name || 'バリエーション'), slots: slotsFrom(v?.slots), portrait: v?.portrait ? String(v.portrait) : null })) : [],
+    basePortrait: raw.basePortrait ? String(raw.basePortrait) : null,
     wingDrive: raw.wingDrive ? item(raw.wingDrive) : null,
     portraits: Array.isArray(raw.portraits) ? raw.portraits.filter(p => p && p.url).map(p => ({ label: String(p.label || '立ち絵'), url: toDirectImage(p.url) })) : [],
     memo: String(raw.memo || ''),
   };
+  dropStaleFormPortraits(data);
+  return data;
 }
+// links to a 立ち絵 that no longer exists are cleared
+function dropStaleFormPortraits(d) {
+  const labels = new Set(d.portraits.map(p => p.label));
+  if (!labels.has(d.basePortrait)) d.basePortrait = null;
+  for (const v of d.variations) if (!labels.has(v.portrait)) v.portrait = null;
+}
+// the 立ち絵 linked to variation i (-1 = 基本), or null
+const formPortrait = (ch, i) => (i === -1 ? ch.data.basePortrait : (ch.data.variations[i] || {}).portrait) || null;
+const portraitUrl = (ch, label) => (ch.data.portraits.find(p => p.label === label) || {}).url || null;
 const statStart = s => s.max ?? s.value;
 const currentSlots = ch => ch.variation >= 0 && ch.data.variations[ch.variation] ? ch.data.variations[ch.variation].slots : ch.data.weapons.slots;
 const ssOf = ch => Number.isFinite(ch.cur['SS値']) ? ch.cur['SS値'] : (ch.data.stats['SS値'] ? statStart(ch.data.stats['SS値']) : -Infinity);
@@ -1035,6 +1128,11 @@ function applyInner(room, a, by, pid) {
     case 'updateCharData': {
       need(ch && canControlChar(room, by, a.cid), 'このキャラクターは編集できません');
       const data = normalizeChar(a.data);
+      // a sheet from the sheet tool has no 立ち絵 links: keep the ones set here (variations matched by name)
+      if (!('basePortrait' in a.data)) data.basePortrait = ch.data.basePortrait || null;
+      data.variations.forEach((v, i) => { const rv = (Array.isArray(a.data.variations) ? a.data.variations : [])[i]; if (!(rv && typeof rv === 'object' && 'portrait' in rv)) v.portrait = (ch.data.variations.find(o => o.name === v.name) || {}).portrait || null; });
+      if (!Array.isArray(a.data.portraits)) data.portraits = ch.data.portraits;
+      dropStaleFormPortraits(data);
       for (const [k, s] of Object.entries(data.stats)) if (!(k in ch.cur)) ch.cur[k] = statStart(s);
       ch.data = data; ch.dv = (ch.dv || 1) + 1;
       if (!(ch.variation < data.variations.length)) ch.variation = -1;
@@ -1082,7 +1180,17 @@ function applyInner(room, a, by, pid) {
     case 'setPortraits': {
       need(ch && canControlChar(room, by, a.cid), 'このキャラクターは編集できません');
       ch.data.portraits = a.portraits.map(p => ({ label: String(p.label || '立ち絵'), url: toDirectImage(p.url) })).filter(p => p.url);
+      // forms: { "-1": label for 基本, "0": label for variation 0, ... } (null = no link)
+      if (a.forms && typeof a.forms === 'object') {
+        const pick = k => a.forms[k] ? String(a.forms[k]) : null;
+        ch.data.basePortrait = pick('-1');
+        ch.data.variations.forEach((v, i) => { v.portrait = pick(String(i)); });
+      }
+      dropStaleFormPortraits(ch.data);
       ch.dv = (ch.dv || 1) + 1;
+      // a link set for the variation being worn takes effect now
+      const now = formPortrait(ch, ch.variation);
+      if (a.forms && now) ch.portrait = now;
       if (!ch.data.portraits.some(p => p.label === ch.portrait)) ch.portrait = ch.data.portraits[0]?.label || null;
       return;
     }
@@ -1100,7 +1208,12 @@ function applyInner(room, a, by, pid) {
       need(i === -1 || ch.data.variations[i], 'そのバリエーションはありません');
       if (ch.variation === i) return;
       ch.variation = i;
-      log(room, { tab: opsTab(room), type: 'variation', by, cid: a.cid, fx: 'form', formName: i === -1 ? '基本' : ch.data.variations[i].name, text: `${ch.data.name}の武装を「${i === -1 ? '基本' : ch.data.variations[i].name}」に切り替えました` });
+      // a variation with a linked 立ち絵 changes the portrait too; when it really changes, the effect shows before → after
+      const from = portraitUrl(ch, ch.portrait), link = formPortrait(ch, i);
+      if (link) ch.portrait = link;
+      const to = portraitUrl(ch, ch.portrait), swap = from && to && from !== to;
+      log(room, { tab: opsTab(room), type: 'variation', by, cid: a.cid, fx: 'form', formName: i === -1 ? '基本' : ch.data.variations[i].name, ptFrom: swap ? from : undefined, ptTo: swap ? to : undefined,
+        text: `${ch.data.name}の武装を「${i === -1 ? '基本' : ch.data.variations[i].name}」に切り替えました` });
       return;
     }
 
@@ -1432,7 +1545,7 @@ function parseDice(raw) {
 
 // A1 is the bottom-left square (rows are counted upward); y=0 is the top row on screen
 // the name used when not speaking as a character: GM may name NPCs freely (but not after a PC);
-// a PL speaks as "<player or PC>（PL）"; spectators are just spectators
+// a PL speaks under their player name (no "（PL）" suffix); spectators are just spectators
 function speakerName(room, by, wanted, pid) {
   const pname = room.players && pid && room.players[pid] ? room.players[pid].name : '';
   if (by === 'gm') {
@@ -1441,7 +1554,7 @@ function speakerName(room, by, wanted, pid) {
     need(!pcNames.includes(n), 'PCと同じ名前では発言できません');
     return n;
   }
-  if (isPcSeat(room, by)) { const d = room.chars[by].data; return `${pname || d.player || d.name}（PL）`; }
+  if (isPcSeat(room, by)) { const d = room.chars[by].data; return pname || d.player || d.name; }
   return pname ? `${pname}（観戦）` : '観戦者';
 }
 const coordName = (x, y) => 'ABCDEFGH'[x] + (8 - y);
@@ -1496,6 +1609,8 @@ const ui = { sel: [], memo: '', selTok: null, drawN: 1, history: [], palette: fa
 const roomUI = rid => (U[rid] = U[rid] || { viewer: 'gm', tab: 'main', sort: 'suit', as: '', name: '' });
 
 const $ = id => document.getElementById(id);
+// rewrite a panel only when its markup changed: keeps focus, scroll and loaded images, and skips a page re-layout
+const setHtml = (el, html) => { if (el._html !== html) { el.innerHTML = html; el._html = html; } };
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const route = () => {
   const h = location.hash.replace(/^#\/?/, '').split('/');
@@ -1506,16 +1621,28 @@ const curRoom = () => { const r = route(); return r.view === 'room' ? DB.rooms[r
 
 // run an action as the current viewpoint; returns FAIL when it was refused
 const FAIL = Symbol('fail');
+// online, these show on screen at once: they are applied to a local copy and re-applied on top of each state
+// the server sends until it confirms them (ack). Draws and other deck/random actions wait for the server.
+const OPTIMISTIC = new Set(['setValue', 'toggleUsed', 'setColor', 'setPortrait', 'variation', 'setTurn', 'nextTurn', 'move', 'play', 'useWeapons', 'give', 'pick', 'say']);
+// a copy to try actions on: the room deep, the logs only one level (actions touch log fields, never deeper)
+const roomCopy = room => { const { logs, ...rest } = room; const r = JSON.parse(JSON.stringify(rest)); r.logs = (logs || []).map(l => ({ ...l })); return r; };
 function act(a, opts = {}) {
   const room = curRoom(); if (!room) return;
   const ru = roomUI(room.id);
   if (ONLINE) {
     if (a.type === 'addChar' && !a.id) a.id = uid('c');
     if (a.type === 'addTab' && !a.id) a.id = uid('t');
-    let ret;
-    try { ret = apply(JSON.parse(JSON.stringify(room)), a, ru.viewer, myPid()); }   // check on a copy; the server decides
+    let ret, copy;
+    try { copy = roomCopy(room); ret = apply(copy, a, ru.viewer, myPid()); }   // check on a copy; the server decides
     catch (e) { toast(e && e.message ? e.message : '操作できませんでした'); return FAIL; }
-    return netSend({ t: 'act', a }) ? ret : FAIL;
+    const seq = ++NET.seq;
+    if (!netSend({ t: 'act', a, seq })) return FAIL;
+    if (OPTIMISTIC.has(a.type)) {
+      NET.pending.push({ seq, a: JSON.parse(JSON.stringify(a)), viewer: ru.viewer });
+      copy.logs = room.logs;                      // lines still come from the server
+      DB.rooms[room.id] = copy; queueRender();
+    }
+    return ret;
   }
   const before = JSON.stringify(room);
   try {
@@ -1571,17 +1698,30 @@ function playFx(room, l) {
   const p = c && (c.data.portraits.find(x => x.label === c.portrait) || c.data.portraits[0]);
   const title = l.fx === 'form' ? '換 装' : 'WING DRIVE';
   const sub = l.fx === 'form' ? `${c ? c.data.name : ''}　${l.formName || ''}` : `${c ? c.data.name : ''}　${l.cmd || ''}`;
+  // 換装 that changes the 立ち絵: the old one turns to light and the new one comes out of the flash
+  const swap = l.fx === 'form' && l.ptFrom && l.ptTo;
   const el = document.createElement('div');
-  el.className = `fx fx-${l.fx} fx-${mode}`;
+  el.className = swap ? `fx fx-swap fx-${mode}` : `fx fx-${l.fx} fx-${mode}`;
   el.style.setProperty('--fxc', c ? c.color : '#FF5C96');
-  el.innerHTML = `<div class="fxStreak"></div><div class="fxBurst"></div><div class="fxWing l"></div><div class="fxWing r"></div>
+  el.innerHTML = swap
+    ? `<div class="swShade"></div><div class="fxBurst"></div><div class="swRing"></div><div class="swRing r2"></div>
+       <div class="swStage"><img class="swOld" src="${esc(l.ptFrom)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()"><img class="swNew" src="${esc(l.ptTo)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()"><div class="swFlash"></div></div>
+       <div class="swSparks">${Array.from({ length: 12 }, (_, i) => `<i style="--a:${i * 30 + 8}deg;--d:${(i % 3) * 50}ms"></i>`).join('')}</div>
+       <div class="fxText swText"><b>${title}</b><span>${esc(sub)}</span></div>`
+    : `<div class="fxStreak"></div><div class="fxBurst"></div><div class="fxWing l"></div><div class="fxWing r"></div>
        ${p ? `<img class="fxPt" src="${esc(p.url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
        <div class="fxText"><b>${title}</b><span>${esc(sub)}</span></div>`;
-  // a popover sits in the top layer, so it shows even over an open modal
-  el.setAttribute('popover', 'manual');
-  document.body.appendChild(el);
-  try { el.showPopover(); } catch (e) { el.removeAttribute('popover'); }
-  setTimeout(() => el.remove(), 2400);
+  const show = () => {
+    // a popover sits in the top layer, so it shows even over an open modal
+    el.setAttribute('popover', 'manual');
+    document.body.appendChild(el);
+    try { el.showPopover(); } catch (e) { el.removeAttribute('popover'); }
+    setTimeout(() => el.remove(), swap ? 3400 : 2400);
+  };
+  if (!swap) { show(); return; }
+  // both pictures are loaded first (at most 1.5 s), so the change never happens on an empty frame
+  const load = url => new Promise(res => { const im = new Image(); im.referrerPolicy = 'no-referrer'; im.onload = im.onerror = res; im.src = url; });
+  Promise.race([Promise.all([load(l.ptFrom), load(l.ptTo)]), new Promise(res => setTimeout(res, 1500))]).then(show);
 }
 // tab strip: arrow buttons instead of a scrollbar
 function updateTabArrows() {
@@ -1590,11 +1730,21 @@ function updateTabArrows() {
   $('tabL').hidden = !over || t.scrollLeft <= 2;
   $('tabR').hidden = !over || t.scrollLeft + t.clientWidth >= t.scrollWidth - 2;
 }
+// the line fades in and out instead of popping; the last text stays while it fades, so the height never changes
+let typingExpire = null;
 function renderTyping() {
   const el = $('typing'), room = curRoom(); if (!el || !room) return;
   const ru = roomUI(room.id), now = Date.now(), who = ui.typing[ru.tab] || {};
-  const names = Object.entries(who).filter(([pid, x]) => x.until > now && pid !== myPid()).map(([, x]) => x.name);
-  el.textContent = names.length ? `✎ ${names.slice(0, 3).join('、')}${names.length > 3 ? ` ほか${names.length - 3}人` : ''}が入力中…` : '';
+  const live = Object.entries(who).filter(([pid, x]) => x.until > now && pid !== myPid());
+  const names = live.map(([, x]) => x.name);
+  if (names.length) {
+    const text = `${names.slice(0, 3).join('、')}${names.length > 3 ? ` ほか${names.length - 3}人` : ''}が入力中`;
+    if (el.dataset.text !== text) { el.dataset.text = text; el.innerHTML = `<span class="tpen">✎</span>${esc(text)}<span class="tdots"><i></i><i></i><i></i></span>`; }
+  }
+  el.classList.toggle('on', names.length > 0);
+  // wake up exactly when the next name runs out (a lost "off" or a closed tab)
+  clearTimeout(typingExpire);
+  if (live.length) typingExpire = setTimeout(renderTyping, Math.min(...live.map(([, x]) => x.until)) - now + 50);
 }
 
 // ---------------- room list ----------------
@@ -1735,7 +1885,9 @@ function renderRoom() {
       </div>`;
     bindRoomStatic();
   }
-  $('roomTitle').textContent = room.name;
+  const logBox = $('chatLog');
+  ui.chatAtBottom = logBox.scrollHeight - logBox.scrollTop - logBox.clientHeight < 40;
+  if ($('roomTitle').textContent !== room.name) $('roomTitle').textContent = room.name;
   if (ONLINE) netStatus(NET.status);
   renderBgmBar(); renderTyping();
   $('roomShell').style.setProperty('--chatW', U.chatW ? U.chatW + 'px' : '');
@@ -1745,7 +1897,8 @@ function renderRoom() {
   $('roomShell').dataset.pane = ru.pane;
   document.querySelectorAll('.mnav [data-pane]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.pane === ru.pane)));
   const lockedOut = () => false;
-  $('viewer').innerHTML = seats.map(([v, n]) => `<option value="${v}" ${v === ru.viewer ? 'selected' : ''} ${lockedOut(v) ? 'disabled' : ''}>${esc(n)}${lockedOut(v) ? '（鍵なし）' : ''}</option>`).join('');
+  setHtml($('viewer'), seats.map(([v, n]) => `<option value="${v}" ${v === ru.viewer ? 'selected' : ''} ${lockedOut(v) ? 'disabled' : ''}>${esc(n)}${lockedOut(v) ? '（鍵なし）' : ''}</option>`).join(''));
+  $('viewer').value = ru.viewer;
   $('setBtn').hidden = ru.viewer !== 'gm';
   $('undoBtn').disabled = !ui.history.length;
   $('undoBtn').hidden = ONLINE;
@@ -1754,6 +1907,7 @@ function renderRoom() {
   if (!ui.fxInit) { ui.fxInit = true; room.logs.forEach(l => ui.fxSeen.add(l.id)); }
   else for (const l of room.logs.slice(-8)) if (l.fx && !ui.fxSeen.has(l.id) && viewLog(room, l, ru.viewer, myPid())) playFx(room, l);
   renderMap(room, ru); renderCards(room, ru); renderChat(room, ru);
+  ui.chatAtBottom = null;
   if (typeof refreshModal === 'function' && ui.modal && $('dlg').open) refreshModal();
   const total = ui.unreadTotal;
   $('unread').hidden = total <= 0; $('unread').textContent = total > 99 ? '99+' : total;
@@ -1841,10 +1995,10 @@ function renderMap(room, ru) {
       ${statLine(room, ru, c, 'HP')}${statLine(room, ru, c, 'TP')}
     </div>`;
   const canNext = cur && (v === 'gm' || v === cur);
-  $('mapP').innerHTML = `
+  setHtml($('mapP'), `
     <div class="mapwrap">
       <div class="order" aria-label="キャラクター（SS値の大きい順）">
-        <div class="ohd"><button class="btn small" data-import>＋ キャラ</button>${cur && (v === 'gm' || v === cur) ? `<button class="btn small primary" data-nextturn title="次のキャラの手番へ">次の手番 ›</button>` : ''}${v === 'gm' ? `<button class="btn small ghost mobileOnly" data-opensettings>設定</button>` : ''}</div>
+        <div class="ohd"><button class="btn small" data-import>＋ キャラ</button>${canNext ? `<button class="btn small primary" data-nextturn title="次のキャラの手番へ">次の手番 ›</button>` : v === 'gm' || isPcSeat(room, v) ? '<span class="btn small primary slot" aria-hidden="true">次の手番 ›</span>' : ''}${v === 'gm' ? `<button class="btn small ghost mobileOnly" data-opensettings>設定</button>` : ''}</div>
         ${order.map(item).join('') || '<p class="muted">「＋ キャラ」から読み込むと、SS値の順に並びます</p>'}
         ${npcs.length ? `<div class="grp">NPC</div>${npcs.map(item).join('')}` : ''}</div>
       <div class="boardCol">
@@ -1853,7 +2007,7 @@ function renderMap(room, ru) {
         </div>
         ${isPhone() ? '' : zoomCtl(true)}
       </div>
-    </div>    </div>`;
+    </div>    </div>`);
 }
 
 // ---------------- cards ----------------
@@ -1872,12 +2026,12 @@ function renderCards(room, ru) {
   const gmCount = (room.cards.hands.gm || []).length;
   const others = allies.map(c => `${esc(c.data.name)} ${(room.cards.hands[c.id] || []).length}`).concat(v !== 'gm' ? [`GM ${gmCount}`] : []).join('　');
   if (!mySeat) {
-    $('cardsP').innerHTML = `<div class="trayRow"><span class="muted">観戦中は手札を操作できません。</span><span class="grow"></span>
-      <button class="btn small" data-handsall>みんなの手札</button><button class="btn small" data-deckmenu>山札 ${room.cards.deck.length}・捨て札 ${room.cards.discard.length}</button></div>`;
+    setHtml($('cardsP'), `<div class="trayRow"><span class="muted">観戦中は手札を操作できません。</span><span class="grow"></span>
+      <button class="btn small" data-handsall>みんなの手札</button><button class="btn small" data-deckmenu>山札 ${room.cards.deck.length}・捨て札 ${room.cards.discard.length}</button></div>`);
     return;
   }
   const n = ui.sel.length;
-  $('cardsP').innerHTML = `
+  setHtml($('cardsP'), `
     <div class="trayRow">
       <b class="handName">${esc(seatName(room, mySeat))}の手札</b><span class="count">${myHand.length}</span>
       <button class="btn small ghost" data-sort>${ru.sort === 'rank' ? '数字順' : 'スート順'}</button>
@@ -1894,7 +2048,7 @@ function renderCards(room, ru) {
       ${isPcSeat(room, mySeat) && allies.length ? `<button class="btn" data-give ${n ? '' : 'disabled'}>渡す</button>` : ''}
       <input type="text" class="memo" id="memo" placeholder="メモ（例：脚へ）" value="${esc(ui.memo)}">
       <span class="drawBox"><button class="step" data-drawstep="-1" aria-label="減らす">−</button><b>${ui.drawN}</b><button class="step" data-drawstep="1" aria-label="増やす">＋</button><button class="btn small" data-draw>枚ドロー</button></span>
-    </div>`;
+    </div>`);
 }
 // other people's hands (modal)
 function handsHtml(room, ru) {
@@ -1997,7 +2151,7 @@ function speakerOptions(room, v) {
     Object.values(room.chars).filter(c => c.side !== 'pc' || gmOwned(c)).forEach(c => opts.push([c.id, c.data.name]));
   } else if (isPcSeat(room, v)) {
     const d = room.chars[v].data;
-    opts.push([v, d.name]); opts.push(['', `${d.player || d.name}（PL）`]);
+    opts.push([v, d.name]); opts.push(['', (ONLINE && me().name) || d.player || d.name]);
   } else opts.push(['', '観戦者']);
   return opts;
 }
@@ -2037,7 +2191,9 @@ function logHtml(room, l) {
   if (l.type === 'turn') return `<div class="le turn">${esc(l.text)}<span class="t">${time}</span></div>`;
   if (l.type === 'draw') return `<div class="le ${cls}"><span class="who">${seatWho}</span>${l.n}枚ドロー ${l.cards ? l.cards.map(chipHtml).join(' ') : ''}<span class="t">${time}</span></div>`;
   const showWho = l.type !== 'sys' && !(l.byName && l.text && l.text.startsWith(l.byName));
-  return `<div class="le ${l.type === 'sys' ? 'sys' : cls}">${showWho ? `<span class="who">${who}</span>` : ''}${esc(l.text)}<span class="t">${time}</span></div>`;
+  // 換装 that changed the 立ち絵: small before → after pictures
+  const swapPics = l.type === 'variation' && l.ptFrom && l.ptTo ? `<span class="swapPics"><img src="${esc(l.ptFrom)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">→<img src="${esc(l.ptTo)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()"></span>` : '';
+  return `<div class="le ${l.type === 'sys' ? 'sys' : cls}">${showWho ? `<span class="who">${who}</span>` : ''}${esc(l.text)}${swapPics}<span class="t">${time}</span></div>`;
 }
 function diceHtml(l) {
   const d = l.dice;
@@ -2071,13 +2227,13 @@ const CHAT_MAX = 300;   // lines kept on screen per tab (the rest stays in the l
 function renderChat(room, ru) {
   const v = ru.viewer;
   ui.viewerNow = v;
-  $('tabs').innerHTML = room.tabs.filter(t => canSeeTab(room, t, v, myPid())).map(t =>
+  setHtml($('tabs'), room.tabs.filter(t => canSeeTab(room, t, v, myPid())).map(t =>
     `<button class="tab ${t.secret ? 'secret' : ''}" data-tab="${t.id}" aria-pressed="${t.id === ru.tab}">${esc(t.name)}${t.secret ? '<span class="lock">秘匿</span>' : ''}${ui.unread && ui.unread[t.id] ? `<span class="tbadge">${ui.unread[t.id] > 99 ? '99+' : ui.unread[t.id]}</span>` : ''}</button>`).join('') +
     `<button class="tab" data-addtab aria-label="タブを追加">＋</button>` +
-    (room.tabs.find(t => t.id === ru.tab)?.secret ? `<button class="tab" data-edittab="${ru.tab}">参加者</button>` : '');
+    (room.tabs.find(t => t.id === ru.tab)?.secret ? `<button class="tab" data-edittab="${ru.tab}">参加者</button>` : ''));
   requestAnimationFrame(updateTabArrows);
   const box = $('chatLog');
-  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+  const atBottom = ui.chatAtBottom ?? (box.scrollHeight - box.scrollTop - box.clientHeight < 40);
   const logs = logsForTab(room, ru.tab).map(l => viewLog(room, l, v, myPid())).filter(Boolean).slice(-CHAT_MAX);
   // light re-render: keep the lines already on screen and only touch what changed at the end
   const sig = l => `${l.id}:${l.edited || ''}:${l.to ?? ''}:${l.type === 'say' ? (l.text || '').length : ''}`;
@@ -2085,9 +2241,14 @@ function renderChat(room, ru) {
   const key = `${ru.tab}|${v}|${look}`;
   const prev = box._sigs || [];
   const next = logs.map(sig);
-  let k = 0;
-  if (box.dataset.key === key && prev.length && next.length && prev[0] === next[0]) {
-    while (k < prev.length && k < next.length && prev[k] === next[k]) k++;
+  let k = 0, changed = true;
+  // only the last CHAT_MAX lines are on screen: lines that dropped off the top are removed, not the whole list rebuilt
+  const drop = box.dataset.key === key && prev.length && next.length ? prev.indexOf(next[0]) : -1;
+  if (drop >= 0) {
+    for (let i = 0; i < drop; i++) box.children[box._head || 0].remove();
+    const kept = prev.slice(drop);
+    while (k < kept.length && k < next.length && kept[k] === next[k]) k++;
+    changed = drop > 0 || k < kept.length || k < next.length;
     while (box.children.length > k + (box._head || 0)) box.lastElementChild.remove();
     if (k < next.length) box.insertAdjacentHTML('beforeend', logs.slice(k).map(l => logHtml(room, l)).join(''));
   } else {
@@ -2097,11 +2258,12 @@ function renderChat(room, ru) {
     if (!logs.length) box._head++;
   }
   box._sigs = next; box.dataset.key = key;
-  if (atBottom || box.dataset.tab !== ru.tab) box.scrollTop = box.scrollHeight;
+  if ((atBottom && changed) || box.dataset.tab !== ru.tab) box.scrollTop = box.scrollHeight;
   box.dataset.tab = ru.tab;
   const opts = speakerOptions(room, v);
   if (!opts.some(o => o[0] === ru.as)) ru.as = opts[0][0];
-  $('asSel').innerHTML = opts.map(([id, n]) => `<option value="${id}" ${id === ru.as ? 'selected' : ''}>${esc(n)}</option>`).join('');
+  setHtml($('asSel'), opts.map(([id, n]) => `<option value="${id}" ${id === ru.as ? 'selected' : ''}>${esc(n)}</option>`).join(''));
+  $('asSel').value = ru.as;
   const c = room.chars[ru.as];
   $('speakFace').innerHTML = c ? ptImg(c, c.portrait) : `<span class="pt none" style="background:var(--void-2)">${esc((ru.name || (v === 'gm' ? 'GM' : '?')).slice(0, 1))}</span>`;
   $('colorBtn').style.background = c ? c.color : (ru.freeColor || '#B48CFF');
@@ -2159,7 +2321,15 @@ function renderPalette(room, c) {
 // The browser validates an action on a copy of its own (filtered) state first, so mistakes are
 // reported instantly; the server then applies it for real and sends everyone their view.
 // =====================================================================
-const NET = { ws: null, roomId: null, wantSeat: null, backoff: 500, status: 'idle', renderQueued: false };
+const NET = { ws: null, roomId: null, wantSeat: null, backoff: 500, status: 'idle', renderQueued: false, seq: 0, pending: [], base: null };
+// the server's latest room with our not-yet-confirmed actions applied on top (dropped if they no longer apply)
+function withPending(base, logs) {
+  if (!NET.pending.length) return { ...base, logs };
+  const r = roomCopy({ ...base, logs });
+  NET.pending = NET.pending.filter(p => { try { apply(r, p.a, p.viewer, myPid()); return true; } catch (e) { return false; } });
+  r.logs = logs;
+  return r;
+}
 const loadJson = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
 const gmKeys = () => loadJson('pw-gmkeys', {});
 function saveGmKey(id, key) { const o = gmKeys(); o[id] = key; try { localStorage.setItem('pw-gmkeys', JSON.stringify(o)); } catch (e) {} }
@@ -2216,6 +2386,7 @@ function queueRender() {
 }
 function onNet(m) {
   if (m.t === 'joined') {
+    NET.pending = []; NET.base = m.room;
     DB.rooms = { [m.room.id]: { ...m.room, logs: m.logs } };
     NET.olderLogs = m.olderLogs || 0;
     (m.logs || []).forEach(l => ui.fxSeen.add(l.id)); ui.fxInit = true;
@@ -2232,7 +2403,9 @@ function onNet(m) {
     const old = DB.rooms[m.room.id]; if (!old) return;
     // sheets that did not change are not resent: keep the copy we have
     for (const [cid, ch] of Object.entries(m.room.chars)) if (!ch.data && old.chars[cid]) ch.data = old.chars[cid].data;
-    DB.rooms[m.room.id] = { ...m.room, logs: old.logs };
+    if (m.ack != null) NET.pending = NET.pending.filter(p => p.seq > m.ack);
+    NET.base = m.room;
+    DB.rooms[m.room.id] = withPending(m.room, old.logs);
     NET.locked = new Set(m.locked || []);
     if (m.seat) saveLastSeat(m.room.id, m.seat);
     const ru = roomUI(m.room.id);
@@ -2246,19 +2419,26 @@ function onNet(m) {
       if (m.remove && m.remove.length) r.logs = r.logs.filter(l => !m.remove.includes(l.id));
       for (const u of m.update || []) { const i = r.logs.findIndex(l => l.id === u.id); if (i >= 0) r.logs[i] = u; else r.logs.push(u); }
       r.logs.push(...(m.add || []));
+      // the message replaces its "入力中" in the same frame
+      for (const l of m.add || []) if (l.type === 'say' && l.pid && ui.typing[l.tab]) delete ui.typing[l.tab][l.pid];
     }
     queueRender(); return;
   }
   if (m.t === 'typing') {
     const who = ui.typing[m.tab] = ui.typing[m.tab] || {};
     if (m.on === false) delete who[m.pid]; else who[m.pid] = { name: m.name, until: Date.now() + 7000 };
-    renderTyping(); setTimeout(renderTyping, 7100); return;
+    renderTyping(); return;
   }
   if (m.t === 'bgm') { bgmApply(m.bgm); return; }
   if (m.t === 'seatKey') { saveSeatKey(m.room, m.cid, m.key); if (NET.copySeatLink === m.cid) { NET.copySeatLink = null; copySeatLink(m.room, m.cid); } queueRender(); return; }
   if (m.t === 'reissued') { toast('席の鍵を作り直しました。新しい席のリンクをコピーしたので、そのPLに送ってください'); return; }
   if (m.t === 'error') {
     toast(m.message || 'エラーが起きました');
+    // a refused action: take back what it showed in advance
+    if (m.ack != null && NET.base && DB.rooms[NET.base.id]) {
+      NET.pending = NET.pending.filter(p => p.seq > m.ack);
+      DB.rooms[NET.base.id] = withPending(NET.base, DB.rooms[NET.base.id].logs); queueRender();
+    }
     if (m.code === 'not_found') { forgetRoom(NET.roomId); NET.roomId = null; location.hash = '#/'; }
   }
 }
@@ -2292,22 +2472,30 @@ async function copySeatLink(id, cid) {
   catch (e) { prompt('席のリンク', link); }
 }
 
-// typing notice: "入力中" while the chat box is focused (on focus, a heartbeat every 3 s, off on blur)
-let typingTimer = null, typingTab = null;
-function typingOn(tab) {
+// typing notice: "入力中" while there is unsent text and a key was pressed in the last few seconds.
+// On on the first keystroke, refreshed every 3 s while typing goes on, off at once on send / empty box / blur / tab change.
+const TYPING_IDLE = 5000;
+let typingTimer = null, typingTab = null, typingLast = 0, typingSent = 0;
+const typingSend = (tab, on) => { if (NET.ws && NET.ws.readyState === 1) NET.ws.send(JSON.stringify({ t: 'typing', tab, on })); };
+function typingInput() {
   if (!ONLINE) return;
-  if (typingTab && typingTab !== tab) netSend({ t: 'typing', tab: typingTab, on: false });
-  typingTab = tab; netSend({ t: 'typing', tab, on: true });
-  clearInterval(typingTimer);
-  typingTimer = setInterval(() => { if (NET.ws && NET.ws.readyState === 1) NET.ws.send(JSON.stringify({ t: 'typing', tab: typingTab, on: true })); }, 3000);
+  const room = curRoom(); if (!room) return;
+  if (!$('sayText').value.trim()) { typingOff(); return; }
+  const tab = roomUI(room.id).tab;
+  typingLast = Date.now();
+  if (typingTab !== tab) { if (typingTab) typingSend(typingTab, false); typingTab = tab; typingSend(tab, true); typingSent = typingLast; }
+  if (!typingTimer) typingTimer = setInterval(() => {
+    const now = Date.now();
+    if (now - typingLast > TYPING_IDLE) typingOff();
+    else if (now - typingSent >= 3000) { typingSend(typingTab, true); typingSent = now; }
+  }, 500);
 }
 function typingOff() {
   if (!ONLINE) return;
   clearInterval(typingTimer); typingTimer = null;
-  if (typingTab && NET.ws && NET.ws.readyState === 1) NET.ws.send(JSON.stringify({ t: 'typing', tab: typingTab, on: false }));
+  if (typingTab) typingSend(typingTab, false);
   typingTab = null;
 }
-function sendTyping() {}
 
 // ---------- BGM (not stored anywhere: the GM's file is relayed from server memory) ----------
 const BGM = { el: null, info: null, blocked: false };
@@ -2585,9 +2773,23 @@ function importDialog(room, ru, editCid) {
 function portraitDialog(room, cid) {
   const c = room.chars[cid];
   let list = c.data.portraits.map(p => ({ ...p }));
+  // which 立ち絵 each variation switches to (-1 = 基本)
+  const formKeys = [-1, ...c.data.variations.map((_, i) => i)];
+  const forms = Object.fromEntries(formKeys.map(k => [k, formPortrait(c, k)]));
+  const drawForms = () => {
+    if (!$('ptForms')) return;
+    $('ptForms').innerHTML = formKeys.map(k => {
+      const url = (list.find(p => p.label === forms[k]) || {}).url;
+      return `<div class="ptFormRow"><span class="fname">${esc(k === -1 ? '基本' : c.data.variations[k].name)}${c.variation === k ? '<span class="formNote on">装備中</span>' : ''}</span>
+        ${url ? `<img src="${esc(url)}" alt="" referrerpolicy="no-referrer">` : '<span class="ptNone">—</span>'}
+        <select data-ptform="${k}" aria-label="${esc(k === -1 ? '基本' : c.data.variations[k].name)}の立ち絵"><option value="">紐づけない</option>${[...new Set(list.map(p => p.label))].map(lb => `<option ${lb === forms[k] ? 'selected' : ''}>${esc(lb)}</option>`).join('')}</select></div>`;
+    }).join('');
+  };
   const draw = () => {
     $('ptList').innerHTML = list.map((p, i) => `<figure><img src="${esc(p.url)}" alt="" referrerpolicy="no-referrer" onerror="this.style.outline='2px solid var(--red)';this.alt='読み込めません'">
       <figcaption>${esc(p.label)}</figcaption><button class="btn small danger" data-rmpt="${i}">外す</button></figure>`).join('') || '<p class="muted">まだありません</p>';
+    for (const k of formKeys) if (forms[k] && !list.some(p => p.label === forms[k])) forms[k] = null;
+    drawForms();
   };
   openDlg(`
     <h1>${esc(c.data.name)}の立ち絵</h1>
@@ -2597,6 +2799,9 @@ function portraitDialog(room, cid) {
     <div class="field">共有リンク<input type="text" id="ptUrl" placeholder="https://www.dropbox.com/scl/fi/…&dl=0"></div>
     <div class="row"><img id="ptPrev" alt="" style="width:64px;height:84px;object-fit:cover;border-radius:8px;background:var(--bg)" referrerpolicy="no-referrer"><span id="ptMsg" class="muted"></span>
       <span style="flex:1"></span><button class="btn" id="ptAdd">追加</button></div>
+    ${c.data.variations.length ? `<h2 class="ptFormsH">バリエーションと立ち絵</h2>
+    <p class="muted">換装すると、紐づけた立ち絵に自動で切り替わります。前後で立ち絵が変わるときは、専用の換装演出が流れます。</p>
+    <div class="ptForms" id="ptForms"></div>` : ''}
     <div class="row" style="margin-top:12px"><span style="flex:1"></span><button class="btn" data-close>やめる</button><button class="btn primary" id="ptSave">保存</button></div>`, () => {
     draw();
     const prev = () => {
@@ -2614,7 +2819,8 @@ function portraitDialog(room, cid) {
       $('ptUrl').value = ''; $('ptLabel').value = ''; prev(); draw();
     };
     $('ptList').onclick = e => { const b = e.target.closest('[data-rmpt]'); if (b) { list.splice(+b.dataset.rmpt, 1); draw(); } };
-    $('ptSave').onclick = () => { act({ type: 'setPortraits', cid, portraits: list }); closeDlg(); };
+    if ($('ptForms')) $('ptForms').onchange = e => { const sel = e.target.closest('[data-ptform]'); if (sel) { forms[sel.dataset.ptform] = sel.value || null; drawForms(); } };
+    $('ptSave').onclick = () => { act({ type: 'setPortraits', cid, portraits: list, forms: c.data.variations.length ? forms : undefined }); closeDlg(); };
   });
 }
 function tabDialog(room, ru, tabId) {
@@ -2820,7 +3026,7 @@ function bindRoomStatic() {
     else colorDialog(ru.freeColor, col => { ru.freeColor = col; saveU(); renderRoom(); });
   };
   $('cmdClear').onclick = () => { ui.cmd = null; $('sayText').value = ''; renderRoom(); };
-  $('sayText').addEventListener('focus', () => { const r = curRoom(); if (r) typingOn(roomUI(r.id).tab); });
+  $('sayText').addEventListener('input', typingInput);
   $('sayText').addEventListener('blur', () => typingOff());
   $('sayText').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
   $('copyLog').onclick = async () => {
@@ -2976,7 +3182,10 @@ document.addEventListener('click', e => {
   if (q('[data-bgm]')) { if (BGM.blocked && BGM.info) { bgmEl().play().catch(() => {}); } bgmDialog(room, ru); return; }
   if (q('[data-theme-toggle]')) { U.theme = (U.theme || 'dark') === 'dark' ? 'light' : 'dark'; saveU(); applyTheme(); return; }
   if ((el = q('.mnav [data-pane]'))) {
+    // each pane comes back where it was left (the chat pane never scrolls the page; the board pane does)
+    ui.paneY = ui.paneY || {}; ui.paneY[ru.pane] = window.scrollY;
     ru.pane = el.dataset.pane; renderRoom();
+    window.scrollTo(0, ui.paneY[ru.pane] || 0);
     if (ru.pane === 'chat') { const box = $('chatLog'); box.scrollTop = box.scrollHeight; }
     window.scrollTo(0, 0); return;
   }
@@ -2990,7 +3199,6 @@ document.addEventListener('click', e => {
     });
     return;
   }
-  if ((el = q('[data-tab]')) && document.activeElement === $('sayText')) typingOn(el.dataset.tab);
   if ((el = q('[data-tab]'))) { ru.tab = el.dataset.tab; renderRoom(); return; }
   if (q('[data-addtab]')) { tabDialog(room, ru); return; }
   if ((el = q('[data-edittab]'))) { tabDialog(room, ru, el.dataset.edittab); return; }

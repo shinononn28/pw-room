@@ -6,6 +6,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const nodeCrypto = require('crypto');
+const zlib = require('zlib');
 const { WebSocketServer } = require('ws');
 const core = require('./public/core.js');
 const { createStore } = require('./store.js');
@@ -14,7 +15,32 @@ const PORT = process.env.PORT || 10000;
 const store = createStore();
 const sha = s => nodeCrypto.createHash('sha256').update(String(s)).digest('hex');
 const randomId = (p, n = 14) => p + nodeCrypto.randomBytes(16).toString('base64url').replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, n);
-const html = () => fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8').replace('<!--PW_ONLINE-->', '<script>window.PW_ONLINE = true;</script>');
+
+// ---------- static files: read once (again only when changed on disk), sent compressed, and a reload with the same ETag costs a 304 ----------
+const statics = new Map();
+function staticFile(name, type, transform) {
+  const file = path.join(__dirname, 'public', name);
+  const mtime = fs.statSync(file).mtimeMs;
+  let f = statics.get(name);
+  if (!f || f.mtime !== mtime) {
+    let body = fs.readFileSync(file);
+    if (transform) body = Buffer.from(transform(body.toString('utf8')));
+    f = { mtime, type, body, gzip: zlib.gzipSync(body, { level: 9 }), br: zlib.brotliCompressSync(body), etag: '"' + sha(body).slice(0, 20) + '"' };
+    statics.set(name, f);
+  }
+  return f;
+}
+function serveStatic(req, res, f) {
+  const headers = { 'content-type': f.type, 'cache-control': 'no-cache', etag: f.etag, vary: 'accept-encoding' };
+  if (req.headers['if-none-match'] === f.etag) { res.writeHead(304, headers); res.end(); return; }
+  const ae = String(req.headers['accept-encoding'] || '');
+  let body = f.body;
+  if (/\bbr\b/.test(ae)) { body = f.br; headers['content-encoding'] = 'br'; }
+  else if (/\bgzip\b/.test(ae)) { body = f.gzip; headers['content-encoding'] = 'gzip'; }
+  headers['content-length'] = body.length;
+  res.writeHead(200, headers); res.end(body);
+}
+const page = () => staticFile('index.html', 'text/html; charset=utf-8', t => t.replace('<!--PW_ONLINE-->', '<script>window.PW_ONLINE = true;</script>'));
 
 // ---------- diagnosis ----------
 function explain(e) {
@@ -81,12 +107,8 @@ function readJson(req) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   try {
-    if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' }); res.end(html()); return;
-    }
-    if (req.method === 'GET' && url.pathname === '/core.js') {
-      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' }); res.end(fs.readFileSync(path.join(__dirname, 'public', 'core.js'))); return;
-    }
+    if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) { serveStatic(req, res, page()); return; }
+    if (req.method === 'GET' && url.pathname === '/core.js') { serveStatic(req, res, staticFile('core.js', 'text/javascript; charset=utf-8')); return; }
     if (req.method === 'GET' && url.pathname === '/healthz') { res.writeHead(200); res.end('ok'); return; }
     if (req.method === 'POST' && url.pathname === '/api/bgm') {
       const entry = rooms.get(String(url.searchParams.get('room') || ''));
@@ -127,7 +149,8 @@ const server = http.createServer(async (req, res) => {
 });
 
 // ---------- websocket ----------
-const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 512 * 1024 });
+// larger messages (joining with the log, room states) go compressed; small ones are not worth the CPU
+const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 512 * 1024, perMessageDeflate: { threshold: 1024, zlibDeflateOptions: { level: 4 } } });
 const send = (ws, m) => { if (ws.readyState === 1) ws.send(JSON.stringify(m)); };
 // Seats: GM needs the GM key. A PC seat needs that character's seat key (issued to whoever imported it).
 // A PC created before seat keys existed is claimed by the first person who sits in it.
@@ -168,7 +191,7 @@ function sendState(conn) {
     if (conn.sentDv[cid] === ch.dv) delete ch.data;      // the browser keeps the sheet it already has
     else conn.sentDv[cid] = ch.dv;
   }
-  send(conn.ws, { t: 'state', seat: conn.seat, room: v, locked: Object.keys(conn.entry.seatKeyHashes) });
+  send(conn.ws, { t: 'state', seat: conn.seat, room: v, locked: Object.keys(conn.entry.seatKeyHashes), ack: conn.ack });
 }
 const JOIN_LOGS = 1000;   // older lines stay in the store; the room opens with the most recent ones
 function sendJoined(conn) {
@@ -191,9 +214,11 @@ function broadcast(entry, diff) {
     if (add.length || update.length || diff.removed.length) send(conn.ws, { t: 'logs', room: room.id, add, update, remove: diff.removed });
   }
 }
-async function handleAct(conn, a) {
-  const entry = conn.entry; if (!entry) return send(conn.ws, { t: 'error', message: '部屋に入っていません' });
-  if (!a || typeof a !== 'object' || typeof a.type !== 'string') return;
+// seq: the browser's number for this action; echoed back (ack) so it can drop the copy it showed in advance
+async function handleAct(conn, a, seq) {
+  if (Number.isSafeInteger(seq)) conn.ack = seq;
+  const entry = conn.entry; if (!entry) return send(conn.ws, { t: 'error', message: '部屋に入っていません', ack: conn.ack });
+  if (!a || typeof a !== 'object' || typeof a.type !== 'string') return send(conn.ws, { t: 'error', message: '操作できませんでした', ack: conn.ack });
   delete a.by;
   const room = entry.room;
   const tail = new Map(room.logs.slice(-6).map(l => [l.id, JSON.stringify(l)]));
@@ -201,7 +226,7 @@ async function handleAct(conn, a) {
   let ret;
   try { ret = core.apply(room, a, conn.seat, conn.pid); }
   catch (e) {
-    if (e instanceof core.ActionError || (e && e.message)) return send(conn.ws, { t: 'error', message: e.message || '操作できませんでした' });
+    if (e instanceof core.ActionError || (e && e.message)) return send(conn.ws, { t: 'error', message: e.message || '操作できませんでした', ack: conn.ack });
     throw e;
   }
   const added = room.logs.filter(l => l.n == null);
@@ -269,13 +294,14 @@ wss.on('connection', ws => {
             sendState(c);
           }
         }
-      } else if (m.t === 'act') await handleAct(conn, m.a);
+      } else if (m.t === 'act') await handleAct(conn, m.a, m.seq);
       else if (m.t === 'typing') {
         // "○○が入力中…": relayed (not stored) to people who can see that tab, at most once a second
         const entry = conn.entry; if (!entry) return;
         const on = m.on !== false, now = Date.now();
-        if (on && now - (conn.lastTyping || 0) < 1000) return;      // "off" always goes through
-        conn.lastTyping = now;
+        // only repeated "on"s for the same tab are thinned; "off", and an "on" right after one, always go through
+        if (on && conn.typingTab === m.tab && now - (conn.lastTyping || 0) < 1000) return;
+        conn.lastTyping = now; conn.typingTab = on ? m.tab : null;
         const tab = entry.room.tabs.find(t => t.id === m.tab); if (!tab) return;
         const name = (entry.room.players[conn.pid] || {}).name || '誰か';
         for (const c of entry.clients) if (c !== conn && core.canSeeTab(entry.room, tab, c.seat, c.pid)) send(c.ws, { t: 'typing', tab: tab.id, name, pid: conn.pid, on });
@@ -296,7 +322,7 @@ wss.on('connection', ws => {
         for (const c of entry.clients) if (c !== conn && c.seat === m.cid) { c.seat = 'obs'; send(c.ws, { t: 'error', message: 'GMが席の鍵を作り直したため、観戦に戻りました' }); sendJoined(c); }
         send(ws, { t: 'reissued', cid: m.cid });
       }
-    } catch (e) { console.error('ws handler error:', m && m.t, e); send(ws, { t: 'error', message: 'サーバーでエラーが起きました：' + explain(e) }); }
+    } catch (e) { console.error('ws handler error:', m && m.t, e); send(ws, { t: 'error', message: 'サーバーでエラーが起きました：' + explain(e), ack: m && m.t === 'act' ? conn.ack : undefined }); }
   });
   ws.on('close', () => {
     if (conn.entry) for (const c of conn.entry.clients) if (c !== conn) for (const t of conn.entry.room.tabs) send(c.ws, { t: 'typing', tab: t.id, name: '', pid: conn.pid, on: false });

@@ -83,19 +83,32 @@ function normalizeChar(raw) {
   // 特殊機能 may sit in core.functions or at the top level (functions)
   const fnSrc = Array.isArray(raw.core?.functions) ? raw.core.functions : Array.isArray(raw.functions) ? raw.functions : [];
   const core = raw.core || fnSrc.length ? { ...item(raw.core || { name: '' }), functions: fnSrc.map(item) } : null;
-  return {
+  const data = {
     format: 'pw-character', version: 2,
     name: raw.name, player: String(raw.player || ''),
     core, stats,
     // tp: TP consumed when the 特技 is used (cost is accepted as an older name)
     skills: Array.isArray(raw.skills) ? raw.skills.map(x => { const t = x?.tp ?? x?.cost; return { ...item(x), tp: t != null && Number.isFinite(Number(t)) ? Number(t) : null }; }) : [],
     weapons,
-    variations: Array.isArray(raw.variations) ? raw.variations.map(v => ({ name: String(v?.name || 'バリエーション'), slots: slotsFrom(v?.slots) })) : [],
+    // portrait: the 立ち絵 (by label) the character switches to when changing into that variation; basePortrait for 基本
+    variations: Array.isArray(raw.variations) ? raw.variations.map(v => ({ name: String(v?.name || 'バリエーション'), slots: slotsFrom(v?.slots), portrait: v?.portrait ? String(v.portrait) : null })) : [],
+    basePortrait: raw.basePortrait ? String(raw.basePortrait) : null,
     wingDrive: raw.wingDrive ? item(raw.wingDrive) : null,
     portraits: Array.isArray(raw.portraits) ? raw.portraits.filter(p => p && p.url).map(p => ({ label: String(p.label || '立ち絵'), url: toDirectImage(p.url) })) : [],
     memo: String(raw.memo || ''),
   };
+  dropStaleFormPortraits(data);
+  return data;
 }
+// links to a 立ち絵 that no longer exists are cleared
+function dropStaleFormPortraits(d) {
+  const labels = new Set(d.portraits.map(p => p.label));
+  if (!labels.has(d.basePortrait)) d.basePortrait = null;
+  for (const v of d.variations) if (!labels.has(v.portrait)) v.portrait = null;
+}
+// the 立ち絵 linked to variation i (-1 = 基本), or null
+const formPortrait = (ch, i) => (i === -1 ? ch.data.basePortrait : (ch.data.variations[i] || {}).portrait) || null;
+const portraitUrl = (ch, label) => (ch.data.portraits.find(p => p.label === label) || {}).url || null;
 const statStart = s => s.max ?? s.value;
 const currentSlots = ch => ch.variation >= 0 && ch.data.variations[ch.variation] ? ch.data.variations[ch.variation].slots : ch.data.weapons.slots;
 const ssOf = ch => Number.isFinite(ch.cur['SS値']) ? ch.cur['SS値'] : (ch.data.stats['SS値'] ? statStart(ch.data.stats['SS値']) : -Infinity);
@@ -187,6 +200,11 @@ function applyInner(room, a, by, pid) {
     case 'updateCharData': {
       need(ch && canControlChar(room, by, a.cid), 'このキャラクターは編集できません');
       const data = normalizeChar(a.data);
+      // a sheet from the sheet tool has no 立ち絵 links: keep the ones set here (variations matched by name)
+      if (!('basePortrait' in a.data)) data.basePortrait = ch.data.basePortrait || null;
+      data.variations.forEach((v, i) => { const rv = (Array.isArray(a.data.variations) ? a.data.variations : [])[i]; if (!(rv && typeof rv === 'object' && 'portrait' in rv)) v.portrait = (ch.data.variations.find(o => o.name === v.name) || {}).portrait || null; });
+      if (!Array.isArray(a.data.portraits)) data.portraits = ch.data.portraits;
+      dropStaleFormPortraits(data);
       for (const [k, s] of Object.entries(data.stats)) if (!(k in ch.cur)) ch.cur[k] = statStart(s);
       ch.data = data; ch.dv = (ch.dv || 1) + 1;
       if (!(ch.variation < data.variations.length)) ch.variation = -1;
@@ -234,7 +252,17 @@ function applyInner(room, a, by, pid) {
     case 'setPortraits': {
       need(ch && canControlChar(room, by, a.cid), 'このキャラクターは編集できません');
       ch.data.portraits = a.portraits.map(p => ({ label: String(p.label || '立ち絵'), url: toDirectImage(p.url) })).filter(p => p.url);
+      // forms: { "-1": label for 基本, "0": label for variation 0, ... } (null = no link)
+      if (a.forms && typeof a.forms === 'object') {
+        const pick = k => a.forms[k] ? String(a.forms[k]) : null;
+        ch.data.basePortrait = pick('-1');
+        ch.data.variations.forEach((v, i) => { v.portrait = pick(String(i)); });
+      }
+      dropStaleFormPortraits(ch.data);
       ch.dv = (ch.dv || 1) + 1;
+      // a link set for the variation being worn takes effect now
+      const now = formPortrait(ch, ch.variation);
+      if (a.forms && now) ch.portrait = now;
       if (!ch.data.portraits.some(p => p.label === ch.portrait)) ch.portrait = ch.data.portraits[0]?.label || null;
       return;
     }
@@ -252,7 +280,12 @@ function applyInner(room, a, by, pid) {
       need(i === -1 || ch.data.variations[i], 'そのバリエーションはありません');
       if (ch.variation === i) return;
       ch.variation = i;
-      log(room, { tab: opsTab(room), type: 'variation', by, cid: a.cid, fx: 'form', formName: i === -1 ? '基本' : ch.data.variations[i].name, text: `${ch.data.name}の武装を「${i === -1 ? '基本' : ch.data.variations[i].name}」に切り替えました` });
+      // a variation with a linked 立ち絵 changes the portrait too; when it really changes, the effect shows before → after
+      const from = portraitUrl(ch, ch.portrait), link = formPortrait(ch, i);
+      if (link) ch.portrait = link;
+      const to = portraitUrl(ch, ch.portrait), swap = from && to && from !== to;
+      log(room, { tab: opsTab(room), type: 'variation', by, cid: a.cid, fx: 'form', formName: i === -1 ? '基本' : ch.data.variations[i].name, ptFrom: swap ? from : undefined, ptTo: swap ? to : undefined,
+        text: `${ch.data.name}の武装を「${i === -1 ? '基本' : ch.data.variations[i].name}」に切り替えました` });
       return;
     }
 
@@ -584,7 +617,7 @@ function parseDice(raw) {
 
 // A1 is the bottom-left square (rows are counted upward); y=0 is the top row on screen
 // the name used when not speaking as a character: GM may name NPCs freely (but not after a PC);
-// a PL speaks as "<player or PC>（PL）"; spectators are just spectators
+// a PL speaks under their player name (no "（PL）" suffix); spectators are just spectators
 function speakerName(room, by, wanted, pid) {
   const pname = room.players && pid && room.players[pid] ? room.players[pid].name : '';
   if (by === 'gm') {
@@ -593,7 +626,7 @@ function speakerName(room, by, wanted, pid) {
     need(!pcNames.includes(n), 'PCと同じ名前では発言できません');
     return n;
   }
-  if (isPcSeat(room, by)) { const d = room.chars[by].data; return `${pname || d.player || d.name}（PL）`; }
+  if (isPcSeat(room, by)) { const d = room.chars[by].data; return pname || d.player || d.name; }
   return pname ? `${pname}（観戦）` : '観戦者';
 }
 const coordName = (x, y) => 'ABCDEFGH'[x] + (8 - y);
