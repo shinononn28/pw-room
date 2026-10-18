@@ -179,7 +179,7 @@ function applyInner(room, a, by, pid) {
       const colors = NAME_COLORS.slice(0, 8);
       room.chars[id] = { id, side: a.side, data, dv: 1, cur, used: {}, variation: -1, x: null, y: null, portrait: data.portraits[0]?.label || null,
         color: a.side === 'enemy' ? '#FF7A7A' : colors[Object.keys(room.chars).filter(k => room.chars[k].side !== 'enemy').length % colors.length],
-        owner: by === 'gm' ? 'gm' : id };
+        owner: by === 'gm' ? 'gm' : (pid && pid !== by ? pid : id) };
       if (a.side === 'pc' || a.side === 'npc') room.cards.hands[id] = room.cards.hands[id] || [];
       log(room, { tab: opsTab(room), type: 'sys', by, text: `${data.name}（${{ pc: 'PC', enemy: '敵', npc: 'NPC' }[a.side]}）が参加しました` });
       return id;
@@ -483,6 +483,16 @@ function applyInner(room, a, by, pid) {
       if (t.secret && a.members) t.members = [...new Set(a.members)];
       return;
     }
+    case 'giveChar': { // hand your own character to another player (or to the GM); nobody can take one
+      need(ch, 'キャラクターが見つかりません');
+      const mine = ch.owner === pid || (by === 'gm' && ch.owner === 'gm');
+      need(mine, '譲渡できるのは自分のキャラクターだけです');
+      need(a.to === 'gm' || (room.players[a.to] && a.to !== ch.owner), '譲渡先のプレイヤーを選んでください');
+      ch.owner = a.to;
+      const toName = a.to === 'gm' ? 'GM' : room.players[a.to].name;
+      log(room, { tab: opsTab(room), type: 'sys', by, text: `${ch.data.name}を${toName}に譲渡しました` });
+      return;
+    }
     case 'setPlayer': { // a person's display name in this room
       const name = String(a.name || '').trim().slice(0, 20);
       need(name, '名前を入れてください');
@@ -620,5 +630,5 @@ function viewRoom(room, seat, pid) {
   return r;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar };
+  module.exports = { apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
 }

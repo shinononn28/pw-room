@@ -43,7 +43,7 @@ async function getRoom(id) {
     if (!got) return null;
     const room = core.migrateRoom(got.room);
     room.logs = room.logs || [];
-    const entry = { room, gmKeyHash: got.gmKeyHash, seatKeyHashes: got.seatKeyHashes || {}, clients: new Set(), seq: room.logs.reduce((m, l) => Math.max(m, l.n || 0), 0), saveTimer: null, idleSince: Date.now() };
+    const entry = { room, gmKeyHash: got.gmKeyHash, seatKeyHashes: got.seatKeyHashes || {}, playerKeyHashes: got.playerKeyHashes || {}, clients: new Set(), seq: room.logs.reduce((m, l) => Math.max(m, l.n || 0), 0), saveTimer: null, idleSince: Date.now() };
     rooms.set(id, entry);
     return entry;
   })();
@@ -57,7 +57,7 @@ function saveSoon(id, entry) {
 async function saveNow(id, entry) {
   clearTimeout(entry.saveTimer); entry.saveTimer = null;
   const { logs, ...rest } = entry.room;
-  try { await store.saveRoom(id, JSON.stringify(rest), { name: entry.room.name, gmKeyHash: entry.gmKeyHash, seatKeyHashes: entry.seatKeyHashes || {} }); }
+  try { await store.saveRoom(id, JSON.stringify(rest), { name: entry.room.name, gmKeyHash: entry.gmKeyHash, seatKeyHashes: entry.seatKeyHashes || {}, playerKeyHashes: entry.playerKeyHashes || {} }); }
   catch (e) { console.error('save failed', id, e.message); }
 }
 // drop rooms nobody has used for a while (they are reloaded from the store on demand)
@@ -140,22 +140,23 @@ function issueSeatKey(entry, cid, conn) {
 }
 function seatFor(entry, seat, gmKey, seatKey, conn) {
   const isGm = !!gmKey && sha(gmKey) === entry.gmKeyHash;
+  // first visit on this device: the GM goes to GM, a player to their own character (PCs first)
+  if (seat === 'auto') {
+    if (isGm) return { seat: 'gm' };
+    const own = Object.values(entry.room.chars).filter(c => c.owner === conn.pid && core.isPcSeat(entry.room, c.id)).sort((a, b) => (a.side === 'pc' ? 0 : 1) - (b.side === 'pc' ? 0 : 1));
+    return { seat: own.length ? own[0].id : 'obs' };
+  }
   if (seat === 'gm') return isGm ? { seat: 'gm' } : { seat: 'obs', why: 'GMキーが違うため、観戦で入りました' };
   if (seat && core.isPcSeat(entry.room, seat)) {
     const ch = entry.room.chars[seat];
-    // the GM may sit in characters it still holds, never in a player's
-    if (isGm) return core.gmOwned(ch) ? { seat } : { seat: 'gm', why: 'GMはPLのキャラの席には座れません' };
-    const h = entry.seatKeyHashes[seat];
-    if (!h) {
-      if (core.gmOwned(ch)) return { seat: 'obs', why: 'GMのキャラです。GMから席のリンクをもらってください' };
-      issueSeatKey(entry, seat, conn); return { seat };
+    if (ch.owner === conn.pid) return { seat };
+    if (core.gmOwned(ch)) return isGm ? { seat } : { seat: 'obs', why: 'GMのキャラです。GMから譲渡してもらってください' };
+    // characters from before players existed (owner = its own id): claim with the old seat key, or freely if it never had one
+    if (ch.owner === ch.id && !isGm) {
+      const h = entry.seatKeyHashes[seat];
+      if (!h || (seatKey && sha(seatKey) === h)) { ch.owner = conn.pid; entry.ownerChanged = true; saveSoon(entry.room.id, entry); return { seat }; }
     }
-    if (seatKey && sha(seatKey) === h) {
-      // a player opening the seat link of a GM-held character takes it over
-      if (core.gmOwned(ch)) { ch.owner = ch.id; entry.ownerChanged = true; saveSoon(entry.room.id, entry); }
-      return { seat };
-    }
-    return { seat: 'obs', why: 'このキャラの席の鍵がないため、観戦で入りました。持ち主かGMに「席のリンク」をもらってください' };
+    return isGm ? { seat: 'gm', why: 'GMはPLのキャラの席には座れません' } : { seat: 'obs', why: 'ほかのプレイヤーのキャラです' };
   }
   return { seat: 'obs' };
 }
@@ -214,8 +215,14 @@ async function handleAct(conn, a) {
   let deleted = removed;
   if (allIds) { const still = new Set(room.logs.map(l => l.id)); deleted = [...allIds].filter(id => !still.has(id)); }
   if (a.type === 'addChar' && (a.side === 'pc' || a.side === 'npc') && typeof ret === 'string') {
-    issueSeatKey(entry, ret, conn);                       // whoever imported the PC holds its seat key
     if (conn.seat === 'obs') conn.seat = ret;              // a spectator who imports a PC sits in it
+  }
+  // after a hand-over, whoever sits in that character but no longer owns it steps out
+  if (a.type === 'giveChar') {
+    const ch = room.chars[a.cid];
+    for (const c of entry.clients) if (c.seat === a.cid && ch.owner !== c.pid && !(core.gmOwned(ch) && c.isGm)) {
+      c.seat = c.isGm ? 'gm' : 'obs'; send(c.ws, { t: 'error', message: `${ch.data.name}は譲渡されました` });
+    }
   }
   if (a.type === 'removeChar') delete entry.seatKeyHashes[a.cid];
   const reset = !!allIds || a.type === 'editTab' || a.type === 'addTab';
@@ -239,6 +246,12 @@ wss.on('connection', ws => {
         // the person behind the connection: a browser-made id plus a display name
         const p = m.player || {};
         conn.pid = typeof p.id === 'string' && /^p[0-9a-z]{8,40}$/.test(p.id) ? p.id : randomId('p', 16);
+        entry.playerKeyHashes = entry.playerKeyHashes || {};
+        const kh = p.key ? sha(p.key) : null;
+        if (entry.playerKeyHashes[conn.pid] && entry.playerKeyHashes[conn.pid] !== kh) {
+          send(ws, { t: 'error', message: 'このプレイヤーの鍵が一致しないため、別人として入りました' });
+          conn.pid = randomId('p', 16);
+        } else if (kh && !entry.playerKeyHashes[conn.pid]) { entry.playerKeyHashes[conn.pid] = kh; saveSoon(entry.room.id, entry); }
         conn.isGm = !!m.gmKey && sha(m.gmKey) === entry.gmKeyHash;
         const pname = String(p.name || '').trim().slice(0, 20);
         const players = entry.room.players = entry.room.players || {};

@@ -780,7 +780,7 @@ input[type=range]{width:100%;accent-color:var(--pink)}
 @keyframes fxPt{0%{opacity:0;transform:translateX(-40px) scale(.95)}20%{opacity:.9;transform:none}75%{opacity:.9}100%{opacity:0;transform:translateX(30px)}}
 @keyframes wingL{0%{opacity:0;transform:rotate(18deg) scaleX(.2)}30%{opacity:.9;transform:rotate(-6deg) scaleX(1)}100%{opacity:0;transform:rotate(-14deg) scaleX(1.05)}}
 @keyframes wingR{0%{opacity:0;transform:rotate(-18deg) scaleX(.2)}30%{opacity:.9;transform:rotate(6deg) scaleX(1)}100%{opacity:0;transform:rotate(14deg) scaleX(1.05)}}
-@media (prefers-reduced-motion:reduce){.fx{display:none}}
+
 /* phones: one tight header row; icons instead of words */
 .top .btn{white-space:nowrap}
 @media (max-width:959px){
@@ -797,6 +797,27 @@ input[type=range]{width:100%;accent-color:var(--pink)}
   .ohd{flex-direction:column}
   .ohd .btn{font-size:.62rem;padding:2px 4px;white-space:nowrap}
 }
+
+/* the effect layer is a popover: strip the browser's default popover box */
+.fx[popover]{margin:0;padding:0;border:none;background:transparent;width:100vw;height:100vh;max-width:none;max-height:none;inset:0;overflow:hidden}
+.fx:popover-open{display:flex}
+/* simple effect: a still card (for "reduce motion" or by choice) */
+.fx-simple{align-items:flex-start;padding-top:18vh}
+.fxCard{display:flex;align-items:center;gap:16px;background:rgba(10,13,30,.92);border:2px solid var(--fxc);border-radius:16px;padding:14px 22px;box-shadow:0 0 0 4px rgba(0,0,0,.3),0 0 30px var(--fxc);color:#fff}
+.fxCard img{width:72px;height:96px;object-fit:cover;object-position:top;border-radius:8px}
+.fxCard b{display:block;font-family:var(--num);font-size:1.8rem;letter-spacing:.14em}
+.fxCard span{display:block;font-weight:800;margin-top:2px}
+
+/* no scrollbars on the map or the tab strip */
+.boardBox,dialog.mapDlg,.tabs{scrollbar-width:none}
+.boardBox::-webkit-scrollbar,dialog.mapDlg::-webkit-scrollbar,.tabs::-webkit-scrollbar{display:none}
+.boardBox.panning,dialog.mapDlg.panning{cursor:grabbing}
+.boardBox.panning *{cursor:grabbing !important}
+.tabsWrap{display:flex;align-items:center;gap:2px;min-width:0;border-bottom:1px solid rgba(255,255,255,.12);margin:-2px -12px 0;padding:2px 6px 8px}
+.tabsWrap .tabs{flex:1;border-bottom:none !important;margin:0 !important;padding:2px 2px 0 !important}
+.tabArrow{flex:none;width:26px;height:26px;border-radius:999px;border:1px solid #4A4C52;background:#36383D;color:#fff;font-weight:800;cursor:pointer;line-height:1}
+.tabArrow:hover{border-color:var(--pink)}
+.fx.fx-simple[popover]{align-items:center;justify-content:center;padding:0}
 </style>
 </head>
 <body>
@@ -985,7 +1006,7 @@ function applyInner(room, a, by, pid) {
       const colors = NAME_COLORS.slice(0, 8);
       room.chars[id] = { id, side: a.side, data, dv: 1, cur, used: {}, variation: -1, x: null, y: null, portrait: data.portraits[0]?.label || null,
         color: a.side === 'enemy' ? '#FF7A7A' : colors[Object.keys(room.chars).filter(k => room.chars[k].side !== 'enemy').length % colors.length],
-        owner: by === 'gm' ? 'gm' : id };
+        owner: by === 'gm' ? 'gm' : (pid && pid !== by ? pid : id) };
       if (a.side === 'pc' || a.side === 'npc') room.cards.hands[id] = room.cards.hands[id] || [];
       log(room, { tab: opsTab(room), type: 'sys', by, text: `${data.name}（${{ pc: 'PC', enemy: '敵', npc: 'NPC' }[a.side]}）が参加しました` });
       return id;
@@ -1289,6 +1310,16 @@ function applyInner(room, a, by, pid) {
       if (t.secret && a.members) t.members = [...new Set(a.members)];
       return;
     }
+    case 'giveChar': { // hand your own character to another player (or to the GM); nobody can take one
+      need(ch, 'キャラクターが見つかりません');
+      const mine = ch.owner === pid || (by === 'gm' && ch.owner === 'gm');
+      need(mine, '譲渡できるのは自分のキャラクターだけです');
+      need(a.to === 'gm' || (room.players[a.to] && a.to !== ch.owner), '譲渡先のプレイヤーを選んでください');
+      ch.owner = a.to;
+      const toName = a.to === 'gm' ? 'GM' : room.players[a.to].name;
+      log(room, { tab: opsTab(room), type: 'sys', by, text: `${ch.data.name}を${toName}に譲渡しました` });
+      return;
+    }
     case 'setPlayer': { // a person's display name in this room
       const name = String(a.name || '').trim().slice(0, 20);
       need(name, '名前を入れてください');
@@ -1426,7 +1457,7 @@ function viewRoom(room, seat, pid) {
   return r;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar };
+  module.exports = { apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
 }
 // =====================================================================
 // local storage + UI
@@ -1447,7 +1478,8 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const route = () => {
   const h = location.hash.replace(/^#\/?/, '').split('/');
-  return h[0] === 'r' && h[1] ? { view: 'room', id: h[1], gmKey: h[2] === 'gm' ? h[3] : null, seatCid: h[2] === 'seat' ? h[3] : null, seatKey: h[2] === 'seat' ? h[4] : null } : { view: 'list' };
+  return h[0] === 'r' && h[1] ? { view: 'room', id: h[1], gmKey: h[2] === 'gm' ? h[3] : null, seatCid: h[2] === 'seat' ? h[3] : null, seatKey: h[2] === 'seat' ? h[4] : null,
+    playerId: h[2] === 'p' ? h[3] : null, playerKey: h[2] === 'p' ? h[4] : null, playerName: h[2] === 'p' && h[5] ? decodeURIComponent(h[5]) : null } : { view: 'list' };
 };
 const curRoom = () => { const r = route(); return r.view === 'room' ? DB.rooms[r.id] : null; };
 
@@ -1507,22 +1539,34 @@ function renderBgmBar() {
 }
 // ---------------- typing notice ----------------
 function playFx(room, l) {
-  if (U.fx === false || matchMedia('(prefers-reduced-motion: reduce)').matches) { ui.fxSeen.add(l.id); return; }
   if (ui.fxSeen.has(l.id)) return;
   ui.fxSeen.add(l.id);
-  if (Date.now() - l.t > 15000) return;
+  const mode = U.fx === false || U.fx === 'off' ? 'off' : U.fx === 'simple' || matchMedia('(prefers-reduced-motion: reduce)').matches ? 'simple' : 'anim';
+  if (mode === 'off' || Date.now() - l.t > 15000) return;
   const c = room.chars[l.cid || l.as];
   const p = c && (c.data.portraits.find(x => x.label === c.portrait) || c.data.portraits[0]);
   const title = l.fx === 'form' ? '換 装' : 'WING DRIVE';
   const sub = l.fx === 'form' ? `${c ? c.data.name : ''}　${l.formName || ''}` : `${c ? c.data.name : ''}　${l.cmd || ''}`;
   const el = document.createElement('div');
-  el.className = `fx fx-${l.fx}`;
+  el.className = `fx fx-${l.fx} fx-${mode}`;
   el.style.setProperty('--fxc', c ? c.color : '#FF5C96');
-  el.innerHTML = `<div class="fxBurst"></div><div class="fxWing l"></div><div class="fxWing r"></div>
-    ${p ? `<img class="fxPt" src="${esc(p.url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
-    <div class="fxText"><b>${title}</b><span>${esc(sub)}</span></div>`;
+  el.innerHTML = mode === 'simple'
+    ? `<div class="fxCard">${p ? `<img src="${esc(p.url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}<div><b>${title}</b><span>${esc(sub)}</span></div></div>`
+    : `<div class="fxBurst"></div><div class="fxWing l"></div><div class="fxWing r"></div>
+       ${p ? `<img class="fxPt" src="${esc(p.url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
+       <div class="fxText"><b>${title}</b><span>${esc(sub)}</span></div>`;
+  // a popover sits in the top layer, so it shows even over an open modal
+  el.setAttribute('popover', 'manual');
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), 2300);
+  try { el.showPopover(); } catch (e) { el.removeAttribute('popover'); }
+  setTimeout(() => el.remove(), mode === 'simple' ? 2400 : 2300);
+}
+// tab strip: arrow buttons instead of a scrollbar
+function updateTabArrows() {
+  const t = $('tabs'); if (!t) return;
+  const over = t.scrollWidth > t.clientWidth + 2;
+  $('tabL').hidden = !over || t.scrollLeft <= 2;
+  $('tabR').hidden = !over || t.scrollLeft + t.clientWidth >= t.scrollWidth - 2;
 }
 function renderTyping() {
   const el = $('typing'), room = curRoom(); if (!el || !room) return;
@@ -1607,11 +1651,12 @@ function renderRoom() {
   const room = curRoom();
   if (!room && ONLINE) {
     const r = route();
+    if (r.playerId && r.playerKey) { saveMe({ id: r.playerId, key: r.playerKey, name: r.playerName || me().name }); location.replace(`#/r/${r.id}`); return; }
     if (r.gmKey) { saveGmKey(r.id, r.gmKey); saveLastSeat(r.id, 'gm'); location.replace(`#/r/${r.id}`); return; }
     if (r.seatCid && r.seatKey) { saveSeatKey(r.id, r.seatCid, r.seatKey); saveLastSeat(r.id, r.seatCid); location.replace(`#/r/${r.id}`); return; }
     // come back to the seat this browser used last time
     if (!me().name) { renderNameGate(r.id); return; }
-    if (NET.roomId !== r.id) netJoin(r.id, lastSeat(r.id) || (gmKeys()[r.id] ? 'gm' : 'obs'));
+    if (NET.roomId !== r.id) netJoin(r.id, lastSeat(r.id) || 'auto');
     $('app').innerHTML = `<p class="loading" style="padding:40vh 0;text-align:center">部屋に入っています…<br><span class="muted">サーバーが眠っていた場合は、起きるまで30秒ほどかかります</span></p>`;
     return;
   }
@@ -1623,9 +1668,10 @@ function renderRoom() {
   }
   const ru = roomUI(room.id);
   const isGmBrowser = ONLINE && !!gmKeys()[room.id];
-  // GM: GM + the characters the GM still holds; players: every PC/NPC seat (locked ones need the seat key)
+  // online: GM + characters you own (the GM also sees the characters it holds); unclaimed older ones can be claimed
+  const usable = c => !ONLINE || c.owner === myPid() || (isGmBrowser && gmOwned(c)) || (!isGmBrowser && c.owner === c.id);
   const seats = [...(!ONLINE || isGmBrowser ? [['gm', 'GM']] : []),
-    ...Object.values(room.chars).filter(c => isPcSeat(room, c.id) && (!isGmBrowser || gmOwned(c))).map(c => [c.id, c.data.name + (c.side === 'npc' ? '（NPC）' : '')]), ['obs', '観戦']];
+    ...Object.values(room.chars).filter(c => isPcSeat(room, c.id) && usable(c)).map(c => [c.id, c.data.name + (c.side === 'npc' ? '（NPC）' : '')]), ['obs', '観戦']];
   if (!seats.some(s => s[0] === ru.viewer)) ru.viewer = ONLINE ? 'obs' : 'gm';
   if (!room.tabs.some(t => t.id === ru.tab && canSeeTab(room, t, ru.viewer, myPid()))) ru.tab = room.tabs.find(t => canSeeTab(room, t, ru.viewer, myPid()))?.id;
   if (!$('roomShell') || $('roomShell').dataset.id !== room.id) {
@@ -1644,7 +1690,7 @@ function renderRoom() {
           </div>
           <div class="chatPane"><div class="vsplit" id="vsplit" title="ドラッグで幅を変更（ダブルクリックで元に戻す）" role="separator" aria-orientation="vertical"></div>
             <section class="panel chat" id="chatP">
-              <div class="tabs" id="tabs"></div>
+              <div class="tabsWrap"><button class="tabArrow" id="tabL" aria-label="タブを左へ" hidden>‹</button><div class="tabs" id="tabs"></div><button class="tabArrow" id="tabR" aria-label="タブを右へ" hidden>›</button></div>
               <div class="log" id="chatLog"></div>
               <div class="typing" id="typing" aria-live="polite"></div>
               <div class="composer">
@@ -1676,7 +1722,7 @@ function renderRoom() {
   ru.pane = ru.pane || 'board';
   $('roomShell').dataset.pane = ru.pane;
   document.querySelectorAll('.mnav [data-pane]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.pane === ru.pane)));
-  const lockedOut = v => ONLINE && v !== 'gm' && v !== 'obs' && NET.locked && NET.locked.has(v) && !seatKeys(room.id)[v] && v !== ru.viewer;
+  const lockedOut = () => false;
   $('viewer').innerHTML = seats.map(([v, n]) => `<option value="${v}" ${v === ru.viewer ? 'selected' : ''} ${lockedOut(v) ? 'disabled' : ''}>${esc(n)}${lockedOut(v) ? '（鍵なし）' : ''}</option>`).join('');
   $('setBtn').hidden = ru.viewer !== 'gm';
   $('undoBtn').disabled = !ui.history.length;
@@ -2007,6 +2053,7 @@ function renderChat(room, ru) {
     `<button class="tab ${t.secret ? 'secret' : ''}" data-tab="${t.id}" aria-pressed="${t.id === ru.tab}">${esc(t.name)}${t.secret ? '<span class="lock">秘匿</span>' : ''}${ui.unread && ui.unread[t.id] ? `<span class="tbadge">${ui.unread[t.id] > 99 ? '99+' : ui.unread[t.id]}</span>` : ''}</button>`).join('') +
     `<button class="tab" data-addtab aria-label="タブを追加">＋</button>` +
     (room.tabs.find(t => t.id === ru.tab)?.secret ? `<button class="tab" data-edittab="${ru.tab}">参加者</button>` : '');
+  requestAnimationFrame(updateTabArrows);
   const box = $('chatLog');
   const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
   const logs = logsForTab(room, ru.tab).map(l => viewLog(room, l, v, myPid())).filter(Boolean).slice(-CHAT_MAX);
@@ -2066,6 +2113,8 @@ function paletteItems(c, room) {
   (d.core?.functions || []).forEach((it, i) => out.push({ grp: '特殊機能', label: it.name, text: cmdText('特殊機能', it), name: it.name, src: it, used: c.used[`func:${i}`] }));
   if (d.wingDrive) out.push({ grp: 'ウイングドライブ', label: d.wingDrive.name, text: cmdText('ウイングドライブ', d.wingDrive), name: d.wingDrive.name, src: d.wingDrive, used: c.used['wingDrive:0'] });
   d.weapons.common.forEach((it, i) => it.name && out.push({ grp: '武装', label: it.name, tag: '共通', text: cmdText('武装', it, '共通 '), name: it.name, src: it, used: c.used[`common:${i}`] }));
+  if (d.variations.length) [-1, ...d.variations.map((_, i) => i)].filter(i => i !== c.variation).forEach(i =>
+    out.push({ grp: '換装', label: `「${i === -1 ? '基本' : d.variations[i].name}」に換装`, text: '', form: i, name: i === -1 ? '基本' : d.variations[i].name }));
   const view = ui.cmdForm && ui.cmdForm.cid === c.id ? ui.cmdForm.idx : c.variation;
   const slots = view === -1 ? d.weapons.slots : (d.variations[view] || {}).slots || currentSlots(c);
   slots.forEach((it, i) => it.name && out.push({ grp: '武装', label: it.name, suit: it.suit, text: cmdText('武装', it, SUIT[it.suit] + ' '), name: it.name, src: it, used: c.used[`slot${view}:${i}`], offForm: view !== c.variation }));
@@ -2100,6 +2149,8 @@ function saveLastSeat(id, seat) { const o = loadJson('pw-lastseat', {}); o[id] =
 function me() {
   let p = loadJson('pw-player', null);
   if (!p || !/^p[0-9a-z]{8,40}$/.test(p.id || '')) { p = { id: 'p' + (crypto.getRandomValues(new Uint32Array(3)).join('').slice(0, 20)), name: (p && p.name) || '' }; saveMe(p); }
+  // a secret proving "this is me" to the server; it travels only inside 自分のリンク
+  if (!p.key) { p.key = Array.from(crypto.getRandomValues(new Uint8Array(18)), b => b.toString(36).padStart(2, '0')).join(''); saveMe(p); }
   return p;
 }
 function saveMe(p) { try { localStorage.setItem('pw-player', JSON.stringify(p)); } catch (e) {} }
@@ -2208,6 +2259,8 @@ document.addEventListener('visibilitychange', () => {
   if (ONLINE && document.visibilityState === 'visible' && (!NET.ws || NET.ws.readyState > 1)) { NET.backoff = 500; netConnect(); }
 });
 
+// 自分のリンク: opens this room on another device as the same player (same characters, same secret tabs)
+const playerLink = id => { const p = me(); return `${location.origin}${location.pathname}#/r/${id}/p/${p.id}/${p.key}/${encodeURIComponent(p.name || '')}`; };
 const seatLink = (id, cid) => `${location.origin}${location.pathname}#/r/${id}/seat/${cid}/${seatKeys(id)[cid] || ''}`;
 async function copySeatLink(id, cid) {
   const link = seatLink(id, cid);
@@ -2277,7 +2330,7 @@ function cmdModalHtml(room, ru) {
       return `<div class="citem ${it.used ? 'used' : ''}" data-ci="${i}" role="button" tabindex="0">
         <div class="ctop">${it.suit ? `<span class="suit ${'HD'.includes(it.suit) ? 'red' : ''}">${SUIT[it.suit]}</span>` : ''}${it.tag ? `<span class="attr">${it.tag}</span>` : ''}
           <b class="cname">${esc(it.label)}</b>${it.tp != null ? `<span class="tpcost ${short ? 'short' : ''}">TP${it.tp}</span>` : ''}${it.used ? '<span class="attr">使用済み</span>' : ''}
-          <span style="flex:1"></span><button class="btn small" data-csend="${i}" ${short ? 'disabled' : ''}>すぐ送る</button></div>
+          <span style="flex:1"></span>${it.grp === '換装' ? '<span class="attr">押すと換装</span>' : `<button class="btn small" data-csend="${i}" ${short ? 'disabled' : ''}>すぐ送る</button>`}</div>
         ${s && Object.keys(s.attrs || {}).length ? `<div class="attrs">${Object.entries(s.attrs).map(([k, v]) => `<span class="attr">${esc(k)}：${esc(v)}</span>`).join('')}</div>` : ''}
         ${s && s.text ? `<div class="itext">${esc(s.text)}</div>` : g.name === 'ダイス' ? `<div class="itext muted">${esc(it.text.trim())}</div>` : ''}
       </div>`; }).join('')}</div></section>`).join('')}`;
@@ -2315,11 +2368,13 @@ function charModalHtml(room, ru, cid) {
       ${can ? `<button class="btn small" data-movechar="${c.id}">${c.x == null ? 'マップに置く' : '移動する'}</button><button class="btn small" data-portraits="${c.id}">立ち絵</button><button class="btn small" data-editchar="${c.id}">更新</button>` : ''}
       ${v === 'gm' || v === c.id ? `<button class="btn small danger" data-delchar="${c.id}">外す</button>` : ''}
       <button class="btn" data-close>閉じる</button></div>
-    ${ONLINE && isPcSeat(room, c.id) ? `<div class="seatRow">
-      ${seatKeys(room.id)[c.id] ? (gmOwned(c) && v === 'gm'
-        ? `<button class="btn small primary" data-seatlink="${c.id}">PLに渡す（席のリンクをコピー）</button><span class="muted">PLがこのリンクで入ると、そのPLのキャラになります</span>`
-        : `<button class="btn small" data-seatlink="${c.id}">席のリンクをコピー</button><span class="muted">別の端末でこのキャラとして入るときに使います</span>`) : ''}
-      ${v === 'gm' ? `<button class="btn small ghost" data-reissue="${c.id}">${gmOwned(c) ? '席の鍵を作り直す' : '席の鍵を作り直す（GMに戻す）'}</button>` : ''}</div>` : ''}
+    ${ONLINE && isPcSeat(room, c.id) ? (() => {
+      const ownerName = gmOwned(c) ? 'GM' : (room.players[c.owner] || {}).name || '（未設定）';
+      const mineToGive = c.owner === myPid() || (v === 'gm' && gmOwned(c));
+      const targets = Object.entries(room.players || {}).filter(([pid]) => pid !== c.owner);
+      return `<div class="seatRow"><span class="muted">持ち主：<b>${esc(ownerName)}</b></span>
+        ${mineToGive ? `<select id="giveTo"><option value="">譲渡先を選ぶ</option>${targets.map(([pid, p]) => `<option value="${pid}">${esc(p.name)}</option>`).join('')}${!gmOwned(c) ? '<option value="gm">GM</option>' : ''}</select><button class="btn small" data-givechar="${c.id}">譲渡する</button>` : ''}</div>`;
+    })() : ''}
     <div class="vals">${keys.map(k => {
       const st = c.data.stats[k] || {};
       if (st.max == null) return `<span class="val">${esc(k)} ${can && v === 'gm' ? `<input type="number" value="${c.cur[k]}" data-vset data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(k)}">` : `<b>${c.cur[k]}</b>`}</span>`;
@@ -2396,6 +2451,7 @@ function refreshModal(first) {
 function useCommand(i, sendNow) {
   const room = curRoom(), ru = roomUI(room.id), c = room.chars[ru.as];
   const it = paletteItems(c, room)[i]; if (!it) return;
+  if (it.grp === '換装') { closeDlg(); act({ type: 'variation', cid: c.id, idx: it.form }); if (ui.cmdForm) ui.cmdForm = null; return; }
   ui.cmd = it.grp === 'ダイス' || !c ? null : { cid: c.id, name: it.name || it.label, tp: it.tp ?? null, label: it.label, fx: it.grp === 'ウイングドライブ' ? 'wd' : null };
   closeDlg();
   if (it.offForm) toast('換装していないバリエーションの武装です（換装はキャラの詳細から）');
@@ -2585,14 +2641,10 @@ function colorDialog(current, onPick) {
 // every link in one place: invite (players), my seat (other devices), GM, hand-over of GM-held characters
 async function copyText(text, msg) { try { await navigator.clipboard.writeText(text); toast(msg); } catch (err) { prompt('リンク', text); } }
 function linksDialog(room, ru) {
-  const v = ru.viewer, rows = [];
+  const rows = [];
   rows.push(['招待リンク', 'PLに送るリンクです。開いた人は観戦で入り、キャラを取り込むとその席に座ります。', inviteLink(room.id)]);
-  if (isPcSeat(room, v) && seatKeys(room.id)[v]) rows.push([`席のリンク（${room.chars[v].data.name}）`, 'スマホなど別の端末で、このキャラとして入るときに開きます。他の人には渡さないでください。', seatLink(room.id, v)]);
-  if (gmKeys()[room.id]) {
-    rows.push(['GM用リンク', '別の端末でGMとして入るときに開きます。PLには送らないでください。', gmLink(room.id)]);
-    Object.values(room.chars).filter(c => gmOwned(c) && isPcSeat(room, c.id) && seatKeys(room.id)[c.id])
-      .forEach(c => rows.push([`PLに渡す：${c.data.name}`, 'GMが用意したキャラをPLに渡すリンクです。PLが開くと、そのPLのキャラになります。', seatLink(room.id, c.id)]));
-  }
+  rows.push([`自分のリンク（${me().name || 'あなた'}）`, 'スマホなど別の端末で、あなたとして入るためのリンクです。自分のキャラにも秘匿タブにもそのまま入れます。他の人には渡さないでください。', playerLink(room.id)]);
+  if (gmKeys()[room.id]) rows.push(['GM用リンク', '別の端末でGMとして入るときに開きます。PLには送らないでください。', gmLink(room.id)]);
   openDlg(`<h1>リンク</h1>${rows.map(([t, d, url], i) => `<div class="linkRow"><div><b>${esc(t)}</b><p class="muted">${esc(d)}</p></div><button class="btn small primary" data-copylink="${i}">コピー</button></div>`).join('')}
     <div class="row" style="margin-top:10px"><span style="flex:1"></span><button class="btn" data-close>閉じる</button></div>`, () => {
     document.querySelectorAll('#dlgBody [data-copylink]').forEach(b => b.onclick = () => copyText(rows[+b.dataset.copylink][2], `「${rows[+b.dataset.copylink][0]}」をコピーしました`));
@@ -2601,7 +2653,10 @@ function linksDialog(room, ru) {
 function menuDialog(room) {
   openDlg(`<h1>メニュー</h1>
     ${ONLINE ? `<div class="field">プレイヤー名<div class="row"><input type="text" id="mnName" maxlength="20" value="${esc(me().name)}" style="flex:1"><button class="btn small" id="mnSave">変更</button></div></div>` : ''}
-    <label class="row" style="margin-bottom:8px"><input type="checkbox" id="mnFx" ${U.fx === false ? '' : 'checked'}> 換装・ウイングドライブの演出を表示する</label>
+    <div class="field">換装・ウイングドライブの演出<select id="mnFx">
+      <option value="anim" ${!U.fx || U.fx === true || U.fx === 'anim' ? 'selected' : ''}>アニメーション（動きを減らす設定の端末では簡易表示）</option>
+      <option value="simple" ${U.fx === 'simple' ? 'selected' : ''}>簡易表示（動かないカード）</option>
+      <option value="off" ${U.fx === false || U.fx === 'off' ? 'selected' : ''}>表示しない</option></select></div>
     <div class="row"><button class="btn small" data-theme-toggle></button><span style="flex:1"></span><button class="btn" data-close>閉じる</button></div>`, () => {
     applyTheme();
     if ($('mnSave')) $('mnSave').onclick = () => {
@@ -2609,7 +2664,7 @@ function menuDialog(room) {
       saveMe({ ...me(), name: n });
       if (act({ type: 'setPlayer', name: n }) !== FAIL) toast('プレイヤー名を変えました');
     };
-    $('mnFx').onchange = e => { U.fx = e.target.checked; saveU(); };
+    $('mnFx').onchange = e => { U.fx = e.target.value; saveU(); };
     document.querySelector('#dlgBody [data-theme-toggle]').onclick = () => { U.theme = (U.theme || 'dark') === 'dark' ? 'light' : 'dark'; saveU(); applyTheme(); };
   });
 }
@@ -2701,7 +2756,7 @@ function bindRoomStatic() {
       if (act({ type: 'setValue', cid: c.id, key, value: v }) === FAIL) return true;
       cur[key] = v;
     }
-    $('sayText').value = '';
+    $('sayText').value = ''; $('sayText').blur();
     return true;
   };
   const send = () => {
@@ -2713,8 +2768,7 @@ function bindRoomStatic() {
     const spend = cmd && cmd.tp ? cmd.tp : null;
     const r = act({ type: 'say', tab: ru.tab, as: c ? c.id : null, name: c ? null : ($('freeName').value.trim() || seatName(room, ru.viewer)), color: c ? null : (ru.freeColor || null), portrait: c ? c.portrait : null, text,
       cmd: cmd ? cmd.name : null, spendTP: Number.isFinite(spend) ? spend : null, fx: cmd && cmd.fx ? cmd.fx : undefined });
-    if (r !== FAIL) { $('sayText').value = ''; ui.cmd = null; renderRoom(); }
-    $('sayText').focus();
+    if (r !== FAIL) { $('sayText').value = ''; ui.cmd = null; $('sayText').blur(); renderRoom(); }
   };
   $('sayBtn').onclick = send;
   $('palBtn').onclick = () => openModal('cmd');
@@ -2758,8 +2812,12 @@ function commonClick(t, room, ru) {
   if (q('[data-import]')) { importDialog(room, ru); return true; }
   if ((el = q('[data-editchar]'))) { importDialog(room, ru, el.dataset.editchar); return true; }
   if ((el = q('[data-formchange]'))) { const cid = el.dataset.formchange; act({ type: 'variation', cid, idx: +el.dataset.idx }); delete ui.formView[cid]; return true; }
-  if ((el = q('[data-seatlink]'))) { copySeatLink(room.id, el.dataset.seatlink); return true; }
-  if ((el = q('[data-reissue]'))) { const cid = el.dataset.reissue; ask(`${room.chars[cid].data.name}の席の鍵を作り直します。今の鍵で座っている人は観戦に戻ります。`, '鍵を作り直す', () => { NET.copySeatLink = cid; netSend({ t: 'reissueSeat', cid }); }); return true; }
+  if ((el = q('[data-givechar]'))) {
+    const cid = el.dataset.givechar, to = $('giveTo').value; if (!to) { toast('譲渡先を選んでください'); return true; }
+    const toName = to === 'gm' ? 'GM' : room.players[to].name;
+    ask(`${room.chars[cid].data.name}を${toName}に譲渡します。譲渡したキャラは取り戻せません（相手から譲渡してもらう必要があります）。`, '譲渡する', () => act({ type: 'giveChar', cid, to }));
+    return true;
+  }
   if ((el = q('[data-colorpick]'))) { const c = room.chars[el.dataset.colorpick]; colorDialog(c.color, col => act({ type: 'setColor', cid: c.id, color: col })); return true; }
   if ((el = q('[data-sheetopen]'))) { openModal('sheet', el.dataset.sheetopen); return true; }
   if ((el = q('[data-portraits]'))) { portraitDialog(room, el.dataset.portraits); return true; }
@@ -2789,6 +2847,37 @@ document.addEventListener('pointerdown', e => {
   bar.addEventListener('pointermove', move); bar.addEventListener('pointerup', up);
 });
 document.addEventListener('dblclick', e => { if (e.target.closest('#vsplit')) { U.chatW = null; saveU(); $('roomShell').style.setProperty('--chatW', ''); } });
+// tab arrows
+document.addEventListener('click', e => {
+  const b = e.target.closest('#tabL, #tabR'); if (!b) return;
+  $('tabs').scrollBy({ left: b.id === 'tabL' ? -160 : 160, behavior: 'smooth' });
+  setTimeout(updateTabArrows, 350);
+});
+document.addEventListener('scroll', e => { if (e.target && e.target.id === 'tabs') updateTabArrows(); }, true);
+window.addEventListener('resize', () => updateTabArrows());
+
+// drag the zoomed map to move around (no scrollbars); a drag never counts as a tap on a square
+let panDrag = null;
+document.addEventListener('pointerdown', e => {
+  if (e.button !== 0 || e.pointerType === 'touch') return;          // touch scrolls natively
+  const box = e.target.closest('#mapP .boardBox, dialog.mapDlg');
+  if (!box || e.target.closest('.zoomV, .zoomCtl, .selbar, button:not(.tok), select, input')) return;
+  if (box.scrollWidth <= box.clientWidth + 1 && box.scrollHeight <= box.clientHeight + 1) return;
+  panDrag = { box, x: e.clientX, y: e.clientY, sl: box.scrollLeft, st: box.scrollTop, moved: false };
+});
+document.addEventListener('pointermove', e => {
+  if (!panDrag) return;
+  const dx = e.clientX - panDrag.x, dy = e.clientY - panDrag.y;
+  if (!panDrag.moved && Math.hypot(dx, dy) < 6) return;
+  panDrag.moved = true; panDrag.box.classList.add('panning');
+  panDrag.box.scrollLeft = panDrag.sl - dx; panDrag.box.scrollTop = panDrag.st - dy;
+});
+document.addEventListener('pointerup', () => {
+  if (!panDrag) return;
+  const moved = panDrag.moved; panDrag.box.classList.remove('panning'); panDrag = null;
+  if (moved) window.addEventListener('click', ev => { ev.stopPropagation(); ev.preventDefault(); }, { capture: true, once: true });
+});
+
 // Ctrl (or ⌘) + wheel over the board zooms the map
 document.addEventListener('wheel', e => {
   if (!(e.ctrlKey || e.metaKey) || !e.target.closest('.board')) return;
