@@ -273,10 +273,12 @@ wss.on('connection', ws => {
       else if (m.t === 'typing') {
         // "○○が入力中…": relayed (not stored) to people who can see that tab, at most once a second
         const entry = conn.entry; if (!entry) return;
-        const now = Date.now(); if (now - (conn.lastTyping || 0) < 1000) return; conn.lastTyping = now;
+        const on = m.on !== false, now = Date.now();
+        if (on && now - (conn.lastTyping || 0) < 1000) return;      // "off" always goes through
+        conn.lastTyping = now;
         const tab = entry.room.tabs.find(t => t.id === m.tab); if (!tab) return;
         const name = (entry.room.players[conn.pid] || {}).name || '誰か';
-        for (const c of entry.clients) if (c !== conn && core.canSeeTab(entry.room, tab, c.seat, c.pid)) send(c.ws, { t: 'typing', tab: tab.id, name, pid: conn.pid });
+        for (const c of entry.clients) if (c !== conn && core.canSeeTab(entry.room, tab, c.seat, c.pid)) send(c.ws, { t: 'typing', tab: tab.id, name, pid: conn.pid, on });
       }
       else if (m.t === 'bgmStop' || m.t === 'bgmLoop') {
         const entry = conn.entry; if (!entry || !conn.isGm) return send(ws, { t: 'error', message: 'BGMを操作できるのはGMだけです' });
@@ -296,7 +298,9 @@ wss.on('connection', ws => {
       }
     } catch (e) { console.error('ws handler error:', m && m.t, e); send(ws, { t: 'error', message: 'サーバーでエラーが起きました：' + explain(e) }); }
   });
-  ws.on('close', () => { if (conn.entry) { conn.entry.clients.delete(conn); if (!conn.entry.clients.size) conn.entry.idleSince = Date.now(); } });
+  ws.on('close', () => {
+    if (conn.entry) for (const c of conn.entry.clients) if (c !== conn) for (const t of conn.entry.room.tabs) send(c.ws, { t: 'typing', tab: t.id, name: '', pid: conn.pid, on: false });
+    if (conn.entry) { conn.entry.clients.delete(conn); if (!conn.entry.clients.size) conn.entry.idleSince = Date.now(); } });
 });
 setInterval(() => { for (const ws of wss.clients) { if (ws._pwDead) { ws.terminate(); continue; } ws._pwDead = true; ws.ping(); } }, 30000);
 wss.on('connection', ws => ws.on('pong', () => { ws._pwDead = false; }));
