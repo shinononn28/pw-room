@@ -801,7 +801,7 @@ input[type=range]{width:100%;accent-color:var(--pink)}
 /* the effect layer is a popover: strip the browser's default popover box */
 .fx[popover]{margin:0;padding:0;border:none;background:transparent;width:100vw;height:100vh;max-width:none;max-height:none;inset:0;overflow:hidden}
 .fx:popover-open{display:flex}
-/* simple effect: a still card (for "reduce motion" or by choice) */
+/* still effect: same picture as the animation, it only fades in and out (for "reduce motion" or by choice) */
 .fx-simple{align-items:flex-start;padding-top:18vh}
 .fxCard{display:flex;align-items:center;gap:16px;background:rgba(10,13,30,.92);border:2px solid var(--fxc);border-radius:16px;padding:14px 22px;box-shadow:0 0 0 4px rgba(0,0,0,.3),0 0 30px var(--fxc);color:#fff}
 .fxCard img{width:72px;height:96px;object-fit:cover;object-position:top;border-radius:8px}
@@ -817,7 +817,17 @@ input[type=range]{width:100%;accent-color:var(--pink)}
 .tabsWrap .tabs{flex:1;border-bottom:none !important;margin:0 !important;padding:2px 2px 0 !important}
 .tabArrow{flex:none;width:26px;height:26px;border-radius:999px;border:1px solid #4A4C52;background:#36383D;color:#fff;font-weight:800;cursor:pointer;line-height:1}
 .tabArrow:hover{border-color:var(--pink)}
-.fx.fx-simple[popover]{align-items:center;justify-content:center;padding:0}
+
+
+.fx-simple .fxBurst{opacity:.75;transform:scale(1);animation:fxFade 2.4s ease forwards}
+.fx-simple .fxPt{opacity:.9;transform:none;animation:fxFade 2.4s ease forwards}
+.fx-simple .fxText{opacity:1;transform:none;animation:fxFade 2.4s ease forwards}
+.fx-simple.fx-wd .fxWing{opacity:.8;animation:fxFade 2.4s ease forwards}
+.fx-simple.fx-wd .fxWing.l{transform:rotate(-6deg)} .fx-simple.fx-wd .fxWing.r{transform:rotate(6deg)}
+@keyframes fxFade{0%{opacity:0}12%{opacity:1}78%{opacity:1}100%{opacity:0}}
+.formBar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:-2px 0 10px}
+.formNow{font-size:.78rem;font-weight:800;color:var(--ok);padding:2px 10px;border:1.5px solid var(--ok);border-radius:999px}
+.fx.fx-simple{align-items:center !important;padding-top:0 !important}
 </style>
 </head>
 <body>
@@ -1541,8 +1551,11 @@ function renderBgmBar() {
 function playFx(room, l) {
   if (ui.fxSeen.has(l.id)) return;
   ui.fxSeen.add(l.id);
-  const mode = U.fx === false || U.fx === 'off' ? 'off' : U.fx === 'simple' || matchMedia('(prefers-reduced-motion: reduce)').matches ? 'simple' : 'anim';
+  const pref = U.fx === false ? 'off' : (U.fx === true || !U.fx) ? 'auto' : U.fx;
+  const mode = pref === 'off' ? 'off' : pref === 'simple' ? 'simple' : pref === 'anim' ? 'anim'
+    : matchMedia('(prefers-reduced-motion: reduce)').matches ? 'simple' : 'anim';
   if (mode === 'off' || Date.now() - l.t > 15000) return;
+  if (U.fxWho === 'mine' && !(ONLINE ? l.pid === myPid() : l.by === roomUI(room.id).viewer)) return;
   const c = room.chars[l.cid || l.as];
   const p = c && (c.data.portraits.find(x => x.label === c.portrait) || c.data.portraits[0]);
   const title = l.fx === 'form' ? '換 装' : 'WING DRIVE';
@@ -1550,16 +1563,14 @@ function playFx(room, l) {
   const el = document.createElement('div');
   el.className = `fx fx-${l.fx} fx-${mode}`;
   el.style.setProperty('--fxc', c ? c.color : '#FF5C96');
-  el.innerHTML = mode === 'simple'
-    ? `<div class="fxCard">${p ? `<img src="${esc(p.url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}<div><b>${title}</b><span>${esc(sub)}</span></div></div>`
-    : `<div class="fxBurst"></div><div class="fxWing l"></div><div class="fxWing r"></div>
+  el.innerHTML = `<div class="fxBurst"></div><div class="fxWing l"></div><div class="fxWing r"></div>
        ${p ? `<img class="fxPt" src="${esc(p.url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
        <div class="fxText"><b>${title}</b><span>${esc(sub)}</span></div>`;
   // a popover sits in the top layer, so it shows even over an open modal
   el.setAttribute('popover', 'manual');
   document.body.appendChild(el);
   try { el.showPopover(); } catch (e) { el.removeAttribute('popover'); }
-  setTimeout(() => el.remove(), mode === 'simple' ? 2400 : 2300);
+  setTimeout(() => el.remove(), 2400);
 }
 // tab strip: arrow buttons instead of a scrollbar
 function updateTabArrows() {
@@ -2109,12 +2120,13 @@ function paletteItems(c, room) {
   const out = [];
   if (!c) return room ? diceItems(room) : out;
   const d = c.data;
+  // 換装 first: it is the big moment, and it acts immediately
+  if (d.variations.length) [-1, ...d.variations.map((_, i) => i)].filter(i => i !== c.variation).forEach(i =>
+    out.push({ grp: '換装', label: `「${i === -1 ? '基本' : d.variations[i].name}」に換装`, text: '', form: i, name: i === -1 ? '基本' : d.variations[i].name }));
   d.skills.forEach((it, i) => out.push({ grp: '特技', label: it.name, text: cmdText('特技', it, it.tp != null ? `TP${it.tp} ` : ''), tp: it.tp, name: it.name, src: it, used: c.used[`skills:${i}`] }));
   (d.core?.functions || []).forEach((it, i) => out.push({ grp: '特殊機能', label: it.name, text: cmdText('特殊機能', it), name: it.name, src: it, used: c.used[`func:${i}`] }));
   if (d.wingDrive) out.push({ grp: 'ウイングドライブ', label: d.wingDrive.name, text: cmdText('ウイングドライブ', d.wingDrive), name: d.wingDrive.name, src: d.wingDrive, used: c.used['wingDrive:0'] });
   d.weapons.common.forEach((it, i) => it.name && out.push({ grp: '武装', label: it.name, tag: '共通', text: cmdText('武装', it, '共通 '), name: it.name, src: it, used: c.used[`common:${i}`] }));
-  if (d.variations.length) [-1, ...d.variations.map((_, i) => i)].filter(i => i !== c.variation).forEach(i =>
-    out.push({ grp: '換装', label: `「${i === -1 ? '基本' : d.variations[i].name}」に換装`, text: '', form: i, name: i === -1 ? '基本' : d.variations[i].name }));
   const view = ui.cmdForm && ui.cmdForm.cid === c.id ? ui.cmdForm.idx : c.variation;
   const slots = view === -1 ? d.weapons.slots : (d.variations[view] || {}).slots || currentSlots(c);
   slots.forEach((it, i) => it.name && out.push({ grp: '武装', label: it.name, suit: it.suit, text: cmdText('武装', it, SUIT[it.suit] + ' '), name: it.name, src: it, used: c.used[`slot${view}:${i}`], offForm: view !== c.variation }));
@@ -2375,6 +2387,9 @@ function charModalHtml(room, ru, cid) {
       return `<div class="seatRow"><span class="muted">持ち主：<b>${esc(ownerName)}</b></span>
         ${mineToGive ? `<select id="giveTo"><option value="">譲渡先を選ぶ</option>${targets.map(([pid, p]) => `<option value="${pid}">${esc(p.name)}</option>`).join('')}${!gmOwned(c) ? '<option value="gm">GM</option>' : ''}</select><button class="btn small" data-givechar="${c.id}">譲渡する</button>` : ''}</div>`;
     })() : ''}
+    ${can && c.data.variations.length ? `<div class="formBar"><span class="muted">換装</span>${[-1, ...c.data.variations.map((_, i) => i)].map(i =>
+      i === c.variation ? `<span class="formNow">${esc(i === -1 ? '基本' : c.data.variations[i].name)}（装備中）</span>`
+        : `<button class="btn small" data-formchange="${c.id}" data-idx="${i}">${esc(i === -1 ? '基本' : c.data.variations[i].name)}に換装</button>`).join('')}</div>` : ''}
     <div class="vals">${keys.map(k => {
       const st = c.data.stats[k] || {};
       if (st.max == null) return `<span class="val">${esc(k)} ${can && v === 'gm' ? `<input type="number" value="${c.cur[k]}" data-vset data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(k)}">` : `<b>${c.cur[k]}</b>`}</span>`;
@@ -2654,9 +2669,13 @@ function menuDialog(room) {
   openDlg(`<h1>メニュー</h1>
     ${ONLINE ? `<div class="field">プレイヤー名<div class="row"><input type="text" id="mnName" maxlength="20" value="${esc(me().name)}" style="flex:1"><button class="btn small" id="mnSave">変更</button></div></div>` : ''}
     <div class="field">換装・ウイングドライブの演出<select id="mnFx">
-      <option value="anim" ${!U.fx || U.fx === true || U.fx === 'anim' ? 'selected' : ''}>アニメーション（動きを減らす設定の端末では簡易表示）</option>
-      <option value="simple" ${U.fx === 'simple' ? 'selected' : ''}>簡易表示（動かないカード）</option>
+      <option value="auto" ${!U.fx || U.fx === true || U.fx === 'auto' ? 'selected' : ''}>自動（端末が「動きを減らす」設定なら静止画）</option>
+      <option value="anim" ${U.fx === 'anim' ? 'selected' : ''}>いつもアニメーション</option>
+      <option value="simple" ${U.fx === 'simple' ? 'selected' : ''}>静止画（ふわっと出て消える）</option>
       <option value="off" ${U.fx === false || U.fx === 'off' ? 'selected' : ''}>表示しない</option></select></div>
+    <div class="field">演出を出すのは<select id="mnFxWho">
+      <option value="all" ${U.fxWho !== 'mine' ? 'selected' : ''}>全員の換装・ウイングドライブ</option>
+      <option value="mine" ${U.fxWho === 'mine' ? 'selected' : ''}>自分のだけ</option></select></div>
     <div class="row"><button class="btn small" data-theme-toggle></button><span style="flex:1"></span><button class="btn" data-close>閉じる</button></div>`, () => {
     applyTheme();
     if ($('mnSave')) $('mnSave').onclick = () => {
@@ -2665,6 +2684,7 @@ function menuDialog(room) {
       if (act({ type: 'setPlayer', name: n }) !== FAIL) toast('プレイヤー名を変えました');
     };
     $('mnFx').onchange = e => { U.fx = e.target.value; saveU(); };
+    $('mnFxWho').onchange = e => { U.fxWho = e.target.value; saveU(); };
     document.querySelector('#dlgBody [data-theme-toggle]').onclick = () => { U.theme = (U.theme || 'dark') === 'dark' ? 'light' : 'dark'; saveU(); applyTheme(); };
   });
 }
