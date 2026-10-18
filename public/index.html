@@ -712,11 +712,15 @@ dialog.mapDlg{overflow:auto}
 .replyRow .btn{flex:none;padding:1px 8px}
 .medit + .medit{margin-left:2px}
 .msg .mname{display:flex;align-items:baseline;flex-wrap:wrap;column-gap:4px}
-.macts{margin-left:auto;display:inline-flex;gap:4px;align-self:center}
-.macts .medit{margin:0;padding:3px 10px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#B8B9BE}
+/* reply / edit float over the message's top-right corner, so they never add a line: shown on hover (PC) or after a tap (phones) */
+.msg{position:relative}
+.macts{position:absolute;top:4px;right:4px;z-index:2;display:none;gap:4px;padding:3px;border-radius:999px;background:#2B2C31;border:1px solid rgba(255,255,255,.14);box-shadow:0 4px 12px rgba(0,0,0,.35)}
+.msg:hover .macts,.msg:focus-within .macts,.msg.act .macts{display:inline-flex}
+.msg.act{background:rgba(255,255,255,.04)}
+.macts .medit{margin:0;padding:3px 10px;border-radius:999px;background:transparent;border:none;color:#D0D1D6;opacity:1}
 .macts .medit:hover{color:#fff;border-color:var(--pink)}
 /* touch screens: buttons always shown and big enough for a finger */
-@media (hover:none){ .macts .medit{padding:6px 12px;font-size:.76rem;min-height:30px} }
+@media (hover:none){ .msg:hover .macts{display:none} .msg.act .macts{display:inline-flex} .macts .medit{padding:6px 12px;font-size:.78rem;min-height:32px} }
 .edited{color:#8E8F94;font-size:.72rem;margin-left:6px}
 .olderNote{color:#8E8F94;font-size:.76rem;text-align:center;padding:6px 0 10px;border-bottom:1px solid rgba(255,255,255,.12)}
 
@@ -2763,8 +2767,8 @@ function logHtml(room, l) {
     const mine = ONLINE ? l.pid === myPid() : l.by === ui.viewerNow;
     const toMe = l.reply && !mine && (ONLINE ? l.reply.pid === myPid() : l.reply.by === ui.viewerNow);
     const quote = l.reply ? `<button class="mquote" data-jump="${l.reply.id}" title="返信先の発言へ"><span class="qarrow">↩</span><b>${esc(l.reply.name)}</b><span class="qtext">${esc(l.reply.text)}</span></button>` : '';
-    return `<div class="msg ${toMe ? 'toMe' : ''}" data-lid="${l.id}">${face}
-      <div class="mbody">${quote}<div class="mname" style="${nameCss(l.color || (c ? c.color : '#B48CFF'))}">${esc(l.name || (c && c.data.name) || '')}<span class="t"> - ${time}</span>${l.edited ? '<span class="edited">（編集済み）</span>' : ''}<span class="macts"><button class="medit" data-replymsg="${l.id}">返信</button>${!l.dice && mine ? `<button class="medit" data-editmsg="${l.id}">編集</button>` : ''}</span></div>
+    return `<div class="msg ${toMe ? 'toMe' : ''}" data-lid="${l.id}"><span class="macts"><button class="medit" data-replymsg="${l.id}">↩ 返信</button>${!l.dice && mine ? `<button class="medit" data-editmsg="${l.id}">✎ 編集</button>` : ''}</span>${face}
+      <div class="mbody">${quote}<div class="mname" style="${nameCss(l.color || (c ? c.color : '#B48CFF'))}">${esc(l.name || (c && c.data.name) || '')}<span class="t"> - ${time}</span>${l.edited ? '<span class="edited">（編集済み）</span>' : ''}</div>
       ${diceHtml(l)}</div></div>`;
   }
   const who = esc(l.byName || seatName(room, l.by));
@@ -3907,7 +3911,14 @@ document.addEventListener('click', e => {
     const vl = viewLog(room, l, ru.viewer, myPid()) || l;
     const body = vl.dice ? (vl.dice.hidden || vl.dice.secret ? 'シークレットダイス' : `${vl.dice.comment ? vl.dice.comment + ' ' : ''}${vl.dice.result}`) : vl.text;
     ui.reply = { id: l.id, tab: ru.tab, name: l.name || '', text: String(body || '').replace(/\s+/g, ' ').slice(0, 60) };
+    document.querySelectorAll('#chatLog .msg.act').forEach(m => m.classList.remove('act'));
     renderRoom(); $('sayText').focus(); return;
+  }
+  if ((el = t.closest('#chatLog .msg')) && !t.closest('button,a,input,textarea,select')) {
+    const was = el.classList.contains('act');
+    document.querySelectorAll('#chatLog .msg.act').forEach(m => m.classList.remove('act'));
+    if (!was) el.classList.add('act');
+    return;
   }
   if ((el = q('[data-jump]'))) {
     const m = document.querySelector(`#chatLog [data-lid="${CSS.escape(el.dataset.jump)}"]`);
