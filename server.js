@@ -11,7 +11,6 @@ const core = require('./public/core.js');
 const { createStore } = require('./store.js');
 
 const PORT = process.env.PORT || 10000;
-const CREATE_PASSWORD = process.env.CREATE_PASSWORD || '';   // optional: required to create rooms
 const store = createStore();
 const sha = s => nodeCrypto.createHash('sha256').update(String(s)).digest('hex');
 const randomId = (p, n = 14) => p + nodeCrypto.randomBytes(16).toString('base64url').replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, n);
@@ -28,7 +27,7 @@ async function getRoom(id) {
     if (!got) return null;
     const room = core.migrateRoom(got.room);
     room.logs = room.logs || [];
-    const entry = { room, gmKeyHash: got.gmKeyHash, clients: new Set(), seq: room.logs.reduce((m, l) => Math.max(m, l.n || 0), 0), saveTimer: null, idleSince: Date.now() };
+    const entry = { room, gmKeyHash: got.gmKeyHash, seatKeyHashes: got.seatKeyHashes || {}, clients: new Set(), seq: room.logs.reduce((m, l) => Math.max(m, l.n || 0), 0), saveTimer: null, idleSince: Date.now() };
     rooms.set(id, entry);
     return entry;
   })();
@@ -42,7 +41,7 @@ function saveSoon(id, entry) {
 async function saveNow(id, entry) {
   clearTimeout(entry.saveTimer); entry.saveTimer = null;
   const { logs, ...rest } = entry.room;
-  try { await store.saveRoom(id, JSON.stringify(rest), { name: entry.room.name, gmKeyHash: entry.gmKeyHash }); }
+  try { await store.saveRoom(id, JSON.stringify(rest), { name: entry.room.name, gmKeyHash: entry.gmKeyHash, seatKeyHashes: entry.seatKeyHashes || {} }); }
   catch (e) { console.error('save failed', id, e.message); }
 }
 // drop rooms nobody has used for a while (they are reloaded from the store on demand)
@@ -66,11 +65,10 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/healthz') { res.writeHead(200); res.end('ok'); return; }
     if (req.method === 'POST' && url.pathname === '/api/rooms') {
       const body = await readJson(req);
-      if (CREATE_PASSWORD && body.password !== CREATE_PASSWORD) { res.writeHead(403, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: '部屋を作る合言葉が違います' })); return; }
       const room = core.newRoom(String(body.name || '').slice(0, 60) || '新しい部屋');
       room.id = randomId('r');
       const gmKey = randomId('k', 24);
-      const entry = { room, gmKeyHash: sha(gmKey), clients: new Set(), seq: 0, saveTimer: null, idleSince: Date.now() };
+      const entry = { room, gmKeyHash: sha(gmKey), seatKeyHashes: {}, clients: new Set(), seq: 0, saveTimer: null, idleSince: Date.now() };
       rooms.set(room.id, entry);
       await saveNow(room.id, entry);
       res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ id: room.id, gmKey, name: room.name })); return;
@@ -82,14 +80,32 @@ const server = http.createServer(async (req, res) => {
 // ---------- websocket ----------
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 512 * 1024 });
 const send = (ws, m) => { if (ws.readyState === 1) ws.send(JSON.stringify(m)); };
-function seatFor(entry, seat, gmKey) {
-  if (seat === 'gm') return gmKey && sha(gmKey) === entry.gmKeyHash ? 'gm' : 'obs';
-  if (seat && core.isPcSeat(entry.room, seat)) return seat;
-  return 'obs';
+// Seats: GM needs the GM key. A PC seat needs that character's seat key (issued to whoever imported it).
+// A PC created before seat keys existed is claimed by the first person who sits in it.
+function issueSeatKey(entry, cid, conn) {
+  const key = randomId('s', 24);
+  entry.seatKeyHashes[cid] = sha(key);
+  saveSoon(entry.room.id, entry);
+  send(conn.ws, { t: 'seatKey', room: entry.room.id, cid, key });
+  return key;
+}
+function seatFor(entry, seat, gmKey, seatKey, conn) {
+  if (seat === 'gm') return gmKey && sha(gmKey) === entry.gmKeyHash ? { seat: 'gm' } : { seat: 'obs', why: 'GMキーが違うため、観戦で入りました' };
+  if (seat && core.isPcSeat(entry.room, seat)) {
+    const h = entry.seatKeyHashes[seat];
+    if (!h) { issueSeatKey(entry, seat, conn); return { seat }; }
+    if (seatKey && sha(seatKey) === h) return { seat };
+    return { seat: 'obs', why: 'このキャラの席の鍵がないため、観戦で入りました。持ち主かGMに「席のリンク」をもらってください' };
+  }
+  return { seat: 'obs' };
+}
+function sendState(conn) {
+  const { room } = conn.entry;
+  send(conn.ws, { t: 'state', seat: conn.seat, room: core.viewRoom(room, conn.seat), locked: Object.keys(conn.entry.seatKeyHashes) });
 }
 function sendJoined(conn) {
   const { room } = conn.entry;
-  send(conn.ws, { t: 'joined', seat: conn.seat, room: core.viewRoom(room, conn.seat),
+  send(conn.ws, { t: 'joined', seat: conn.seat, room: core.viewRoom(room, conn.seat), locked: Object.keys(conn.entry.seatKeyHashes),
     logs: room.logs.map(l => core.viewLog(room, l, conn.seat)).filter(Boolean) });
 }
 function broadcast(entry, diff) {
@@ -97,7 +113,7 @@ function broadcast(entry, diff) {
   for (const conn of entry.clients) {
     // a PC seat whose character left falls back to spectating
     if (conn.seat !== 'gm' && conn.seat !== 'obs' && !core.isPcSeat(room, conn.seat)) conn.seat = 'obs';
-    send(conn.ws, { t: 'state', seat: conn.seat, room: core.viewRoom(room, conn.seat) });
+    sendState(conn);
     if (diff.reset) { send(conn.ws, { t: 'logs', room: room.id, reset: true, add: room.logs.map(l => core.viewLog(room, l, conn.seat)).filter(Boolean) }); continue; }
     const v = l => core.viewLog(room, l, conn.seat);
     const add = diff.added.map(v).filter(Boolean), update = diff.updated.map(v).filter(Boolean);
@@ -111,7 +127,8 @@ async function handleAct(conn, a) {
   const room = entry.room;
   const tail = new Map(room.logs.slice(-6).map(l => [l.id, JSON.stringify(l)]));
   const allIds = a.type === 'removeTab' ? new Set(room.logs.map(l => l.id)) : null;
-  try { core.apply(room, a, conn.seat); }
+  let ret;
+  try { ret = core.apply(room, a, conn.seat); }
   catch (e) {
     if (e instanceof core.ActionError || (e && e.message)) return send(conn.ws, { t: 'error', message: e.message || '操作できませんでした' });
     throw e;
@@ -125,6 +142,11 @@ async function handleAct(conn, a) {
   }
   let deleted = removed;
   if (allIds) { const still = new Set(room.logs.map(l => l.id)); deleted = [...allIds].filter(id => !still.has(id)); }
+  if (a.type === 'addChar' && a.side === 'pc' && typeof ret === 'string') {
+    issueSeatKey(entry, ret, conn);                       // whoever imported the PC holds its seat key
+    if (conn.seat === 'obs') conn.seat = ret;              // a spectator who imports a PC sits in it
+  }
+  if (a.type === 'removeChar') delete entry.seatKeyHashes[a.cid];
   broadcast(entry, { added, updated, removed, reset: !!allIds });
   saveSoon(room.id, entry);
   const put = [...added, ...updated];
@@ -142,10 +164,19 @@ wss.on('connection', ws => {
         if (!entry) return send(ws, { t: 'error', code: 'not_found', message: 'この部屋は見つかりません' });
         if (conn.entry && conn.entry !== entry) { conn.entry.clients.delete(conn); if (!conn.entry.clients.size) conn.entry.idleSince = Date.now(); }
         conn.entry = entry; entry.clients.add(conn);
-        conn.seat = seatFor(entry, m.seat, m.gmKey);
-        if (m.seat === 'gm' && conn.seat !== 'gm') send(ws, { t: 'error', message: 'GMキーが違うため、観戦で入りました' });
+        const r = seatFor(entry, m.seat, m.gmKey, m.seatKey, conn);
+        conn.seat = r.seat;
+        if (r.why) send(ws, { t: 'error', message: r.why });
         sendJoined(conn);
       } else if (m.t === 'act') await handleAct(conn, m.a);
+      else if (m.t === 'reissueSeat') {
+        // GM: make a new seat key for a PC (lost device / hand-over). Old key holders drop to spectating.
+        const entry = conn.entry;
+        if (!entry || conn.seat !== 'gm' || !core.isPcSeat(entry.room, m.cid)) return send(ws, { t: 'error', message: '席の鍵を作り直せるのはGMだけです' });
+        issueSeatKey(entry, m.cid, conn);
+        for (const c of entry.clients) if (c !== conn && c.seat === m.cid) { c.seat = 'obs'; send(c.ws, { t: 'error', message: 'GMが席の鍵を作り直したため、観戦に戻りました' }); sendJoined(c); }
+        send(ws, { t: 'reissued', cid: m.cid });
+      }
     } catch (e) { console.error(e); send(ws, { t: 'error', message: 'サーバーでエラーが起きました' }); }
   });
   ws.on('close', () => { if (conn.entry) { conn.entry.clients.delete(conn); if (!conn.entry.clients.size) conn.entry.idleSince = Date.now(); } });

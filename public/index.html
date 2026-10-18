@@ -621,6 +621,62 @@ dialog{border-radius:6px}
 .wused .wto{font-weight:700;color:#FFFFFF;margin-left:6px}
 .wused .wmemo{color:#C9C9C9;margin-left:6px}
 .cmdhead .suit{font-size:1em}
+
+/* names in any colour stay readable: thin dark outline */
+.oname,.mname,.uname,.mhead h1,.wprev{text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000,0 0 3px rgba(0,0,0,.6)}
+.mname .t{text-shadow:none}
+
+/* bigger portraits: turn list, tokens, chat, character modal */
+.ohead .pt{width:44px !important;height:44px !important;border-radius:4px !important}
+.ohead{gap:8px}
+.ohead .oname{font-size:.9rem}
+.oitem .ometa{margin-left:52px;margin-top:-18px;min-height:16px}
+@media (min-width:960px){ #mapP .mapwrap{grid-template-columns:196px minmax(0,1fr)} }
+.tok{width:min(92%,84px) !important;border-width:3px}
+.cell.multi .tok{width:48% !important}
+.chat .msg .pt{width:64px !important;height:64px !important}
+.bigpt{float:right;width:min(240px,38%);aspect-ratio:3/4;object-fit:cover;object-position:top;margin:0 0 10px 14px;border:1px solid var(--line);background:var(--mist)}
+@media (max-width:720px){
+  .ohead .pt{width:30px !important;height:30px !important}
+  .oitem .ometa{margin:2px 0 0}
+  .bigpt{float:none;display:block;width:100%;max-width:280px;margin:0 auto 10px}
+}
+
+.otext{display:flex;flex-direction:column;min-width:0;flex:1;gap:1px}
+.otext .oname{flex:none}
+.otext .ometa{margin:0 !important;min-height:0}
+.ohead{align-items:center}
+/* light name colours: keep initials and token edges visible */
+.pt.none,.tok{text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000}
+.tok{box-shadow:0 0 0 1px rgba(0,0,0,.55),0 3px 8px rgba(10,13,30,.45)}
+.pt.none{box-shadow:inset 0 0 0 1px rgba(0,0,0,.35)}
+
+.charGrid.hasPt{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:18px;align-items:start}
+.charGrid .charMain{min-width:0}
+.charSide{order:2;position:sticky;top:0}
+.charSide .bigpt{float:none;width:100%;margin:0;aspect-ratio:3/4}
+@media (max-width:720px){ .charGrid.hasPt{grid-template-columns:1fr} .charSide{order:0;position:static} .charSide .bigpt{max-width:260px;margin:0 auto;display:block} }
+
+/* map zoom: the board and its tokens scale together (--z) */
+@media (min-width:960px){
+  .boardBox{overflow:auto;display:flex;position:relative}
+  .boardBox .board{width:calc(min(100cqw, 100cqh) * var(--z,1)) !important;flex:none;margin:auto !important}
+}
+.tok{width:min(92%, calc(84px * var(--z,1))) !important;font-size:calc(clamp(.6rem,2.2vw,.9rem) * var(--z,1))}
+.cell .dist{font-size:calc(.68rem * var(--z,1))}
+.coord{font-size:calc(.72rem * var(--z,1))}
+.zoomCtl{position:sticky;top:6px;left:6px;align-self:flex-start;display:inline-flex;align-items:center;gap:2px;background:var(--cloud);border:1px solid var(--line);border-radius:999px;padding:2px;z-index:4;margin-right:-160px;flex:none;box-shadow:var(--shadow)}
+.zoomCtl button{border:none;background:var(--mist);color:var(--ink);border-radius:999px;min-width:28px;height:26px;font-weight:800;cursor:pointer;padding:0 8px}
+.zoomCtl button:hover{color:var(--pink)}
+.zoomCtl span{font-family:var(--num);font-size:.76rem;min-width:3.2em;text-align:center}
+.zoomCtl .fit{font-size:.74rem}
+.mzoom{display:flex;justify-content:flex-end;margin:-2px 0 6px}
+.mzoom .zoomCtl{position:static;margin:0;box-shadow:none}
+.board.big{width:calc(min(100%, 64dvh) * var(--z,1)) !important;max-width:none !important}
+dialog.mapDlg{overflow:auto}
+@media (min-width:960px){ .boardBox{justify-content:flex-start !important;align-items:flex-start !important} }
+
+.seatRow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:-2px 0 10px;font-size:.82rem}
 </style>
 </head>
 <body>
@@ -1193,7 +1249,7 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const route = () => {
   const h = location.hash.replace(/^#\/?/, '').split('/');
-  return h[0] === 'r' && h[1] ? { view: 'room', id: h[1], gmKey: h[2] === 'gm' ? h[3] : null } : { view: 'list' };
+  return h[0] === 'r' && h[1] ? { view: 'room', id: h[1], gmKey: h[2] === 'gm' ? h[3] : null, seatCid: h[2] === 'seat' ? h[3] : null, seatKey: h[2] === 'seat' ? h[4] : null } : { view: 'list' };
 };
 const curRoom = () => { const r = route(); return r.view === 'room' ? DB.rooms[r.id] : null; };
 
@@ -1244,14 +1300,13 @@ function renderListOnline() {
       <h2>GMとして部屋を作る</h2>
       <div class="row">
         <input type="text" id="newRoomName" placeholder="部屋の名前（例：第3話 空に焦がれる少女）" style="flex:1;min-width:12em">
-        <input type="text" id="newRoomPass" placeholder="作成用の合言葉（設定している場合）" style="width:14em">
         <button class="btn primary" id="newRoom">部屋を作る</button>
       </div>
       <p class="muted">作った人のブラウザにGMキーが保存されます。別の端末でGMをするときは、部屋の設定にある「GM用リンク」を使ってください。</p>
     </div>`;
   if (typeof applyTheme === 'function') applyTheme();
   $('newRoom').onclick = async () => {
-    try { const j = await createOnlineRoom($('newRoomName').value.trim(), $('newRoomPass').value); NET.wantSeat = 'gm'; location.hash = `#/r/${j.id}`; }
+    try { const j = await createOnlineRoom($('newRoomName').value.trim()); saveLastSeat(j.id, 'gm'); NET.wantSeat = 'gm'; location.hash = `#/r/${j.id}`; }
     catch (e) { toast(e.message); }
   };
 }
@@ -1303,12 +1358,19 @@ function renderRoom() {
   const room = curRoom();
   if (!room && ONLINE) {
     const r = route();
-    if (r.gmKey) { saveGmKey(r.id, r.gmKey); location.replace(`#/r/${r.id}`); return; }
-    if (NET.roomId !== r.id) netJoin(r.id, gmKeys()[r.id] ? 'gm' : (NET.wantSeat || 'obs'));
+    if (r.gmKey) { saveGmKey(r.id, r.gmKey); saveLastSeat(r.id, 'gm'); location.replace(`#/r/${r.id}`); return; }
+    if (r.seatCid && r.seatKey) { saveSeatKey(r.id, r.seatCid, r.seatKey); saveLastSeat(r.id, r.seatCid); location.replace(`#/r/${r.id}`); return; }
+    // come back to the seat this browser used last time
+    if (NET.roomId !== r.id) netJoin(r.id, lastSeat(r.id) || (gmKeys()[r.id] ? 'gm' : 'obs'));
     $('app').innerHTML = `<p class="loading" style="padding:40vh 0;text-align:center">部屋に入っています…<br><span class="muted">サーバーが眠っていた場合は、起きるまで30秒ほどかかります</span></p>`;
     return;
   }
   if (!room) { location.hash = '#/'; return; }
+  if (ONLINE) {
+    const r = route();
+    if (r.gmKey) { saveGmKey(r.id, r.gmKey); location.replace(`#/r/${r.id}`); netJoin(r.id, 'gm'); return; }
+    if (r.seatCid && r.seatKey) { saveSeatKey(r.id, r.seatCid, r.seatKey); location.replace(`#/r/${r.id}`); netJoin(r.id, r.seatCid); return; }
+  }
   const ru = roomUI(room.id);
   const seats = [...(!ONLINE || gmKeys()[room.id] ? [['gm', 'GM']] : []), ...Object.values(room.chars).filter(c => c.side === 'pc').map(c => [c.id, c.data.name]), ['obs', '観戦']];
   if (!seats.some(s => s[0] === ru.viewer)) ru.viewer = ONLINE ? 'obs' : 'gm';
@@ -1357,7 +1419,8 @@ function renderRoom() {
   ru.pane = ru.pane || 'board';
   $('roomShell').dataset.pane = ru.pane;
   document.querySelectorAll('.mnav [data-pane]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.pane === ru.pane)));
-  $('viewer').innerHTML = seats.map(([v, n]) => `<option value="${v}" ${v === ru.viewer ? 'selected' : ''}>${esc(n)}</option>`).join('');
+  const lockedOut = v => ONLINE && v !== 'gm' && v !== 'obs' && NET.locked && NET.locked.has(v) && !seatKeys(room.id)[v] && v !== ru.viewer;
+  $('viewer').innerHTML = seats.map(([v, n]) => `<option value="${v}" ${v === ru.viewer ? 'selected' : ''} ${lockedOut(v) ? 'disabled' : ''}>${esc(n)}${lockedOut(v) ? '（鍵なし）' : ''}</option>`).join('');
   $('setBtn').hidden = ru.viewer !== 'gm';
   $('undoBtn').disabled = !ui.history.length;
   $('undoBtn').hidden = ONLINE;
@@ -1417,6 +1480,9 @@ function boardCells(room) {
   return cells;
 }
 const isPhone = () => matchMedia('(max-width:720px)').matches;
+const ZOOMS = [0.6, 0.75, 1, 1.25, 1.5, 2, 2.5];
+const zoomOf = () => ZOOMS.includes(U.zoom) ? U.zoom : 1;
+const zoomCtl = () => `<div class="zoomCtl" role="group" aria-label="マップの拡大縮小"><button data-zoom="-1" aria-label="縮小">−</button><span>${Math.round(zoomOf() * 100)}%</span><button data-zoom="1" aria-label="拡大">＋</button><button data-zoom="0" class="fit">全体</button></div>`;
 function statLine(room, ru, c, k) {
   if (!(k in c.cur)) return '';
   const st = c.data.stats[k] || {}, can = canControlChar(room, ru.viewer, c.id);
@@ -1435,9 +1501,10 @@ function renderMap(room, ru) {
   const v = ru.viewer, cur = room.turn.current;
   const item = c => `
     <div class="oitem ${c.id === cur ? 'now' : ''} ${ui.selTok === c.id ? 'sel' : ''} ${c.side}" data-charopen="${c.id}" role="button" tabindex="0" title="${esc(c.data.name)}の詳細を開く">
-      <div class="ohead">${ptImg(c, null, 'pt')}<span class="oname" style="color:${c.color}">${esc(c.data.name)}</span>
+      <div class="ohead">${ptImg(c, null, 'pt')}
+        <div class="otext"><span class="oname" style="color:${c.color}">${esc(c.data.name)}</span>
+          <span class="ometa">${'HP' in c.cur ? `<span class="phoneOnly">HP${c.cur.HP}${'TP' in c.cur ? ` TP${c.cur.TP}` : ''}<br></span>` : ''}${c.data.stats['SS値'] ? `SS${c.cur['SS値']}` : ''}${c.data.stats['移動値'] ? `　移${c.cur['移動値']}` : ''}${c.x == null ? '　盤外' : `　${coordName(c.x, c.y)}`}</span></div>
         ${v === 'gm' && c.side !== 'npc' ? `<button class="oset" data-setturn="${c.id}" aria-label="${esc(c.data.name)}を手番にする">▶</button>` : ''}</div>
-      <div class="ometa">${'HP' in c.cur ? `<span class="phoneOnly">HP${c.cur.HP}${'TP' in c.cur ? ` TP${c.cur.TP}` : ''}<br></span>` : ''}${c.data.stats['SS値'] ? `SS${c.cur['SS値']}` : ''}${c.data.stats['移動値'] ? `　移${c.cur['移動値']}` : ''}${c.x == null ? '　盤外' : `　${coordName(c.x, c.y)}`}</div>
       ${statLine(room, ru, c, 'HP')}${statLine(room, ru, c, 'TP')}
     </div>`;
   const canNext = cur && (v === 'gm' || v === cur);
@@ -1454,7 +1521,7 @@ function renderMap(room, ru) {
       <div class="order" aria-label="手番順（SS値の大きい順）">${order.map(item).join('') || '<p class="muted">「キャラを取り込む」から読み込むと、SS値の順に並びます</p>'}
         ${npcs.length ? `<div class="grp">NPC</div>${npcs.map(item).join('')}` : ''}</div>
       <div class="boardCol">
-        <div class="boardBox"><div class="board" id="board">${cells}</div>
+        <div class="boardBox">${isPhone() ? '' : zoomCtl()}<div class="board" id="board" style="--z:${isPhone() ? 1 : zoomOf()}">${cells}</div>
           ${!isPhone() && sel ? `<div class="selbar"><span>${esc(sel.data.name)}を移動中${Number.isFinite(sel.cur['移動値']) ? `<span class="mvtag">移動値${sel.cur['移動値']}</span>` : ''}</span><button class="btn small" data-offboard>盤外へ</button><button class="btn small" data-unsel>やめる</button></div>` : ''}
         </div>
       </div>
@@ -1720,6 +1787,11 @@ const NET = { ws: null, roomId: null, wantSeat: null, backoff: 500, status: 'idl
 const loadJson = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
 const gmKeys = () => loadJson('pw-gmkeys', {});
 function saveGmKey(id, key) { const o = gmKeys(); o[id] = key; try { localStorage.setItem('pw-gmkeys', JSON.stringify(o)); } catch (e) {} }
+// seat keys and the last seat, per room, in this browser
+const seatKeys = id => (loadJson('pw-seatkeys', {})[id] || {});
+function saveSeatKey(id, cid, key) { const o = loadJson('pw-seatkeys', {}); (o[id] = o[id] || {})[cid] = key; try { localStorage.setItem('pw-seatkeys', JSON.stringify(o)); } catch (e) {} }
+const lastSeat = id => loadJson('pw-lastseat', {})[id] || null;
+function saveLastSeat(id, seat) { const o = loadJson('pw-lastseat', {}); o[id] = seat; try { localStorage.setItem('pw-lastseat', JSON.stringify(o)); } catch (e) {} }
 const recentRooms = () => loadJson('pw-recent', []);
 function rememberRoom(id, name) {
   const list = recentRooms().filter(r => r.id !== id);
@@ -1749,7 +1821,7 @@ function netSend(m) {
 function netJoin(id, seat) {
   NET.roomId = id; NET.wantSeat = seat || NET.wantSeat || 'obs';
   if (!NET.ws || NET.ws.readyState !== 1) { netConnect(); return; }
-  NET.ws.send(JSON.stringify({ t: 'join', room: id, seat: NET.wantSeat, gmKey: gmKeys()[id] || null }));
+  NET.ws.send(JSON.stringify({ t: 'join', room: id, seat: NET.wantSeat, gmKey: gmKeys()[id] || null, seatKey: seatKeys(id)[NET.wantSeat] || null }));
 }
 function queueRender() {
   if (NET.renderQueued) return;
@@ -1759,6 +1831,8 @@ function queueRender() {
 function onNet(m) {
   if (m.t === 'joined') {
     DB.rooms = { [m.room.id]: { ...m.room, logs: m.logs } };
+    NET.locked = new Set(m.locked || []);
+    saveLastSeat(m.room.id, m.seat);
     const ru = roomUI(m.room.id);
     if (ru.viewer !== m.seat) ru.as = null;     // speak as the new seat's character by default
     ru.viewer = m.seat; NET.wantSeat = m.seat;
@@ -1769,6 +1843,8 @@ function onNet(m) {
   if (m.t === 'state') {
     const old = DB.rooms[m.room.id]; if (!old) return;
     DB.rooms[m.room.id] = { ...m.room, logs: old.logs };
+    NET.locked = new Set(m.locked || []);
+    if (m.seat) saveLastSeat(m.room.id, m.seat);
     const ru = roomUI(m.room.id);
     if (ru.viewer !== m.seat) { ru.viewer = m.seat; ru.as = null; NET.wantSeat = m.seat; }
     queueRender(); return;
@@ -1783,13 +1859,15 @@ function onNet(m) {
     }
     queueRender(); return;
   }
+  if (m.t === 'seatKey') { saveSeatKey(m.room, m.cid, m.key); if (NET.copySeatLink === m.cid) { NET.copySeatLink = null; copySeatLink(m.room, m.cid); } queueRender(); return; }
+  if (m.t === 'reissued') { toast('席の鍵を作り直しました。新しい席のリンクをコピーしたので、そのPLに送ってください'); return; }
   if (m.t === 'error') {
     toast(m.message || 'エラーが起きました');
     if (m.code === 'not_found') { forgetRoom(NET.roomId); NET.roomId = null; location.hash = '#/'; }
   }
 }
-async function createOnlineRoom(name, password) {
-  const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, password }) });
+async function createOnlineRoom(name) {
+  const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }) });
   const j = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(j.error || '部屋を作れませんでした');
   saveGmKey(j.id, j.gmKey); rememberRoom(j.id, j.name);
@@ -1797,6 +1875,24 @@ async function createOnlineRoom(name, password) {
 }
 const inviteLink = id => `${location.origin}${location.pathname}#/r/${id}`;
 const gmLink = id => `${location.origin}${location.pathname}#/r/${id}/gm/${gmKeys()[id] || ''}`;
+
+// back/forward cache: Chrome freezes the page and drops the socket. Close it cleanly on the way out,
+// and reconnect (re-joining the same room and seat) when the page comes back.
+window.addEventListener('pagehide', () => {
+  if (!ONLINE || !NET.ws) return;
+  NET.ws.onclose = null; try { NET.ws.close(); } catch (e) {} NET.ws = null; netStatus('closed');
+});
+window.addEventListener('pageshow', e => { if (ONLINE && e.persisted) { NET.backoff = 500; netConnect(); } });
+document.addEventListener('visibilitychange', () => {
+  if (ONLINE && document.visibilityState === 'visible' && (!NET.ws || NET.ws.readyState > 1)) { NET.backoff = 500; netConnect(); }
+});
+
+const seatLink = (id, cid) => `${location.origin}${location.pathname}#/r/${id}/seat/${cid}/${seatKeys(id)[cid] || ''}`;
+async function copySeatLink(id, cid) {
+  const link = seatLink(id, cid);
+  try { await navigator.clipboard.writeText(link); toast('席のリンクをコピーしました。別の端末で開くと、このキャラの席に座れます'); }
+  catch (e) { prompt('席のリンク', link); }
+}
 // =====================================================================
 // events and dialogs
 // =====================================================================
@@ -1864,7 +1960,8 @@ function mapModalHtml(room, ru) {
   return `<div class="mhead"><div><h1>マップ</h1><span class="muted">第${room.turn.round}ラウンド${cur && room.chars[cur] ? `・${esc(room.chars[cur].data.name)}の手番` : ''}</span></div>
       <span style="flex:1"></span><button class="btn" data-close>閉じる</button></div>
     <div class="mchips">${order.map(c => `<button class="mchip ${c.id === cur ? 'now' : ''}" data-tok="${c.id}" aria-pressed="${ui.selTok === c.id}">${ptImg(c, null, 'pt')}${esc(c.data.name)}</button>`).join('')}</div>
-    <div class="board big">${boardCells(room)}</div>
+    <div class="mzoom">${zoomCtl()}</div>
+    <div class="board big" style="--z:${zoomOf()}">${boardCells(room)}</div>
     <div class="mapbar">${sel ? `<span class="muted">${esc(sel.data.name)}を選択中${Number.isFinite(sel.cur['移動値']) ? `（移動値${sel.cur['移動値']}の範囲を表示）` : ''}。移動先のマスをタップ</span>
       <button class="btn small" data-offboard>盤外へ</button><button class="btn small" data-unsel>選択をやめる</button>`
       : `<span class="muted">コマか上の名前をタップで選択、マスをタップで移動。数字は選んだコマからの距離（斜めは2マス）です。</span>`}</div>`;
@@ -1873,19 +1970,24 @@ function charModalHtml(room, ru, cid) {
   const c = room.chars[cid]; if (!c) return '<p>キャラクターがいません</p><button class="btn" data-close>閉じる</button>';
   const v = ru.viewer, can = canControlChar(room, v, c.id);
   const keys = STAT_KEYS.filter(k => k in c.cur).concat(Object.keys(c.cur).filter(k => !STAT_KEYS.includes(k)));
-  return `<div class="mhead">${ptImg(c)}
+  const big = c.data.portraits.find(p => p.label === c.portrait) || c.data.portraits[0];
+  return `<div class="charGrid ${big ? 'hasPt' : ''}">${big ? `<aside class="charSide"><img class="bigpt" src="${esc(big.url)}" alt="${esc(c.data.name)}の立ち絵" referrerpolicy="no-referrer"></aside>` : ''}<div class="charMain">
+    <div class="mhead">${ptImg(c)}
       <button class="swatch" ${can ? `data-colorpick="${c.id}"` : 'disabled'} style="background:${c.color}" title="名前の色"></button>
       <div><h1 style="color:${c.color}">${esc(c.data.name)}</h1><span class="muted">${esc([c.data.player, c.data.core?.name].filter(Boolean).join('　'))}</span></div>
       <span style="flex:1"></span>
       ${can ? `<button class="btn small" data-movechar="${c.id}">${c.x == null ? 'マップに置く' : '移動する'}</button><button class="btn small" data-portraits="${c.id}">立ち絵</button><button class="btn small" data-editchar="${c.id}">更新</button>` : ''}
       ${v === 'gm' || v === c.id ? `<button class="btn small danger" data-delchar="${c.id}">外す</button>` : ''}
       <button class="btn" data-close>閉じる</button></div>
+    ${ONLINE && c.side === 'pc' ? `<div class="seatRow">
+      ${seatKeys(room.id)[c.id] ? `<button class="btn small" data-seatlink="${c.id}">席のリンクをコピー</button><span class="muted">別の端末でこのキャラとして入るときに使います</span>` : ''}
+      ${v === 'gm' ? `<button class="btn small ghost" data-reissue="${c.id}">席の鍵を作り直す</button>` : ''}</div>` : ''}
     <div class="vals">${keys.map(k => {
       const st = c.data.stats[k] || {};
       if (st.max == null) return `<span class="val">${esc(k)} ${can && v === 'gm' ? `<input type="number" value="${c.cur[k]}" data-vset data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(k)}">` : `<b>${c.cur[k]}</b>`}</span>`;
       return `<span class="val">${esc(k)}${can ? `<button class="btn small" data-vstep="-1" data-cid="${c.id}" data-key="${esc(k)}">−</button><input type="number" value="${c.cur[k]}" data-vset data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(k)}"><button class="btn small" data-vstep="1" data-cid="${c.id}" data-key="${esc(k)}">＋</button>` : `<b>${c.cur[k]}</b>`}<span class="max">/ ${st.max}</span></span>`;
     }).join('')}</div>
-    ${charSheetHtml(c, can)}`;
+    ${charSheetHtml(c, can)}</div></div>`;
 }
 // 武装を使う: pick any number of weapons, the cards to discard and the targets in one go
 function weaponModalHtml(room, ru) {
@@ -2022,7 +2124,7 @@ function importDialog(room, ru, editCid) {
       const r = editing ? act({ type: 'updateCharData', cid: editCid, data }) : act({ type: 'addChar', side, data });
       if (r === FAIL) return;
       closeDlg();
-      if (ONLINE && side === 'pc' && roomUI(room.id).viewer === 'obs') netJoin(room.id, r);
+      // online: the server gives this browser the PC's seat key and seats a spectator in it
     };
   });
 }
@@ -2224,6 +2326,8 @@ function commonClick(t, room, ru) {
   // characters
   if (q('[data-import]')) { importDialog(room, ru); return true; }
   if ((el = q('[data-editchar]'))) { importDialog(room, ru, el.dataset.editchar); return true; }
+  if ((el = q('[data-seatlink]'))) { copySeatLink(room.id, el.dataset.seatlink); return true; }
+  if ((el = q('[data-reissue]'))) { const cid = el.dataset.reissue; ask(`${room.chars[cid].data.name}の席の鍵を作り直します。今の鍵で座っている人は観戦に戻ります。`, '鍵を作り直す', () => { NET.copySeatLink = cid; netSend({ t: 'reissueSeat', cid }); }); return true; }
   if ((el = q('[data-colorpick]'))) { const c = room.chars[el.dataset.colorpick]; colorDialog(c.color, col => act({ type: 'setColor', cid: c.id, color: col })); return true; }
   if ((el = q('[data-sheetopen]'))) { openModal('sheet', el.dataset.sheetopen); return true; }
   if ((el = q('[data-portraits]'))) { portraitDialog(room, el.dataset.portraits); return true; }
@@ -2234,10 +2338,21 @@ function commonClick(t, room, ru) {
   return false;
 }
 
+function stepZoom(d) {
+  const i = ZOOMS.indexOf(zoomOf());
+  U.zoom = d === 0 ? 1 : ZOOMS[Math.max(0, Math.min(ZOOMS.length - 1, i + d))];
+  saveU(); renderRoom();
+}
+// Ctrl (or ⌘) + wheel over the board zooms the map
+document.addEventListener('wheel', e => {
+  if (!(e.ctrlKey || e.metaKey) || !e.target.closest('.board')) return;
+  e.preventDefault(); stepZoom(e.deltaY < 0 ? 1 : -1);
+}, { passive: false });
 // map interactions, shared by the page and the big map modal
 function mapClick(t, room, ru) {
   const q = s => t.closest(s);
   let el;
+  if ((el = q('[data-zoom]'))) { stepZoom(+el.dataset.zoom); return true; }
   if ((el = q('[data-movechar]'))) { ui.selTok = el.dataset.movechar; closeDlg(); if (isPhone()) openModal('map'); else renderRoom(); return true; }
   if ((el = q('[data-setturn]'))) { act({ type: 'setTurn', cid: el.dataset.setturn }); return true; }
   if (q('[data-nextturn]')) { act({ type: 'nextTurn' }); return true; }
