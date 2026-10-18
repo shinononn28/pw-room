@@ -888,30 +888,87 @@ input[type=range]{width:100%;accent-color:var(--pink)}
 
 /* a reserved place for a button that is not usable right now (keeps the layout from shifting) */
 .btn.slot{visibility:hidden;pointer-events:none}
-/* phones: the board takes the full width and the turn order sits under it as two columns of cards,
-   each with its HP/TP bars; nothing in them changes size when the turn or a value changes */
+/* hand tray (all widths): other people's counts, deck / discard with its top card */
+.card .s2{display:none}
+.tray .count small{font-size:.7em;margin-left:1px;color:var(--ink-2)}
+.piles{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.piles b{font-family:var(--num);color:var(--gold);margin:0 4px 0 1px}
+.piles .chip{font-size:.78rem;line-height:1.5;padding:0 5px}
+.handOthers{display:flex;align-items:center;gap:6px;width:100%;margin:2px 0 8px;padding:4px 2px;border:none;background:none;color:var(--ink-2);font:inherit;font-size:.78rem;cursor:pointer;overflow-x:auto;white-space:nowrap;scrollbar-width:none;text-align:left}
+.handOthers::-webkit-scrollbar{display:none}
+.handOthers .ho{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;background:var(--mist);color:var(--ink);font-weight:700;flex:none}
+.handOthers .ho i{width:8px;height:8px;border-radius:50%;flex:none}
+.handOthers .ho i.gm{background:var(--gold)}
+.handOthers .ho b{font-family:var(--num);color:var(--gold)}
+.handOthers .ho .hn{max-width:6.5em;overflow:hidden;text-overflow:ellipsis}
+.handOthers .hoMore{margin-left:auto;padding-left:6px;flex:none}
+.handOthers:hover .hoMore{color:var(--pink)}
+.onum{font-family:var(--num);font-size:.62rem;font-weight:700;color:var(--ink-2);min-width:.9em;text-align:center;flex:none}
+.phoneTool,.ordToggle{display:none}
+
+/* ===== phones: board operated in place, turn order as a ▶ fold-out column beside it, hand right under ===== */
 @media (max-width:720px){
-  #mapP .mapwrap{display:flex !important;flex-direction:column;align-items:stretch;gap:10px}
-  #mapP .boardCol,#mapP .boardBox{width:100%}
-  #mapP .boardCol{order:1}
-  #mapP .order{order:2;display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 6px !important;overflow:visible !important;max-height:none;padding:0 !important}
-  #mapP .order > .ohd,#mapP .order > .grp,#mapP .order > p{grid-column:1 / -1}
-  #mapP .order > .grp{margin:2px 0 -4px}
-  .ohd{flex-direction:row !important;flex-wrap:nowrap;gap:6px;margin:0}
-  .ohd .btn{font-size:.8rem !important;padding:6px 8px !important;white-space:nowrap;justify-content:center;text-align:center}
-  .oitem{padding:7px 8px 7px 10px !important;min-width:0}
-  .ohead{gap:8px}
-  .ohead .pt{width:34px !important;height:34px !important}
-  .ohead .oname{font-size:.86rem}
-  .oitem .ometa{font-size:.72rem;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #mapP .mapwrap{display:grid !important;grid-template-columns:46px minmax(0,1fr) !important;grid-template-rows:auto auto;gap:6px !important;align-items:stretch}
+  #mapP .mapwrap.ordOpen{grid-template-columns:150px minmax(0,1fr) !important}
+  /* tool row above: the buttons, or "moving …" while a piece is picked up (same height either way) */
+  .phoneTool{grid-column:1 / -1;display:flex;align-items:center;gap:6px;height:36px}
+  .phoneTool .btn{flex:1;justify-content:center;text-align:center;white-space:nowrap;font-size:.8rem !important;padding:5px 8px !important}
+  .phoneTool.moving{background:var(--cloud);border:1.5px solid var(--gold);border-radius:999px;padding:0 4px 0 12px}
+  .phoneTool.moving .btn{flex:none}
+  .phoneTool .mvname{flex:1;min-width:0;font-weight:800;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .phoneTool .mvtag{margin-left:6px;font-size:.72rem;color:var(--gold)}
+  /* the column is exactly as tall as the board and scrolls inside */
+  #mapP .order{grid-column:1;grid-row:2;display:flex !important;flex-direction:column !important;gap:6px !important;height:0;min-height:100%;max-height:none !important;overflow-y:auto !important;overflow-x:hidden !important;padding:0 !important;scrollbar-width:none}
+  #mapP .order::-webkit-scrollbar{display:none}
+  /* the row keeps the folded board's height, so opening the column never moves the hand below */
+  #mapP .boardCol{grid-column:2;grid-row:2;width:auto;min-height:min(560px, 100vw - 64px);display:flex;align-items:center}
+  #mapP .boardCol .boardBox{width:100%}
+  #mapP .board{cursor:default}
+  #mapP .board .dist{display:block}
+  .ordToggle{display:block;flex:none;height:26px;border-radius:6px;border:1px solid var(--line);background:var(--cloud);color:var(--ink-2);font-weight:800;font-size:.8rem;cursor:pointer;padding:0}
+  .ordToggle:hover{color:var(--pink);border-color:var(--pink)}
+  .oitem{padding:5px 6px 5px 8px !important;min-width:0;flex:none}
+  .oitem .oset{display:none}
   .oitem .phoneOnly{display:none !important}
-  /* no +/- here (too small to tap safely); tapping the card opens the detail with them */
-  .oitem .ostat{display:grid !important;grid-template-columns:22px auto auto minmax(16px,1fr);column-gap:4px;margin-top:3px}
+  .ohead{gap:5px}
+  .ohead .pt{width:26px !important;height:26px !important}
+  .ohead .oname{font-size:.76rem}
+  .oitem .ometa{font-size:.64rem;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .oitem .ostat{display:grid !important;grid-template-columns:18px auto auto minmax(10px,1fr);column-gap:3px;margin-top:2px}
   .oitem .ostat .step{display:none}
-  .ostat i{font-size:.7rem}
-  .ostat b{font-size:.88rem}
-  .ostat em{font-size:.7rem}
-  .ostat .bar{height:6px;border-radius:3px;margin-left:4px}
+  .ostat i{font-size:.62rem}
+  .ostat b{font-size:.8rem;min-width:1.4em}
+  .ostat em{font-size:.62rem}
+  .ostat .bar{height:5px;border-radius:3px;margin-left:2px}
+  #mapP .order > .grp{font-size:.62rem;margin:4px 0 0;text-align:center}
+  /* folded: portraits in order with an HP bar each */
+  .mapwrap:not(.ordOpen) .oitem{padding:4px 3px 4px 4px !important;border-left-width:2px}
+  .mapwrap:not(.ordOpen) .ohead{flex-direction:column;align-items:center;gap:1px}
+  .mapwrap:not(.ordOpen) .ohead .pt{width:30px !important;height:30px !important}
+  .mapwrap:not(.ordOpen) .onum{position:absolute;left:1px;top:0;font-size:.55rem}
+  .mapwrap:not(.ordOpen) .otext{display:none}
+  .mapwrap:not(.ordOpen) .ostat.tp{display:none !important}
+  .mapwrap:not(.ordOpen) .ostat{display:block !important;margin-top:3px}
+  .mapwrap:not(.ordOpen) .ostat > :not(.bar){display:none}
+  .mapwrap:not(.ordOpen) .ostat .bar{display:block;margin:0;height:4px}
+  .mapwrap:not(.ordOpen) .oitem.now::after{content:"";top:-3px;right:-3px;width:9px;height:9px;padding:0;border:2px solid var(--cloud)}
+  /* hand: one fanned row of fixed height; cards overlap when there are many, and show their corner */
+  .tray{padding:8px 10px 10px !important}
+  .handHead{flex-wrap:nowrap}
+  .handHead .handName{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .piles{font-size:.74rem !important;padding:3px 8px !important}
+  #myHand{display:flex;flex-wrap:nowrap;gap:0;align-items:flex-end;height:86px;min-height:0;margin:2px 0 0;padding-top:10px}
+  #myHand > .muted{align-self:center}
+  #myHand .card{flex:none;width:50px;height:72px;align-items:flex-start;justify-content:flex-start;padding:4px 0 0 5px;box-shadow:-2px 0 4px rgba(0,0,0,.25),0 2px 0 rgba(0,0,0,.18)}
+  #myHand .card + .card{margin-left:min(6px, calc((100% - var(--n) * 50px) / (var(--n) - 1)))}
+  #myHand .card .r{font-size:1.02rem;line-height:1}
+  #myHand .card .s{font-size:.9rem;margin-top:1px;line-height:1}
+  #myHand .card .s2{display:block;position:absolute;right:5px;bottom:4px;font-size:1.45rem;line-height:1}
+  #myHand .card.joker{writing-mode:vertical-rl;font-size:.6rem;padding:5px 0 0 4px}
+  #myHand .card.sel{transform:translateY(-9px)}
+  .handOthers{margin:4px 0 6px}
+  .trayRow.acts{gap:6px}
+  .trayRow.acts .btn{padding:5px 10px;font-size:.82rem}
 }
 @media (max-width:400px){
   .top{gap:4px !important}
@@ -1984,10 +2041,10 @@ function renderMap(room, ru) {
   const sel = ui.selTok && room.chars[ui.selTok];
   const cells = boardCells(room);
   const order = turnOrder(room), npcs = Object.values(room.chars).filter(c => c.side === 'npc');
-  const v = ru.viewer, cur = room.turn.current;
-  const item = c => `
+  const v = ru.viewer, cur = room.turn.current, phone = isPhone();
+  const item = (c, i) => `
     <div class="oitem ${c.id === cur ? 'now' : ''} ${ui.selTok === c.id ? 'sel' : ''} ${c.side}" data-charopen="${c.id}" role="button" tabindex="0" title="${esc(c.data.name)}の詳細を開く">
-      <div class="ohead">${ptImg(c, null, 'pt')}
+      <div class="ohead">${i != null ? `<span class="onum">${i + 1}</span>` : ''}${ptImg(c, null, 'pt')}
         <div class="otext"><span class="oname" style="${nameCss(c.color)}">${esc(c.data.name)}</span>
           ${v === 'gm' && c.side !== 'npc' ? `<button class="oset" data-setturn="${c.id}" title="${c.id === cur ? '手番を外す' : 'このキャラの手番にする'}" aria-label="${esc(c.data.name)}の手番にする">▶</button>` : ''}
           <span class="ometa">${'HP' in c.cur ? `<span class="phoneOnly ${c.data.stats.HP && c.data.stats.HP.max && c.cur.HP / c.data.stats.HP.max <= 0.5 ? 'hpLow' : ''}">HP${c.cur.HP}${'TP' in c.cur ? ` TP${c.cur.TP}` : ''}<br></span>` : ''}${c.data.stats['SS値'] ? `SS${c.cur['SS値']}` : ''}${c.data.stats['移動値'] ? `　移${c.cur['移動値']}` : ''}${c.x == null ? '　盤外' : `　${coordName(c.x, c.y)}`}</span></div>
@@ -1995,26 +2052,30 @@ function renderMap(room, ru) {
       ${statLine(room, ru, c, 'HP')}${statLine(room, ru, c, 'TP')}
     </div>`;
   const canNext = cur && (v === 'gm' || v === cur);
+  const tools = `<button class="btn small" data-import>＋ キャラ</button>${canNext ? `<button class="btn small primary" data-nextturn title="次のキャラの手番へ">次の手番 ›</button>` : v === 'gm' || isPcSeat(room, v) ? '<span class="btn small primary slot" aria-hidden="true">次の手番 ›</span>' : ''}${v === 'gm' ? `<button class="btn small ghost mobileOnly" data-opensettings>設定</button>` : ''}`;
+  const moving = sel ? `<span class="mvname">${esc(sel.data.name)}を移動中${Number.isFinite(sel.cur['移動値']) ? `<span class="mvtag">移動値${sel.cur['移動値']}</span>` : ''}</span><button class="btn small" data-offboard>盤外へ</button><button class="btn small" data-unsel>やめる</button>` : '';
+  const open = !!U.ordOpen;
   setHtml($('mapP'), `
-    <div class="mapwrap">
+    <div class="mapwrap ${open ? 'ordOpen' : ''}">
+      ${phone ? `<div class="phoneTool ${sel ? 'moving' : ''}">${sel ? moving : tools}</div>` : ''}
       <div class="order" aria-label="キャラクター（SS値の大きい順）">
-        <div class="ohd"><button class="btn small" data-import>＋ キャラ</button>${canNext ? `<button class="btn small primary" data-nextturn title="次のキャラの手番へ">次の手番 ›</button>` : v === 'gm' || isPcSeat(room, v) ? '<span class="btn small primary slot" aria-hidden="true">次の手番 ›</span>' : ''}${v === 'gm' ? `<button class="btn small ghost mobileOnly" data-opensettings>設定</button>` : ''}</div>
-        ${order.map(item).join('') || '<p class="muted">「＋ キャラ」から読み込むと、SS値の順に並びます</p>'}
-        ${npcs.length ? `<div class="grp">NPC</div>${npcs.map(item).join('')}` : ''}</div>
+        ${phone ? `<button class="ordToggle" data-ordtoggle aria-expanded="${open}" title="${open ? '行動順を閉じる' : '行動順を開く'}">${open ? '◀' : '▶'}</button>` : `<div class="ohd">${tools}</div>`}
+        ${order.map(item).join('') || (phone ? '' : '<p class="muted">「＋ キャラ」から読み込むと、SS値の順に並びます</p>')}
+        ${npcs.length ? `<div class="grp">NPC</div>${npcs.map(c => item(c)).join('')}` : ''}</div>
       <div class="boardCol">
-        <div class="boardBox"><div class="board" id="board" style="--z:${isPhone() ? 1 : zoomOf()}">${cells}</div>
-          ${!isPhone() && sel ? `<div class="selbar"><span>${esc(sel.data.name)}を移動中${Number.isFinite(sel.cur['移動値']) ? `<span class="mvtag">移動値${sel.cur['移動値']}</span>` : ''}</span><button class="btn small" data-offboard>盤外へ</button><button class="btn small" data-unsel>やめる</button></div>` : ''}
+        <div class="boardBox"><div class="board" id="board" style="--z:${phone ? 1 : zoomOf()}">${cells}</div>
+          ${!phone && sel ? `<div class="selbar">${moving}</div>` : ''}
         </div>
-        ${isPhone() ? '' : zoomCtl(true)}
+        ${phone ? '' : zoomCtl(true)}
       </div>
-    </div>    </div>`);
+    </div>`);
 }
 
 // ---------------- cards ----------------
 function cardHtml(c, opts = {}) {
   const k = cardOf(c);
   if (k.joker) return `<button class="card joker ${opts.mini ? 'mini' : ''} ${opts.sel ? 'sel' : ''}" ${opts.attr || ''}>JOKER</button>`;
-  return `<button class="card ${'HD'.includes(k.s) ? 'red' : ''} ${opts.mini ? 'mini' : ''} ${opts.sel ? 'sel' : ''}" ${opts.attr || ''} aria-label="${cardText(c)}"><span class="r">${RANK(k.r)}</span><span class="s">${SUIT[k.s]}</span></button>`;
+  return `<button class="card ${'HD'.includes(k.s) ? 'red' : ''} ${opts.mini ? 'mini' : ''} ${opts.sel ? 'sel' : ''}" ${opts.attr || ''} aria-label="${cardText(c)}"><span class="r">${RANK(k.r)}</span><span class="s">${SUIT[k.s]}</span><span class="s2" aria-hidden="true">${SUIT[k.s]}</span></button>`;
 }
 const chipHtml = c => { const k = cardOf(c); return k.joker ? `<span class="chip">JK</span>` : `<span class="chip ${'HD'.includes(k.s) ? 'red' : ''}">${SUIT[k.s]}${RANK(k.r)}</span>`; };
 function renderCards(room, ru) {
@@ -2024,23 +2085,24 @@ function renderCards(room, ru) {
   ui.sel = ui.sel.filter(c => myHand.includes(c));
   const allies = Object.values(room.chars).filter(c => isPcSeat(room, c.id) && c.id !== v);
   const gmCount = (room.cards.hands.gm || []).length;
-  const others = allies.map(c => `${esc(c.data.name)} ${(room.cards.hands[c.id] || []).length}`).concat(v !== 'gm' ? [`GM ${gmCount}`] : []).join('　');
+  // everyone else's count at a glance (tap: their cards); deck and discard with the card on top
+  const othersRow = `<button class="handOthers" data-handsall title="みんなの手札を見る">${allies.map(c => `<span class="ho"><i style="background:${c.color}"></i><span class="hn">${esc(c.data.name)}</span><b>${(room.cards.hands[c.id] || []).length}</b></span>`).join('')}${v !== 'gm' ? `<span class="ho"><i class="gm"></i>GM<b>${gmCount}</b></span>` : ''}<span class="hoMore">みんなの手札 ›</span></button>`;
+  const top = room.cards.discard[room.cards.discard.length - 1];
+  const piles = `<button class="btn small piles" data-deckmenu title="山札と捨て札">山札<b>${room.cards.deck.length}</b>捨て札<b>${room.cards.discard.length}</b>${top ? chipHtml(top) : ''}</button>`;
   if (!mySeat) {
-    setHtml($('cardsP'), `<div class="trayRow"><span class="muted">観戦中は手札を操作できません。</span><span class="grow"></span>
-      <button class="btn small" data-handsall>みんなの手札</button><button class="btn small" data-deckmenu>山札 ${room.cards.deck.length}・捨て札 ${room.cards.discard.length}</button></div>`);
+    setHtml($('cardsP'), `<div class="trayRow"><span class="muted">観戦中は手札を操作できません。</span><span class="grow"></span>${piles}</div>${othersRow}`);
     return;
   }
   const n = ui.sel.length;
   setHtml($('cardsP'), `
-    <div class="trayRow">
-      <b class="handName">${esc(seatName(room, mySeat))}の手札</b><span class="count">${myHand.length}</span>
+    <div class="trayRow handHead">
+      <b class="handName">${esc(seatName(room, mySeat))}の手札</b><span class="count">${myHand.length}<small>枚</small></span>
       <button class="btn small ghost" data-sort>${ru.sort === 'rank' ? '数字順' : 'スート順'}</button>
       <span class="grow"></span>
-      <span class="muted othersLine" title="ほかの人の手札の枚数">${others}</span>
-      <button class="btn small" data-handsall>みんなの手札</button>
-      <button class="btn small" data-deckmenu>山札 ${room.cards.deck.length}・捨て札 ${room.cards.discard.length}</button>
+      ${piles}
     </div>
-    <div class="cards" id="myHand">${myHand.map(c => cardHtml(c, { sel: ui.sel.includes(c), attr: `data-pick="${c}"` })).join('') || '<span class="muted">手札はありません</span>'}</div>
+    <div class="cards" id="myHand" style="--n:${myHand.length}">${myHand.map(c => cardHtml(c, { sel: ui.sel.includes(c), attr: `data-pick="${c}"` })).join('') || '<span class="muted">手札はありません</span>'}</div>
+    ${othersRow}
     <div class="trayRow acts">
       <button class="btn primary" data-weapon>武装を使う</button>
       <button class="btn" data-play="evade" ${n ? '' : 'disabled'}>回避で出す</button>
@@ -3104,6 +3166,8 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('scroll', e => { if (e.target && e.target.id === 'tabs') updateTabArrows(); }, true);
 window.addEventListener('resize', () => updateTabArrows());
+// crossing the phone width (rotation, resizing) switches between the two map layouts
+matchMedia('(max-width:720px)').addEventListener('change', () => { if (curRoom()) renderRoom(); });
 
 // drag the zoomed map to move around (no scrollbars); a drag never counts as a tap on a square
 let panDrag = null;
@@ -3137,7 +3201,7 @@ function mapClick(t, room, ru) {
   const q = s => t.closest(s);
   let el;
   if ((el = q('[data-zoom]'))) { stepZoom(+el.dataset.zoom); return true; }
-  if ((el = q('[data-movechar]'))) { ui.selTok = el.dataset.movechar; closeDlg(); if (isPhone()) openModal('map'); else renderRoom(); return true; }
+  if ((el = q('[data-movechar]'))) { ui.selTok = el.dataset.movechar; closeDlg(); renderRoom(); if (isPhone()) $('board').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return true; }
   if ((el = q('[data-setturn]'))) { act({ type: 'setTurn', cid: el.dataset.setturn }); return true; }
   if (q('[data-nextturn]')) { act({ type: 'nextTurn' }); return true; }
   if (q('[data-endround]')) { act({ type: 'endRound' }); return true; }
@@ -3170,8 +3234,7 @@ document.addEventListener('click', e => {
   if (q('[data-weapon]')) { ui.w = { cid: isPcSeat(room, ru.viewer) ? ru.viewer : (room.turn.current && room.chars[room.turn.current]?.side === 'enemy' ? room.turn.current : null), weapons: [], cards: [...ui.sel], targets: [], memo: ui.memo }; openModal('weapon'); return; }
   if (q('[data-handsall]')) { openModal('hands'); return; }
   if (q('[data-deckmenu]')) { openModal('deck'); return; }
-  // phones: the board on the page is a preview; tapping it opens the big map
-  if (isPhone() && t.closest('#mapP .board')) { openModal('map'); return; }
+  if (q('[data-ordtoggle]')) { U.ordOpen = !U.ordOpen; saveU(); renderRoom(); return; }
   if (mapClick(t, room, ru)) return;
 
   if (commonClick(t, room, ru)) return;
