@@ -711,6 +711,12 @@ dialog.mapDlg{overflow:auto}
 .replyRow #replyInfo b{flex:none;max-width:9em;overflow:hidden;text-overflow:ellipsis}
 .replyRow .btn{flex:none;padding:1px 8px}
 .medit + .medit{margin-left:2px}
+.msg .mname{display:flex;align-items:baseline;flex-wrap:wrap;column-gap:4px}
+.macts{margin-left:auto;display:inline-flex;gap:4px;align-self:center}
+.macts .medit{margin:0;padding:3px 10px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#B8B9BE}
+.macts .medit:hover{color:#fff;border-color:var(--pink)}
+/* touch screens: buttons always shown and big enough for a finger */
+@media (hover:none){ .macts .medit{padding:6px 12px;font-size:.76rem;min-height:30px} }
 .edited{color:#8E8F94;font-size:.72rem;margin-left:6px}
 .olderNote{color:#8E8F94;font-size:.76rem;text-align:center;padding:6px 0 10px;border-bottom:1px solid rgba(255,255,255,.12)}
 
@@ -847,6 +853,8 @@ input[type=range]{width:100%;accent-color:var(--pink)}
 .boardBox.panning *{cursor:grabbing !important}
 .tabsWrap{display:flex;align-items:center;gap:2px;min-width:0;border-bottom:1px solid rgba(255,255,255,.12);margin:-2px -12px 0;padding:2px 6px 8px}
 .tabsWrap .tabs{flex:1;border-bottom:none !important;margin:0 !important;padding:2px 2px 0 !important}
+/* tabs inside the input area: a slim row above the speaker select, separated by a hairline below */
+.tabsWrap.inComposer{margin:-4px -2px 8px;padding:0 0 8px;border-bottom:1px solid rgba(255,255,255,.1)}
 .tabArrow{flex:none;width:26px;height:26px;border-radius:999px;border:1px solid #4A4C52;background:#36383D;color:#fff;font-weight:800;cursor:pointer;line-height:1}
 .tabArrow:hover{border-color:var(--pink)}
 
@@ -934,6 +942,18 @@ input[type=range]{width:100%;accent-color:var(--pink)}
   .boardBox .board{margin:0 !important}
 }
 
+/* character panel: one sticky title row (name + ✕), the actions on a row of their own below it */
+.mhead.charHead{flex-wrap:nowrap !important}
+.charHead .mtitle{flex:1;min-width:0}
+.charHead .mtitle h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.charHead .swatch{flex:none}
+.charHead .mclose{flex:none;width:36px;height:36px;padding:0;border-radius:50%;font-size:1rem;display:inline-flex;align-items:center;justify-content:center}
+.mactions{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.mactions:empty{display:none}
+.mhead.charHead{box-shadow:0 8px 8px -8px rgba(10,13,30,.35)}
+/* phones: name and actions first; the large portrait goes to the end (the small one is in the title row) */
+@media (max-width:720px){ .charGrid.hasPt .charSide{order:2 !important;position:static} .charGrid.hasPt .charSide .bigpt{max-width:220px} }
+
 /* notice under the chat tabs (floats over the log, so nothing moves) */
 .chat{position:relative}
 .chatNotice{position:absolute;left:12px;right:12px;z-index:5;display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:8px;background:#3A2A35;border:1px solid var(--pink);color:#fff;font-size:.82rem;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.4);cursor:pointer;opacity:0;transform:translateY(-6px);pointer-events:none;transition:opacity .2s ease,transform .2s ease}
@@ -952,6 +972,26 @@ input[type=range]{width:100%;accent-color:var(--pink)}
 .myTurn{flex:none;font-size:.72rem;font-weight:800;color:#2A1C00;background:var(--gold);border-radius:999px;padding:1px 9px;white-space:nowrap;animation:turnTag 1.6s ease-in-out infinite}
 @keyframes turnTag{50%{box-shadow:0 0 0 4px color-mix(in srgb,var(--gold) 30%,transparent)}}
 @media (prefers-reduced-motion:reduce){.tok.turn,.myTurn{animation:none}}
+
+/* cross unison: slanted portrait panels side by side, a flash, the title */
+.unRow{position:relative;display:flex;justify-content:center;align-items:stretch;width:min(96vw,1000px);height:min(58vh,460px)}
+.unCell{position:relative;flex:1;margin:0 -1.6%;clip-path:polygon(14% 0,100% 0,86% 100%,0 100%);background:linear-gradient(160deg,color-mix(in srgb,var(--c) 85%,#fff),color-mix(in srgb,var(--c) 60%,#0A0D1E));
+  opacity:0;transform:translateX(70vw);animation:unIn 3.4s cubic-bezier(.2,.8,.2,1) forwards;animation-delay:calc(var(--i) * 110ms)}
+.unCell img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top center}
+.unCell::after{content:"";position:absolute;inset:0;box-shadow:inset 0 0 0 3px color-mix(in srgb,var(--c) 60%,#fff),inset 0 -60px 50px -30px rgba(0,0,0,.6)}
+.unName{position:absolute;left:18%;right:18%;bottom:10px;z-index:1;text-align:center;color:#fff;font-weight:800;font-size:clamp(.7rem,2.4vw,1rem);text-shadow:0 1px 3px #000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.unStreak{position:absolute;inset:-20%;background:repeating-linear-gradient(115deg,transparent 0 40px,rgba(255,255,255,.07) 40px 44px);opacity:0;animation:unStreak 3.4s linear forwards}
+.unFlash{position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,#fff 0%,rgba(255,255,255,.6) 30%,transparent 65%);opacity:0;animation:unFlash 3.4s ease-out forwards}
+.fx-unison .unText{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);animation:unText 3.4s ease-out forwards}
+.fx-unison .unText b{font-size:clamp(2rem,8vw,4.6rem);letter-spacing:.14em;color:#fff;text-shadow:0 0 18px #FF5C96,0 0 4px #000,0 3px 0 #000}
+.fx-unison .unText span{color:#fff;text-shadow:0 1px 4px #000}
+@keyframes unIn{0%{opacity:0;transform:translateX(70vw) skewX(-8deg)}16%{opacity:1;transform:none}82%{opacity:1;transform:none}100%{opacity:0;transform:translateX(-50vw) skewX(-8deg)}}
+@keyframes unStreak{0%{opacity:0;transform:translateX(-10%)}20%{opacity:1}85%{opacity:1}100%{opacity:0;transform:translateX(10%)}}
+@keyframes unFlash{0%,34%{opacity:0}40%{opacity:.95}58%{opacity:0}100%{opacity:0}}
+@keyframes unText{0%,38%{opacity:0;transform:translateY(-50%) scale(1.25)}46%{opacity:1;transform:translateY(-50%) scale(1)}84%{opacity:1;transform:translateY(-50%) scale(1)}100%{opacity:0;transform:translateY(-50%) scale(.98)}}
+.fx-unison.fx-simple .unCell{animation:fxFade 3.4s ease forwards;transform:none}
+.fx-unison.fx-simple .unStreak,.fx-unison.fx-simple .unFlash{display:none}
+.fx-unison.fx-simple .unText{animation:fxFade 3.4s ease forwards;opacity:1}
 
 /* turn cut-in: a slanted band in the character's colour sweeps through (gold when it is yours) */
 .fx-turn .tnBand{position:relative;display:flex;align-items:center;justify-content:center;gap:16px;width:130vw;padding:14px 0;
@@ -1472,7 +1512,10 @@ function applyInner(room, a, by, pid) {
       room.cards.discard.push(...cards);
       log(room, { tab: opsTab(room), type: 'weapon', by, seat, cid: ch.id, charName: ch.data.name,
         weapons: ws.map(w => ({ name: w.name, suit: w.suit || null, attrs: { ...(w.attrs || {}) }, text: w.text || '' })),
-        cards, targets: (Array.isArray(a.targets) ? a.targets : []).map(id => room.chars[id]?.data.name).filter(Boolean), memo: String(a.memo || '').trim(), offForm });
+        cards, targets: (Array.isArray(a.targets) ? a.targets : []).map(id => room.chars[id]?.data.name).filter(Boolean), memo: String(a.memo || '').trim(), offForm,
+        // クロスユニゾン (an all-out attack): every PC lines up in the effect, the declarer first
+        ...(ws.some(w => /クロスユニゾン/.test(w.name)) ? { fx: 'unison', members: Object.values(room.chars).filter(c => c.side === 'pc').sort((x, y) => (x.id === ch.id ? -1 : 0) - (y.id === ch.id ? -1 : 0))
+          .map(c => ({ name: c.data.name, color: c.color, url: portraitUrl(c, c.portrait) || (c.data.portraits[0] || {}).url || null })) } : {}) });
       return;
     }
     case 'shuffleBack': {
@@ -1804,10 +1847,10 @@ function act(a, opts = {}) {
 // chat news (someone replied to you) drops in just under the tabs when the chat is on screen; otherwise a toast
 let noticeT;
 function chatNotice(text, jump) {
-  const room = curRoom(), n = $('chatNotice'), tw = document.querySelector('.tabsWrap');
-  const onScreen = n && tw && (matchMedia('(min-width:960px)').matches || (room && roomUI(room.id).pane === 'chat'));
+  const room = curRoom(), n = $('chatNotice'), log = $('chatLog');
+  const onScreen = n && log && (matchMedia('(min-width:960px)').matches || (room && roomUI(room.id).pane === 'chat'));
   if (!onScreen) { toast(text); return; }
-  n.style.top = (tw.offsetTop + tw.offsetHeight + 6) + 'px';
+  n.style.top = (log.offsetTop + 6) + 'px';
   n.innerHTML = `<span class="qarrow">↩</span><span class="cnText">${esc(text)}</span>${jump ? '<span class="cnGo">見る ›</span>' : ''}`;
   if (jump) n.dataset.jump = jump; else delete n.dataset.jump;
   n.classList.remove('show'); void n.offsetWidth; n.classList.add('show');
@@ -1871,11 +1914,31 @@ function playTurn(room, l) {
   setTimeout(() => el.remove(), 1800);
   if (mine && navigator.vibrate) { try { navigator.vibrate(60); } catch (e) {} }
 }
+// クロスユニゾン: every PC's 立ち絵 rushes in side by side like slanted panels, then CROSS UNISON over a flash (3.4 s)
+function playUnison(l, mode) {
+  const m = l.members || []; if (!m.length) return;
+  const el = document.createElement('div');
+  el.className = `fx fx-unison fx-${mode}`;
+  el.style.setProperty('--n', m.length);
+  el.innerHTML = `<div class="swShade"></div><div class="unStreak"></div>
+    <div class="unRow">${m.map((x, i) => `<div class="unCell" style="--c:${esc(x.color || '#FF5C96')};--i:${i}">${x.url ? `<img src="${esc(x.url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}<span class="unName">${esc(x.name)}</span></div>`).join('')}</div>
+    <div class="unFlash"></div>
+    <div class="fxText unText"><b>CROSS UNISON</b><span>${esc(l.charName || '')}の号令で一斉攻撃</span></div>`;
+  const show = () => {
+    el.setAttribute('popover', 'manual');
+    document.body.appendChild(el);
+    try { el.showPopover(); } catch (e) { el.removeAttribute('popover'); }
+    setTimeout(() => el.remove(), 3600);
+  };
+  const load = url => new Promise(res => { const im = new Image(); im.referrerPolicy = 'no-referrer'; im.onload = im.onerror = res; im.src = url; });
+  Promise.race([Promise.all(m.filter(x => x.url).map(x => load(x.url))), new Promise(res => setTimeout(res, 1500))]).then(show);
+}
 function playFx(room, l) {
   if (ui.fxSeen.has(l.id)) return;
   ui.fxSeen.add(l.id);
   const mode = fxMode();
   if (mode === 'off' || Date.now() - l.t > 15000) return;
+  if (l.fx === 'unison') { if (U.fxWho !== 'mine' || (l.members || []).some(x => x.name === (room.chars[roomUI(room.id).viewer] || { data: {} }).data.name) || l.pid === myPid()) playUnison(l, mode); return; }
   if (U.fxWho === 'mine' && !(ONLINE ? l.pid === myPid() : l.by === roomUI(room.id).viewer)) return;
   const c = room.chars[l.cid || l.as];
   const p = c && (c.data.portraits.find(x => x.label === c.portrait) || c.data.portraits[0]);
@@ -2045,11 +2108,11 @@ function renderRoom() {
           </div>
           <div class="chatPane"><div class="vsplit" id="vsplit" title="ドラッグで幅を変更（ダブルクリックで元に戻す）" role="separator" aria-orientation="vertical"></div>
             <section class="panel chat" id="chatP">
-              <div class="tabsWrap"><button class="tabArrow" id="tabL" aria-label="タブを左へ" hidden>‹</button><div class="tabs" id="tabs"></div><button class="tabArrow" id="tabR" aria-label="タブを右へ" hidden>›</button></div>
               <div class="chatNotice" id="chatNotice" role="status"></div>
               <div class="log" id="chatLog"></div>
               <div class="typing" id="typing" aria-live="polite"></div>
               <div class="composer">
+                <div class="tabsWrap inComposer"><button class="tabArrow" id="tabL" aria-label="タブを左へ" hidden>‹</button><div class="tabs" id="tabs"></div><button class="tabArrow" id="tabR" aria-label="タブを右へ" hidden>›</button></div>
                 <div class="replyRow" id="replyRow" hidden><span class="qarrow">↩</span><span id="replyInfo"></span><button class="btn small" id="replyClear" aria-label="返信をやめる">✕</button></div>
                 <div class="row" id="tpRow" hidden><span id="tpInfo" style="flex:1"></span><button class="btn small" id="cmdClear">コマンドをやめる</button></div>
                 <div class="speak">
@@ -2359,7 +2422,7 @@ function logHtml(room, l) {
     const toMe = l.reply && !mine && (ONLINE ? l.reply.pid === myPid() : l.reply.by === ui.viewerNow);
     const quote = l.reply ? `<button class="mquote" data-jump="${l.reply.id}" title="返信先の発言へ"><span class="qarrow">↩</span><b>${esc(l.reply.name)}</b><span class="qtext">${esc(l.reply.text)}</span></button>` : '';
     return `<div class="msg ${toMe ? 'toMe' : ''}" data-lid="${l.id}">${face}
-      <div class="mbody">${quote}<div class="mname" style="${nameCss(l.color || (c ? c.color : '#B48CFF'))}">${esc(l.name || (c && c.data.name) || '')}<span class="t"> - ${time}</span>${l.edited ? '<span class="edited">（編集済み）</span>' : ''}<button class="medit" data-replymsg="${l.id}">返信</button>${!l.dice && mine ? `<button class="medit" data-editmsg="${l.id}">編集</button>` : ''}</div>
+      <div class="mbody">${quote}<div class="mname" style="${nameCss(l.color || (c ? c.color : '#B48CFF'))}">${esc(l.name || (c && c.data.name) || '')}<span class="t"> - ${time}</span>${l.edited ? '<span class="edited">（編集済み）</span>' : ''}<span class="macts"><button class="medit" data-replymsg="${l.id}">返信</button>${!l.dice && mine ? `<button class="medit" data-editmsg="${l.id}">編集</button>` : ''}</span></div>
       ${diceHtml(l)}</div></div>`;
   }
   const who = esc(l.byName || seatName(room, l.by));
@@ -2782,14 +2845,14 @@ function charModalHtml(room, ru, cid) {
   const keys = STAT_KEYS.filter(k => k in c.cur).concat(Object.keys(c.cur).filter(k => !STAT_KEYS.includes(k)));
   const big = c.data.portraits.find(p => p.label === c.portrait) || c.data.portraits[0];
   return `<div class="charGrid ${big ? 'hasPt' : ''}">${big ? `<aside class="charSide"><img class="bigpt" src="${esc(big.url)}" alt="${esc(c.data.name)}の立ち絵" referrerpolicy="no-referrer"></aside>` : ''}<div class="charMain">
-    <div class="mhead">${ptImg(c)}
+    <div class="mhead charHead">${ptImg(c)}
       <button class="swatch" ${can ? `data-colorpick="${c.id}"` : 'disabled'} style="background:${c.color}" title="名前の色"></button>
-      <div><h1 style="${nameCss(c.color)}">${esc(c.data.name)}</h1><span class="muted">${esc([c.data.player, c.data.core?.name].filter(Boolean).join('　'))}</span></div>
-      <span style="flex:1"></span>
+      <div class="mtitle"><h1 style="${nameCss(c.color)}">${esc(c.data.name)}</h1><span class="muted">${esc([c.data.player, c.data.core?.name].filter(Boolean).join('　'))}</span></div>
+      <button class="btn mclose" data-close aria-label="閉じる" title="閉じる">✕</button></div>
+    <div class="mactions">
       ${v === 'gm' && c.side !== 'npc' ? `<button class="btn small" data-setturn="${c.id}">${room.turn.current === c.id ? '手番を外す' : '手番にする'}</button>` : ''}
       ${can ? `<button class="btn small" data-movechar="${c.id}">${c.x == null ? 'マップに置く' : '移動する'}</button><button class="btn small" data-portraits="${c.id}">立ち絵</button><button class="btn small" data-editchar="${c.id}">更新</button>` : ''}
-      ${v === 'gm' || v === c.id ? `<button class="btn small danger" data-delchar="${c.id}">外す</button>` : ''}
-      <button class="btn" data-close>閉じる</button></div>
+      ${v === 'gm' || v === c.id ? `<button class="btn small danger" data-delchar="${c.id}">外す</button>` : ''}</div>
     ${ONLINE && isPcSeat(room, c.id) ? (() => {
       const ownerName = gmOwned(c) ? 'GM' : (room.players[c.owner] || {}).name || '（未設定）';
       const mineToGive = c.owner === myPid() || (v === 'gm' && gmOwned(c));

@@ -408,7 +408,10 @@ function applyInner(room, a, by, pid) {
       room.cards.discard.push(...cards);
       log(room, { tab: opsTab(room), type: 'weapon', by, seat, cid: ch.id, charName: ch.data.name,
         weapons: ws.map(w => ({ name: w.name, suit: w.suit || null, attrs: { ...(w.attrs || {}) }, text: w.text || '' })),
-        cards, targets: (Array.isArray(a.targets) ? a.targets : []).map(id => room.chars[id]?.data.name).filter(Boolean), memo: String(a.memo || '').trim(), offForm });
+        cards, targets: (Array.isArray(a.targets) ? a.targets : []).map(id => room.chars[id]?.data.name).filter(Boolean), memo: String(a.memo || '').trim(), offForm,
+        // クロスユニゾン (an all-out attack): every PC lines up in the effect, the declarer first
+        ...(ws.some(w => /クロスユニゾン/.test(w.name)) ? { fx: 'unison', members: Object.values(room.chars).filter(c => c.side === 'pc').sort((x, y) => (x.id === ch.id ? -1 : 0) - (y.id === ch.id ? -1 : 0))
+          .map(c => ({ name: c.data.name, color: c.color, url: portraitUrl(c, c.portrait) || (c.data.portraits[0] || {}).url || null })) } : {}) });
       return;
     }
     case 'shuffleBack': {
