@@ -934,8 +934,9 @@ input[type=range]{width:100%;accent-color:var(--pink)}
    the turn-order list gets all the rest, in two columns when there is room ===== */
 @media (min-width:960px){
   #mapP{container-type:size}
-  #mapP .mapwrap{grid-template-columns:minmax(200px,1fr) calc(min(100cqh, 100cqw - 246px) + 40px) !important;gap:6px !important}
-  #mapP .order{display:grid !important;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));align-content:start;gap:4px !important;overflow-x:hidden !important}
+  /* the turn order is one vertical column of a fixed width (the round line and buttons above it share it); the board gets the rest */
+  #mapP .mapwrap{grid-template-columns:236px minmax(0,1fr) !important;gap:6px !important}
+  #mapP .order{display:grid !important;grid-template-columns:minmax(0,1fr);align-content:start;gap:4px !important;overflow-x:hidden !important}
   #mapP .order > .ohd,#mapP .order > .grp,#mapP .order > p{grid-column:1 / -1}
   .ohd{flex-wrap:nowrap}
   .ohd .btn{flex:none;white-space:nowrap}
@@ -1026,6 +1027,7 @@ dialog .mhead{z-index:8 !important}
 .oitem.acted::after{content:"済";position:absolute;top:4px;right:22px;font-size:.6rem;font-weight:800;color:var(--ink-2);border:1px solid var(--line);border-radius:4px;padding:0 4px;background:var(--cloud)}
 .oitem.tied{box-shadow:inset 0 0 0 2px #7C5CFF,0 0 12px rgba(124,92,255,.45) !important;animation:turnTag 1.6s ease-in-out infinite}
 .oitem .pickGo{position:absolute;right:6px;bottom:6px;z-index:2;padding:2px 10px !important}
+.oitem:has(.pickGo) .ostat:last-of-type{padding-right:52px}
 @media (max-width:720px){ .mapwrap:not(.ordOpen) .oitem .pickGo{display:none} .mapwrap:not(.ordOpen) .oitem.acted::after{top:auto;bottom:2px;right:2px;font-size:.5rem;padding:0 2px} }
 @media (prefers-reduced-motion:reduce){ .oitem.tied{animation:none} }
 .pickList{display:flex;flex-direction:column;gap:8px;margin-top:12px}
@@ -1119,6 +1121,26 @@ dialog .mhead{z-index:8 !important}
 /* the turn-order list scrolls without a visible scrollbar (it sat right against the board) */
 #mapP .order{scrollbar-width:none}
 #mapP .order::-webkit-scrollbar{display:none}
+
+/* hand on wider screens too: one fanned row of fixed height (a big hand no longer pushes the board smaller) */
+@media (min-width:721px){
+  #myHand{display:flex;flex-wrap:nowrap;gap:0;align-items:flex-end;height:92px !important;min-height:0 !important;margin:4px 0 2px !important;padding-top:12px}
+  #myHand > .muted{align-self:center}
+  #myHand .card{flex:none;width:54px !important;height:76px !important;align-items:flex-start;justify-content:flex-start;padding:5px 0 0 6px;box-shadow:-2px 0 4px rgba(0,0,0,.22),0 2px 0 rgba(0,0,0,.16)}
+  #myHand .card + .card{margin-left:min(8px, calc((100% - var(--n) * 54px) / (var(--n) - 1)))}
+  #myHand .card .r{font-size:1.1rem !important;line-height:1}
+  #myHand .card .s{font-size:.95rem !important;margin-top:1px;line-height:1}
+  #myHand .card .s2{display:block;position:absolute;right:6px;bottom:5px;font-size:1.55rem;line-height:1}
+  #myHand .card.joker{writing-mode:vertical-rl;font-size:.62rem;padding:6px 0 0 5px}
+  #myHand .card.sel{transform:translateY(-10px)}
+  #myHand .card:hover{transform:translateY(-4px);z-index:1}
+  #myHand .card.sel:hover{transform:translateY(-10px)}
+}
+@media (min-width:960px) and (max-height:820px){
+  #myHand{height:80px !important;padding-top:10px}
+  #myHand .card{width:46px !important;height:66px !important}
+  #myHand .card + .card{margin-left:min(6px, calc((100% - var(--n) * 46px) / (var(--n) - 1)))}
+}
 
 /* ===== phones: board operated in place, turn order as a ▶ fold-out column beside it, hand right under ===== */
 @media (max-width:720px){
