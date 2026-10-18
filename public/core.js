@@ -294,7 +294,7 @@ function applyInner(room, a, by, pid) {
       need(by === 'gm', '手番を指定できるのはGMだけです');
       need(a.cid === null || room.chars[a.cid], 'キャラクターが見つかりません');
       room.turn.current = a.cid && room.turn.current !== a.cid ? a.cid : null;   // pressing the current one again clears it
-      if (room.turn.current) log(room, { tab: opsTab(room), type: 'turn', by, text: `${room.chars[room.turn.current].data.name}の手番です` });
+      if (room.turn.current) log(room, { tab: opsTab(room), type: 'turn', by, cid: room.turn.current, text: `${room.chars[room.turn.current].data.name}の手番です` });
       return;
     }
     case 'nextTurn': {
@@ -304,7 +304,7 @@ function applyInner(room, a, by, pid) {
       const i = order.findIndex(c => c.id === room.turn.current);
       const next = order[i + 1] || order[0];          // no rounds: after the last one, back to the top
       room.turn.current = next.id;
-      log(room, { tab: opsTab(room), type: 'turn', by, text: `${next.data.name}の手番です` });
+      log(room, { tab: opsTab(room), type: 'turn', by, cid: next.id, text: `${next.data.name}の手番です` });
       return;
     }
     case 'endRound': {
@@ -312,7 +312,7 @@ function applyInner(room, a, by, pid) {
       log(room, { tab: opsTab(room), type: 'round', by, text: `第${room.turn.round}ラウンド終了（手札交換のタイミングです）` });
       room.turn.round += 1;
       room.turn.current = turnOrder(room)[0]?.id || null;
-      log(room, { tab: opsTab(room), type: 'round', by, text: `第${room.turn.round}ラウンド開始${room.turn.current ? `：${room.chars[room.turn.current].data.name}の手番です` : ''}` });
+      log(room, { tab: opsTab(room), type: 'round', by, start: room.turn.round, cid: room.turn.current, text: `第${room.turn.round}ラウンド開始${room.turn.current ? `：${room.chars[room.turn.current].data.name}の手番です` : ''}` });
       return;
     }
     case 'resetRound': {
