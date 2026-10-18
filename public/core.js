@@ -421,7 +421,7 @@ function apply(room, a, by) {
     case 'editSay': { // fix the text of one's own message later (dice results are never re-rolled)
       const l = room.logs.find(x => x.id === a.id);
       need(l && l.type === 'say', 'その発言は見つかりません');
-      need(l.by === by || by === 'gm', '自分の発言だけ編集できます');
+      need(l.by === by, '自分の発言だけ編集できます');
       need(!l.dice, 'ダイスの発言は結果が変わってしまうので編集できません');
       const text = String(a.text || '').trim();
       need(text, '空にはできません');
@@ -523,7 +523,8 @@ function parseDice(raw) {
     result: `(${expr}) ＞ ${showDetail ? detail + ' ＞ ' : ''}${total}${ok == null ? '' : ok ? ' ＞ 成功' : ' ＞ 失敗'}` };
 }
 
-const coordName = (x, y) => 'ABCDEFGH'[x] + (y + 1);
+// A1 is the bottom-left square (rows are counted upward); y=0 is the top row on screen
+const coordName = (x, y) => 'ABCDEFGH'[x] + (8 - y);
 
 // ----- visibility -----
 function canSeeTab(room, tab, seat) {

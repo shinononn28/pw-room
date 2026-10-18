@@ -697,6 +697,30 @@ dialog.mapDlg{overflow:auto}
 @media (hover:none){ .medit{opacity:1} }
 .edited{color:#8E8F94;font-size:.72rem;margin-left:6px}
 .olderNote{color:#8E8F94;font-size:.76rem;text-align:center;padding:6px 0 10px;border-bottom:1px solid rgba(255,255,255,.12)}
+
+/* resizable chat column */
+@media (min-width:960px){
+  #roomShell{grid-template-columns:minmax(0,1fr) var(--chatW, 44%) !important}
+  .chatPane{position:relative}
+  .vsplit{position:absolute;left:-4px;top:0;bottom:0;width:8px;cursor:col-resize;z-index:6;touch-action:none}
+  .vsplit::after{content:"";position:absolute;left:3px;top:0;bottom:0;width:2px;background:transparent;transition:background .15s}
+  .vsplit:hover::after,.vsplit.on::after{background:var(--pink)}
+}
+@media (min-width:1500px){ #roomShell{grid-template-columns:minmax(0,1fr) var(--chatW, 46%) !important} }
+@media (max-width:959px){ .vsplit{display:none} }
+
+/* more room for the map: no round header, slimmer list and zoom strip, chat 40% by default */
+.ohd{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:2px}
+.ohd .btn{flex:1}
+@media (min-width:960px){
+  #roomShell{grid-template-columns:minmax(0,1fr) var(--chatW, 40%) !important}
+  #mapP .mapwrap{grid-template-columns:178px minmax(0,1fr) !important}
+  #mapP{padding-top:6px !important}
+  .zoomV{width:34px}
+  .zoomV button{width:26px;height:26px}
+}
+@media (min-width:1500px){ #roomShell{grid-template-columns:minmax(0,1fr) var(--chatW, 42%) !important} }
+@media (min-width:960px){ .chatPane{top:auto !important} }
 </style>
 </head>
 <body>
@@ -1127,7 +1151,7 @@ function apply(room, a, by) {
     case 'editSay': { // fix the text of one's own message later (dice results are never re-rolled)
       const l = room.logs.find(x => x.id === a.id);
       need(l && l.type === 'say', 'その発言は見つかりません');
-      need(l.by === by || by === 'gm', '自分の発言だけ編集できます');
+      need(l.by === by, '自分の発言だけ編集できます');
       need(!l.dice, 'ダイスの発言は結果が変わってしまうので編集できません');
       const text = String(a.text || '').trim();
       need(text, '空にはできません');
@@ -1229,7 +1253,8 @@ function parseDice(raw) {
     result: `(${expr}) ＞ ${showDetail ? detail + ' ＞ ' : ''}${total}${ok == null ? '' : ok ? ' ＞ 成功' : ' ＞ 失敗'}` };
 }
 
-const coordName = (x, y) => 'ABCDEFGH'[x] + (y + 1);
+// A1 is the bottom-left square (rows are counted upward); y=0 is the top row on screen
+const coordName = (x, y) => 'ABCDEFGH'[x] + (8 - y);
 
 // ----- visibility -----
 function canSeeTab(room, tab, seat) {
@@ -1320,7 +1345,7 @@ function lum(hex) {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return 0.4;
   const n = parseInt(m[1], 16); return (0.2126 * (n >> 16 & 255) + 0.7152 * (n >> 8 & 255) + 0.0722 * (n & 255)) / 255;
 }
-const nameCss = col => `color:${col};${lum(col) > 0.72 ? 'text-shadow:0 0 2px rgba(0,0,0,.85),0 0 1px rgba(0,0,0,.9)' : ''}`;
+const nameCss = col => `color:${col};${lum(col) > 0.6 ? 'text-shadow:-1px -1px 0 #1B2547,1px -1px 0 #1B2547,-1px 1px 0 #1B2547,1px 1px 0 #1B2547,0 0 3px rgba(0,0,0,.6)' : ''}`;
 const inkOn = col => lum(col) > 0.62 ? '#1B2547' : '#FFFFFF';
 
 // ---------------- room list ----------------
@@ -1413,7 +1438,9 @@ function renderRoom() {
     if (r.seatCid && r.seatKey) { saveSeatKey(r.id, r.seatCid, r.seatKey); location.replace(`#/r/${r.id}`); netJoin(r.id, r.seatCid); return; }
   }
   const ru = roomUI(room.id);
-  const seats = [...(!ONLINE || gmKeys()[room.id] ? [['gm', 'GM']] : []), ...Object.values(room.chars).filter(c => c.side === 'pc').map(c => [c.id, c.data.name]), ['obs', '観戦']];
+  const isGmBrowser = ONLINE && !!gmKeys()[room.id];
+  const seats = [...(!ONLINE || isGmBrowser ? [['gm', 'GM']] : []),
+    ...(isGmBrowser ? [] : Object.values(room.chars).filter(c => c.side === 'pc').map(c => [c.id, c.data.name])), ['obs', '観戦']];
   if (!seats.some(s => s[0] === ru.viewer)) ru.viewer = ONLINE ? 'obs' : 'gm';
   if (!room.tabs.some(t => t.id === ru.tab && canSeeTab(room, t, ru.viewer))) ru.tab = room.tabs.find(t => canSeeTab(room, t, ru.viewer))?.id;
   if (!$('roomShell') || $('roomShell').dataset.id !== room.id) {
@@ -1429,7 +1456,7 @@ function renderRoom() {
             <section class="skyP" id="mapP"></section>
             <section class="tray" id="cardsP"></section>
           </div>
-          <div class="chatPane">
+          <div class="chatPane"><div class="vsplit" id="vsplit" title="ドラッグで幅を変更（ダブルクリックで元に戻す）" role="separator" aria-orientation="vertical"></div>
             <section class="panel chat" id="chatP">
               <div class="tabs" id="tabs"></div>
               <div class="log" id="chatLog"></div>
@@ -1455,6 +1482,7 @@ function renderRoom() {
   }
   $('roomTitle').textContent = room.name;
   if (ONLINE) netStatus(NET.status);
+  $('roomShell').style.setProperty('--chatW', U.chatW ? U.chatW + 'px' : '');
   if (typeof applyTheme === 'function') applyTheme();
   // phones show one pane at a time (盤面 / チャット); wide screens show both
   ru.pane = ru.pane || 'board';
@@ -1498,7 +1526,7 @@ const dist = (room, a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 function tokHtml(c, sel) {
   const p = c.data.portraits.find(x => x.label === c.portrait) || c.data.portraits[0];
   const down = Object.keys(c.cur).includes('HP') && c.cur.HP <= 0;
-  return `<div class="tok ${c.side === 'enemy' ? 'enemy' : 'pc'} ${sel ? 'sel' : ''} ${down ? 'down' : ''}" data-tok="${c.id}" title="${esc(c.data.name)}" style="${c.side !== 'enemy' ? `background:${c.color};color:${inkOn(c.color)}` : ''}">${p ? `<img src="${esc(p.url)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : esc(c.data.name.slice(0, 2))}</div>`;
+  return `<div class="tok ${c.side === 'enemy' ? 'enemy' : 'pc'} ${sel ? 'sel' : ''} ${down ? 'down' : ''}" data-tok="${c.id}" title="${esc(c.data.name)}" style="${c.side !== 'enemy' ? `background:${c.color};color:${inkOn(c.color)}` : ''}">${p ? `<img src="${esc(p.url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createTextNode(${esc(JSON.stringify(c.data.name.slice(0, 2)))}))">` : esc(c.data.name.slice(0, 2))}</div>`;
 }
 function boardCells(room) {
   const chars = Object.values(room.chars);
@@ -1507,7 +1535,7 @@ function boardCells(room) {
   const at = {}; chars.forEach(c => { if (c.x != null) (at[c.x + ',' + c.y] = at[c.x + ',' + c.y] || []).push(c); });
   let cells = '';
   for (let y = 0; y < 8; y++) {
-    cells += `<div class="coord">${y + 1}</div>`;
+    cells += `<div class="coord">${8 - y}</div>`;
     for (let x = 0; x < 8; x++) {
       const list = at[x + ',' + y] || [];
       const d = sel && sel.x != null ? dist(room, sel, { x, y }) : null;
@@ -1543,25 +1571,19 @@ function renderMap(room, ru) {
   const order = turnOrder(room), npcs = Object.values(room.chars).filter(c => c.side === 'npc');
   const v = ru.viewer, cur = room.turn.current;
   const item = c => `
-    <div class="oitem ${c.id === cur ? 'now' : ''} ${ui.selTok === c.id ? 'sel' : ''} ${c.side}" data-charopen="${c.id}" role="button" tabindex="0" title="${esc(c.data.name)}の詳細を開く">
+    <div class="oitem ${ui.selTok === c.id ? 'sel' : ''} ${c.side}" data-charopen="${c.id}" role="button" tabindex="0" title="${esc(c.data.name)}の詳細を開く">
       <div class="ohead">${ptImg(c, null, 'pt')}
         <div class="otext"><span class="oname" style="${nameCss(c.color)}">${esc(c.data.name)}</span>
           <span class="ometa">${'HP' in c.cur ? `<span class="phoneOnly">HP${c.cur.HP}${'TP' in c.cur ? ` TP${c.cur.TP}` : ''}<br></span>` : ''}${c.data.stats['SS値'] ? `SS${c.cur['SS値']}` : ''}${c.data.stats['移動値'] ? `　移${c.cur['移動値']}` : ''}${c.x == null ? '　盤外' : `　${coordName(c.x, c.y)}`}</span></div>
-        ${v === 'gm' && c.side !== 'npc' ? `<button class="oset" data-setturn="${c.id}" aria-label="${esc(c.data.name)}を手番にする">▶</button>` : ''}</div>
+</div>
       ${statLine(room, ru, c, 'HP')}${statLine(room, ru, c, 'TP')}
     </div>`;
   const canNext = cur && (v === 'gm' || v === cur);
   $('mapP').innerHTML = `
-    <div class="maphead">
-      <span class="roundTag">第<b>${room.turn.round}</b>ラウンド</span>
-      <span class="muted">${cur && room.chars[cur] ? `${esc(room.chars[cur].data.name)}の手番` : '手番なし'}</span>
-      ${canNext ? `<button class="btn small primary" data-nextturn>次の手番へ</button>` : ''}
-      ${v === 'gm' ? `<button class="btn small" data-endround>ラウンド終了</button><button class="btn small ghost" data-resetround>戦闘開始</button><button class="btn small ghost mobileOnly" data-opensettings>部屋の設定</button>` : ''}
-      <span class="grow"></span>
-      <button class="btn small" data-import>キャラを取り込む</button>
-    </div>
     <div class="mapwrap">
-      <div class="order" aria-label="手番順（SS値の大きい順）">${order.map(item).join('') || '<p class="muted">「キャラを取り込む」から読み込むと、SS値の順に並びます</p>'}
+      <div class="order" aria-label="キャラクター（SS値の大きい順）">
+        <div class="ohd"><button class="btn small" data-import>＋ キャラ</button>${v === 'gm' ? `<button class="btn small ghost mobileOnly" data-opensettings>設定</button>` : ''}</div>
+        ${order.map(item).join('') || '<p class="muted">「＋ キャラ」から読み込むと、SS値の順に並びます</p>'}
         ${npcs.length ? `<div class="grp">NPC</div>${npcs.map(item).join('')}` : ''}</div>
       <div class="boardCol">
         <div class="boardBox"><div class="board" id="board" style="--z:${isPhone() ? 1 : zoomOf()}">${cells}</div>
@@ -1650,9 +1672,24 @@ function charSheetHtml(c, canEdit) {
     ${d.memo ? `<div class="grp">メモ</div><div class="itext">${esc(d.memo)}</div>` : ''}
   </div>`;
 }
+function ptFallbackAttrs(c, fb) {
+  const bg = c ? (c.side === 'enemy' ? '#3A2F86' : c.color) : '#5B4FB0';
+  return `data-fb="${esc(fb || '')}" data-ini="${esc((c ? c.data.name : '?').slice(0, 1))}" data-bg="${esc(bg)}" onerror="ptErr(this)"`;
+}
+// broken portrait: fall back to the character's current portrait, then to the initial
+function ptErr(img) {
+  const fb = img.dataset.fb;
+  if (fb && img.getAttribute('src') !== fb) { img.dataset.fb = ''; img.src = fb; return; }
+  const s = document.createElement('span');
+  s.className = img.className + ' none';
+  s.textContent = img.dataset.ini || '?';
+  s.style.background = img.dataset.bg || '#5B4FB0';
+  s.style.color = inkOn(img.dataset.bg || '#5B4FB0');
+  img.replaceWith(s);
+}
 function ptImg(c, label, cls = 'pt') {
   const p = c && (c.data.portraits.find(x => x.label === label) || c.data.portraits.find(x => x.label === c.portrait) || c.data.portraits[0]);
-  if (p) return `<img class="${cls}" src="${esc(p.url)}" alt="" loading="lazy" referrerpolicy="no-referrer">`;
+  if (p) return `<img class="${cls}" src="${esc(p.url)}" alt="" loading="lazy" referrerpolicy="no-referrer" ${ptFallbackAttrs(c, '')}>`;
   const bg = c ? (c.side === 'enemy' ? 'var(--void)' : c.color) : 'var(--void-2)';
   return `<span class="${cls} none" style="background:${bg};color:${bg.startsWith('#') ? inkOn(bg) : '#fff'}">${esc((c ? c.data.name : 'GM').slice(0, 1))}</span>`;
 }
@@ -1700,9 +1737,10 @@ function logHtml(room, l) {
   const dt = new Date(l.t), p2 = n => String(n).padStart(2, '0');
   const time = `${dt.getFullYear()}/${p2(dt.getMonth() + 1)}/${p2(dt.getDate())} ${p2(dt.getHours())}:${p2(dt.getMinutes())}`;
   if (l.type === 'say') {
-    const face = l.portraitUrl ? `<img class="pt" src="${esc(l.portraitUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : c ? ptImg(c, l.portrait) : `<span class="pt none" style="background:var(--void-2)">${esc((l.name || '?').slice(0, 1))}</span>`;
+    const curP = c && (c.data.portraits.find(x => x.label === l.portrait) || c.data.portraits.find(x => x.label === c.portrait) || c.data.portraits[0]);
+    const face = l.portraitUrl ? `<img class="pt" src="${esc(l.portraitUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" ${ptFallbackAttrs(c, curP && curP.url !== l.portraitUrl ? curP.url : '')}>` : c ? ptImg(c, l.portrait) : `<span class="pt none" style="background:var(--void-2)">${esc((l.name || '?').slice(0, 1))}</span>`;
     return `<div class="msg">${face}
-      <div class="mbody"><div class="mname" style="${nameCss(l.color || (c ? c.color : '#B48CFF'))}">${esc(l.name || (c && c.data.name) || '')}<span class="t"> - ${time}</span>${l.edited ? '<span class="edited">（編集済み）</span>' : ''}${!l.dice && (l.by === ui.viewerNow || ui.viewerNow === 'gm') ? `<button class="medit" data-editmsg="${l.id}">編集</button>` : ''}</div>
+      <div class="mbody"><div class="mname" style="${nameCss(l.color || (c ? c.color : '#B48CFF'))}">${esc(l.name || (c && c.data.name) || '')}<span class="t"> - ${time}</span>${l.edited ? '<span class="edited">（編集済み）</span>' : ''}${!l.dice && l.by === ui.viewerNow ? `<button class="medit" data-editmsg="${l.id}">編集</button>` : ''}</div>
       ${diceHtml(l)}</div></div>`;
   }
   const who = esc(l.byName || seatName(room, l.by));
@@ -2004,9 +2042,9 @@ function sheetModalHtml(room, ru, cid) {
 function mapModalHtml(room, ru) {
   const sel = ui.selTok && room.chars[ui.selTok], cur = room.turn.current;
   const order = turnOrder(room);
-  return `<div class="mhead"><div><h1>マップ</h1><span class="muted">第${room.turn.round}ラウンド${cur && room.chars[cur] ? `・${esc(room.chars[cur].data.name)}の手番` : ''}</span></div>
+  return `<div class="mhead"><div><h1>マップ</h1></div>
       <span style="flex:1"></span><button class="btn" data-close>閉じる</button></div>
-    <div class="mchips">${order.map(c => `<button class="mchip ${c.id === cur ? 'now' : ''}" data-tok="${c.id}" aria-pressed="${ui.selTok === c.id}">${ptImg(c, null, 'pt')}${esc(c.data.name)}</button>`).join('')}</div>
+    <div class="mchips">${order.map(c => `<button class="mchip" data-tok="${c.id}" aria-pressed="${ui.selTok === c.id}">${ptImg(c, null, 'pt')}${esc(c.data.name)}</button>`).join('')}</div>
     <div class="mzoom">${zoomCtl()}</div>
     <div class="board big" style="--z:${zoomOf()}">${boardCells(room)}</div>
     <div class="mapbar">${sel ? `<span class="muted">${esc(sel.data.name)}を選択中${Number.isFinite(sel.cur['移動値']) ? `（移動値${sel.cur['移動値']}の範囲を表示）` : ''}。移動先のマスをタップ</span>
@@ -2390,6 +2428,20 @@ function stepZoom(d) {
   U.zoom = d === 0 ? 1 : ZOOMS[Math.max(0, Math.min(ZOOMS.length - 1, i + d))];
   saveU(); renderRoom();
 }
+// drag the line between the board side and the chat to resize (wide screens)
+document.addEventListener('pointerdown', e => {
+  const bar = e.target.closest('#vsplit'); if (!bar) return;
+  e.preventDefault();
+  const shell = $('roomShell'), rect = shell.getBoundingClientRect();
+  bar.setPointerCapture(e.pointerId); bar.classList.add('on');
+  const move = ev => {
+    const w = Math.round(Math.max(340, Math.min(rect.width - 480, rect.right - ev.clientX)));
+    shell.style.setProperty('--chatW', w + 'px'); U.chatW = w;
+  };
+  const up = () => { bar.removeEventListener('pointermove', move); bar.removeEventListener('pointerup', up); bar.classList.remove('on'); saveU(); };
+  bar.addEventListener('pointermove', move); bar.addEventListener('pointerup', up);
+});
+document.addEventListener('dblclick', e => { if (e.target.closest('#vsplit')) { U.chatW = null; saveU(); $('roomShell').style.setProperty('--chatW', ''); } });
 // Ctrl (or ⌘) + wheel over the board zooms the map
 document.addEventListener('wheel', e => {
   if (!(e.ctrlKey || e.metaKey) || !e.target.closest('.board')) return;

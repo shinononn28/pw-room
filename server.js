@@ -113,7 +113,10 @@ function issueSeatKey(entry, cid, conn) {
   return key;
 }
 function seatFor(entry, seat, gmKey, seatKey, conn) {
-  if (seat === 'gm') return gmKey && sha(gmKey) === entry.gmKeyHash ? { seat: 'gm' } : { seat: 'obs', why: 'GMキーが違うため、観戦で入りました' };
+  const isGm = !!gmKey && sha(gmKey) === entry.gmKeyHash;
+  if (seat === 'gm') return isGm ? { seat: 'gm' } : { seat: 'obs', why: 'GMキーが違うため、観戦で入りました' };
+  // the GM never takes a player's seat (a PC the GM imported is handed over with its seat link)
+  if (isGm && seat && seat !== 'obs') return { seat: 'gm', why: 'GMはPLの席には座れません' };
   if (seat && core.isPcSeat(entry.room, seat)) {
     const h = entry.seatKeyHashes[seat];
     if (!h) { issueSeatKey(entry, seat, conn); return { seat }; }
