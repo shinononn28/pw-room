@@ -16,6 +16,22 @@ const sha = s => nodeCrypto.createHash('sha256').update(String(s)).digest('hex')
 const randomId = (p, n = 14) => p + nodeCrypto.randomBytes(16).toString('base64url').replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, n);
 const html = () => fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8').replace('<!--PW_ONLINE-->', '<script>window.PW_ONLINE = true;</script>');
 
+// ---------- diagnosis ----------
+function explain(e) {
+  const code = e && (e.code ?? '');
+  const msg = String((e && e.message) || e || '');
+  if (code === 5 || /NOT_FOUND/i.test(msg)) return 'Firestoreのデータベースが見つかりません。名前付きのデータベースなら、Renderの環境変数 FIRESTORE_DATABASE_ID にその名前を入れてください';
+  if (code === 7 || /PERMISSION_DENIED/i.test(msg)) return 'Firestoreへの権限がありません。FIREBASE_SERVICE_ACCOUNT が同じプロジェクトの秘密鍵か確認してください';
+  if (code === 16 || /UNAUTHENTICATED|invalid_grant|private key/i.test(msg)) return 'サービスアカウントの鍵が無効です。秘密鍵を作り直して FIREBASE_SERVICE_ACCOUNT に貼り直してください';
+  if (code === 9 || /FAILED_PRECONDITION/i.test(msg)) return 'Firestoreの設定が足りません（' + msg.slice(0, 120) + '）';
+  return msg.slice(0, 160) || '不明なエラー';
+}
+let storeStatus = { ok: null, detail: '確認中' };
+(async () => {
+  try { storeStatus = await store.check(); console.log('store check ok:', storeStatus.detail); }
+  catch (e) { storeStatus = { ok: false, detail: explain(e) }; console.error('store check FAILED:', storeStatus.detail, '\n', e); }
+})();
+
 // ---------- rooms in memory ----------
 const rooms = new Map();     // id -> entry { room, gmKeyHash, clients:Set, seq, saveTimer, idleSince }
 const loading = new Map();
@@ -63,18 +79,25 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' }); res.end(fs.readFileSync(path.join(__dirname, 'public', 'core.js'))); return;
     }
     if (req.method === 'GET' && url.pathname === '/healthz') { res.writeHead(200); res.end('ok'); return; }
+    if (req.method === 'GET' && url.pathname === '/api/status') {
+      try { storeStatus = await store.check(); } catch (e) { storeStatus = { ok: false, detail: explain(e) }; }
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ store: store.kind, ok: storeStatus.ok, detail: storeStatus.detail, roomsInMemory: rooms.size }, null, 2)); return;
+    }
     if (req.method === 'POST' && url.pathname === '/api/rooms') {
       const body = await readJson(req);
       const room = core.newRoom(String(body.name || '').slice(0, 60) || '新しい部屋');
       room.id = randomId('r');
       const gmKey = randomId('k', 24);
       const entry = { room, gmKeyHash: sha(gmKey), seatKeyHashes: {}, clients: new Set(), seq: 0, saveTimer: null, idleSince: Date.now() };
+      const { logs, ...rest } = room;
+      try { await store.saveRoom(room.id, JSON.stringify(rest), { name: room.name, gmKeyHash: entry.gmKeyHash, seatKeyHashes: {} }); }
+      catch (e) { console.error('create failed', e); res.writeHead(500, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ error: '部屋を保存できませんでした：' + explain(e) })); return; }
       rooms.set(room.id, entry);
-      await saveNow(room.id, entry);
       res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ id: room.id, gmKey, name: room.name })); return;
     }
     res.writeHead(404); res.end('not found');
-  } catch (e) { console.error(e); res.writeHead(500); res.end('error'); }
+  } catch (e) { console.error(e); res.writeHead(500, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ error: explain(e) })); }
 });
 
 // ---------- websocket ----------
@@ -177,7 +200,7 @@ wss.on('connection', ws => {
         for (const c of entry.clients) if (c !== conn && c.seat === m.cid) { c.seat = 'obs'; send(c.ws, { t: 'error', message: 'GMが席の鍵を作り直したため、観戦に戻りました' }); sendJoined(c); }
         send(ws, { t: 'reissued', cid: m.cid });
       }
-    } catch (e) { console.error(e); send(ws, { t: 'error', message: 'サーバーでエラーが起きました' }); }
+    } catch (e) { console.error('ws handler error:', m && m.t, e); send(ws, { t: 'error', message: 'サーバーでエラーが起きました：' + explain(e) }); }
   });
   ws.on('close', () => { if (conn.entry) { conn.entry.clients.delete(conn); if (!conn.entry.clients.size) conn.entry.idleSince = Date.now(); } });
 });

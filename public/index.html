@@ -677,6 +677,18 @@ dialog.mapDlg{overflow:auto}
 @media (min-width:960px){ .boardBox{justify-content:flex-start !important;align-items:flex-start !important} }
 
 .seatRow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:-2px 0 10px;font-size:.82rem}
+
+/* zoom buttons: a slim vertical strip at the right edge of the map, never over the board */
+@media (min-width:960px){
+  .boardCol{flex-direction:row !important;gap:6px}
+  .boardCol .boardBox{flex:1;min-width:0}
+}
+.zoomV{display:flex;flex-direction:column;align-items:center;gap:4px;flex:none;width:40px;padding:4px 0;align-self:flex-start;background:var(--cloud);border:1px solid var(--line)}
+.zoomV button{width:30px;height:30px;border-radius:999px;border:1px solid var(--line);background:var(--mist);color:var(--ink);font-weight:800;font-size:1rem;cursor:pointer;padding:0}
+.zoomV button:hover{border-color:var(--pink);color:var(--pink)}
+.zoomV .fit{font-size:.62rem;height:34px}
+.zoomV span{font-family:var(--num);font-size:.68rem;font-weight:700;color:var(--ink-2)}
+@media (min-width:960px){ .boardBox .board{margin:0 auto !important} }
 </style>
 </head>
 <body>
@@ -1482,7 +1494,9 @@ function boardCells(room) {
 const isPhone = () => matchMedia('(max-width:720px)').matches;
 const ZOOMS = [0.6, 0.75, 1, 1.25, 1.5, 2, 2.5];
 const zoomOf = () => ZOOMS.includes(U.zoom) ? U.zoom : 1;
-const zoomCtl = () => `<div class="zoomCtl" role="group" aria-label="マップの拡大縮小"><button data-zoom="-1" aria-label="縮小">−</button><span>${Math.round(zoomOf() * 100)}%</span><button data-zoom="1" aria-label="拡大">＋</button><button data-zoom="0" class="fit">全体</button></div>`;
+const zoomCtl = vertical => vertical
+  ? `<div class="zoomV" role="group" aria-label="マップの拡大縮小"><button data-zoom="1" aria-label="拡大">＋</button><span>${Math.round(zoomOf() * 100)}%</span><button data-zoom="-1" aria-label="縮小">−</button><button data-zoom="0" class="fit" title="画面に合わせる">全体</button></div>`
+  : `<div class="zoomCtl" role="group" aria-label="マップの拡大縮小"><button data-zoom="-1" aria-label="縮小">−</button><span>${Math.round(zoomOf() * 100)}%</span><button data-zoom="1" aria-label="拡大">＋</button><button data-zoom="0" class="fit">全体</button></div>`;
 function statLine(room, ru, c, k) {
   if (!(k in c.cur)) return '';
   const st = c.data.stats[k] || {}, can = canControlChar(room, ru.viewer, c.id);
@@ -1521,9 +1535,10 @@ function renderMap(room, ru) {
       <div class="order" aria-label="手番順（SS値の大きい順）">${order.map(item).join('') || '<p class="muted">「キャラを取り込む」から読み込むと、SS値の順に並びます</p>'}
         ${npcs.length ? `<div class="grp">NPC</div>${npcs.map(item).join('')}` : ''}</div>
       <div class="boardCol">
-        <div class="boardBox">${isPhone() ? '' : zoomCtl()}<div class="board" id="board" style="--z:${isPhone() ? 1 : zoomOf()}">${cells}</div>
+        <div class="boardBox"><div class="board" id="board" style="--z:${isPhone() ? 1 : zoomOf()}">${cells}</div>
           ${!isPhone() && sel ? `<div class="selbar"><span>${esc(sel.data.name)}を移動中${Number.isFinite(sel.cur['移動値']) ? `<span class="mvtag">移動値${sel.cur['移動値']}</span>` : ''}</span><button class="btn small" data-offboard>盤外へ</button><button class="btn small" data-unsel>やめる</button></div>` : ''}
         </div>
+        ${isPhone() ? '' : zoomCtl(true)}
       </div>
     </div>    </div>`;
 }

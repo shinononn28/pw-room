@@ -18,6 +18,7 @@ function memoryStore() {
       const r = rooms.get(id) || { logs: new Map() };
       Object.assign(r, { json, ...meta }); rooms.set(id, r);
     },
+    async check() { return { ok: true, detail: 'メモリ保存（再起動で消えます）' }; },
     async putLogs(id, logs) { const r = rooms.get(id); if (!r) return; for (const l of logs) r.logs.set(l.id, { n: l.n, tab: l.tab, json: JSON.stringify(l) }); },
     async deleteLogs(id, ids) { const r = rooms.get(id); if (!r) return; ids.forEach(x => r.logs.delete(x)); },
   };
@@ -32,6 +33,11 @@ function firestoreStore() {
   const inChunks = async (items, fn) => { for (let i = 0; i < items.length; i += 400) { const b = db.batch(); items.slice(i, i + 400).forEach(x => fn(b, x)); await b.commit(); } };
   return {
     kind: 'firestore',
+    // a cheap read that fails the same way loading a room would (wrong database, no permission, ...)
+    async check() {
+      await base.limit(1).get();
+      return { ok: true, detail: `Firestore（データベース: ${process.env.FIRESTORE_DATABASE_ID || '(default)'}、GROUP_ID: ${process.env.GROUP_ID || 'default'}）` };
+    },
     async load(id) {
       const doc = await base.doc(id).get();
       if (!doc.exists) return null;
@@ -47,4 +53,18 @@ function firestoreStore() {
   };
 }
 
-module.exports = { createStore: () => process.env.FIREBASE_SERVICE_ACCOUNT ? firestoreStore() : memoryStore() };
+// if Firestore cannot even be set up (broken key JSON etc.), keep the server up and report why
+function brokenStore(err) {
+  const fail = async () => { throw err; };
+  return { kind: 'firestore', check: fail, load: fail, saveRoom: fail, putLogs: fail, deleteLogs: fail };
+}
+function createStore() {
+  if (!process.env.FIREBASE_SERVICE_ACCOUNT) return memoryStore();
+  try { return firestoreStore(); }
+  catch (e) {
+    const err = new Error('FIREBASE_SERVICE_ACCOUNT を読み込めませんでした（JSONの中身をまるごと貼れているか確認してください）：' + e.message);
+    console.error(err.message);
+    return brokenStore(err);
+  }
+}
+module.exports = { createStore };
