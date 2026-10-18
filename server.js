@@ -124,12 +124,21 @@ function seatFor(entry, seat, gmKey, seatKey, conn) {
 }
 function sendState(conn) {
   const { room } = conn.entry;
-  send(conn.ws, { t: 'state', seat: conn.seat, room: core.viewRoom(room, conn.seat), locked: Object.keys(conn.entry.seatKeyHashes) });
+  const v = core.viewRoom(room, conn.seat);
+  conn.sentDv = conn.sentDv || {};
+  for (const [cid, ch] of Object.entries(v.chars)) {
+    if (conn.sentDv[cid] === ch.dv) delete ch.data;      // the browser keeps the sheet it already has
+    else conn.sentDv[cid] = ch.dv;
+  }
+  send(conn.ws, { t: 'state', seat: conn.seat, room: v, locked: Object.keys(conn.entry.seatKeyHashes) });
 }
+const JOIN_LOGS = 1000;   // older lines stay in the store; the room opens with the most recent ones
 function sendJoined(conn) {
   const { room } = conn.entry;
+  conn.sentDv = Object.fromEntries(Object.values(room.chars).map(c => [c.id, c.dv]));
+  const logs = room.logs.map(l => core.viewLog(room, l, conn.seat)).filter(Boolean);
   send(conn.ws, { t: 'joined', seat: conn.seat, room: core.viewRoom(room, conn.seat), locked: Object.keys(conn.entry.seatKeyHashes),
-    logs: room.logs.map(l => core.viewLog(room, l, conn.seat)).filter(Boolean) });
+    logs: logs.slice(-JOIN_LOGS), olderLogs: Math.max(0, logs.length - JOIN_LOGS) });
 }
 function broadcast(entry, diff) {
   const { room } = entry;
@@ -163,6 +172,7 @@ async function handleAct(conn, a) {
     const now = room.logs.find(l => l.id === id);
     if (!now) removed.push(id); else if (JSON.stringify(now) !== js) updated.push(now);
   }
+  if (a.type === 'editSay') { const l = room.logs.find(x => x.id === a.id); if (l && !updated.includes(l)) updated.push(l); }
   let deleted = removed;
   if (allIds) { const still = new Set(room.logs.map(l => l.id)); deleted = [...allIds].filter(id => !still.has(id)); }
   if (a.type === 'addChar' && a.side === 'pc' && typeof ret === 'string') {

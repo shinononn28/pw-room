@@ -167,7 +167,7 @@ function apply(room, a, by) {
       const id = typeof a.id === 'string' && /^c[0-9a-z]{6,30}$/.test(a.id) && !room.chars[a.id] ? a.id : uid('c');
       const cur = {}; for (const [k, s] of Object.entries(data.stats)) cur[k] = statStart(s);
       const colors = NAME_COLORS.slice(0, 8);
-      room.chars[id] = { id, side: a.side, data, cur, used: {}, variation: -1, x: null, y: null, portrait: data.portraits[0]?.label || null,
+      room.chars[id] = { id, side: a.side, data, dv: 1, cur, used: {}, variation: -1, x: null, y: null, portrait: data.portraits[0]?.label || null,
         color: a.side === 'enemy' ? '#FF7A7A' : colors[Object.keys(room.chars).filter(k => room.chars[k].side !== 'enemy').length % colors.length], owner: by };
       if (a.side === 'pc') room.cards.hands[id] = room.cards.hands[id] || [];
       log(room, { tab: opsTab(room), type: 'sys', by, text: `${data.name}（${{ pc: 'PC', enemy: '敵', npc: 'NPC' }[a.side]}）が参加しました` });
@@ -177,7 +177,7 @@ function apply(room, a, by) {
       need(ch && canControlChar(room, by, a.cid), 'このキャラクターは編集できません');
       const data = normalizeChar(a.data);
       for (const [k, s] of Object.entries(data.stats)) if (!(k in ch.cur)) ch.cur[k] = statStart(s);
-      ch.data = data;
+      ch.data = data; ch.dv = (ch.dv || 1) + 1;
       if (!(ch.variation < data.variations.length)) ch.variation = -1;
       if (ch.portrait && !data.portraits.some(p => p.label === ch.portrait)) ch.portrait = data.portraits[0]?.label || null;
       log(room, { tab: opsTab(room), type: 'sys', by, text: `${data.name}のデータを更新しました` });
@@ -223,6 +223,7 @@ function apply(room, a, by) {
     case 'setPortraits': {
       need(ch && canControlChar(room, by, a.cid), 'このキャラクターは編集できません');
       ch.data.portraits = a.portraits.map(p => ({ label: String(p.label || '立ち絵'), url: toDirectImage(p.url) })).filter(p => p.url);
+      ch.dv = (ch.dv || 1) + 1;
       if (!ch.data.portraits.some(p => p.label === ch.portrait)) ch.portrait = ch.data.portraits[0]?.label || null;
       return;
     }
@@ -417,6 +418,17 @@ function apply(room, a, by) {
       }
       return;
     }
+    case 'editSay': { // fix the text of one's own message later (dice results are never re-rolled)
+      const l = room.logs.find(x => x.id === a.id);
+      need(l && l.type === 'say', 'その発言は見つかりません');
+      need(l.by === by || by === 'gm', '自分の発言だけ編集できます');
+      need(!l.dice, 'ダイスの発言は結果が変わってしまうので編集できません');
+      const text = String(a.text || '').trim();
+      need(text, '空にはできません');
+      if (text === l.text) return;
+      l.text = text; l.edited = Date.now();
+      return;
+    }
     case 'addTab': {
       need((a.name || '').trim(), 'タブ名を入れてください');
       const t = { id: typeof a.id === 'string' && /^t[0-9a-z]{6,30}$/.test(a.id) && !room.tabs.some(x => x.id === a.id) ? a.id : uid('t'), name: a.name.trim() };
@@ -455,6 +467,7 @@ function migrateRoom(room) {
   for (const ch of Object.values(room.chars)) {
     if (!ch.data.stats || ch.data.skills.some(s => !('tp' in s))) { try { ch.data = normalizeChar({ ...ch.data, values: ch.data.stats ? Object.fromEntries(Object.entries(ch.data.stats)) : ch.data.values }); } catch (e) {} }
     if (ch.variation == null) ch.variation = -1;
+    if (!ch.dv) ch.dv = 1;
   }
   return room;
 }
