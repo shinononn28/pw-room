@@ -468,6 +468,14 @@ function applyInner(room, a, by, pid) {
         else need(by === a.as, '自分のキャラクターとしてだけ発言できます');
       }
       const freeName = speakerName(room, by, a.name, pid);
+      // a reply quotes a message of the same tab (so it never shows anything the readers could not see already)
+      let reply;
+      if (a.reply) {
+        const o = room.logs.find(x => x.id === a.reply);
+        need(o && o.type === 'say' && o.tab === tab.id, '返信先の発言が見つかりません');
+        const body = o.dice ? (o.dice.secret ? 'シークレットダイス' : `${o.dice.comment ? o.dice.comment + ' ' : ''}${o.dice.result}`) : o.text;
+        reply = { id: o.id, name: o.name || '', pid: o.pid || null, by: o.by, text: String(body || '').replace(/\s+/g, ' ').slice(0, 60) };
+      }
       // a 特技 command spends its TP automatically; refuse before anything is logged if TP is short
       let tpCh = null;
       if (a.as && Number.isFinite(a.spendTP) && a.spendTP > 0) {
@@ -478,7 +486,7 @@ function applyInner(room, a, by, pid) {
       const pUrl = a.as ? (room.chars[a.as].data.portraits.find(p => p.label === a.portrait) || {}).url || null : null;
       const dice = parseDice(text);
       const color = a.as ? room.chars[a.as].color : (isHex(a.color) ? a.color : null);
-      log(room, { tab: tab.id, type: 'say', by, as: a.as || null, name: a.as ? room.chars[a.as].data.name : freeName, color, portrait: a.portrait || null, portraitUrl: pUrl, text, cmd: a.cmd || null, dice, fx: a.fx === 'wd' ? 'wd' : undefined });
+      log(room, { tab: tab.id, type: 'say', by, as: a.as || null, name: a.as ? room.chars[a.as].data.name : freeName, color, portrait: a.portrait || null, portraitUrl: pUrl, text, cmd: a.cmd || null, dice, fx: a.fx === 'wd' ? 'wd' : undefined, reply });
       if (tpCh) {
         const before = tpCh.cur.TP;
         tpCh.cur.TP = before - a.spendTP;

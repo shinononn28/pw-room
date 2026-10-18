@@ -695,6 +695,22 @@ dialog.mapDlg{overflow:auto}
 .medit{border:none;background:none;color:#8E8F94;font-size:.72rem;font-weight:700;margin-left:8px;cursor:pointer;padding:0 4px;border-radius:4px;opacity:0;transition:opacity .15s}
 .msg:hover .medit,.medit:focus-visible{opacity:1}
 @media (hover:none){ .medit{opacity:1} }
+/* replies: the quote above a message, the bar above the input, a mark on replies to you */
+.mquote{display:flex;align-items:center;gap:6px;max-width:100%;margin:0 0 3px;padding:2px 8px 2px 6px;border:none;border-left:2px solid #5A5C63;border-radius:0 4px 4px 0;background:rgba(255,255,255,.05);color:#A8A9AE;font:inherit;font-size:.76rem;cursor:pointer;text-align:left;min-width:0}
+.mquote:hover{background:rgba(255,255,255,.1);color:#D6D7DB}
+.mquote b{font-weight:800;flex:none;max-width:9em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qarrow{flex:none;color:#8E8F94}
+.qtext{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:6px;color:#A8A9AE}
+.mquote .qtext{margin-left:0}
+.msg.toMe{background:linear-gradient(90deg,color-mix(in srgb,var(--pink) 16%,transparent),transparent 70%);box-shadow:inset 3px 0 0 var(--pink)}
+.msg.toMe .mquote{border-left-color:var(--pink)}
+.msg.flash{animation:msgFlash 1.4s ease}
+@keyframes msgFlash{0%,40%{background:color-mix(in srgb,var(--gold) 28%,transparent)}100%{background:transparent}}
+.replyRow{display:flex;align-items:center;gap:6px;font-size:.8rem;color:#CFCFD3;margin-bottom:6px;padding:4px 4px 4px 8px;border-left:2px solid var(--pink);background:rgba(255,255,255,.05);border-radius:0 6px 6px 0}
+.replyRow #replyInfo{flex:1;min-width:0;display:flex;align-items:center;white-space:nowrap;overflow:hidden}
+.replyRow #replyInfo b{flex:none;max-width:9em;overflow:hidden;text-overflow:ellipsis}
+.replyRow .btn{flex:none;padding:1px 8px}
+.medit + .medit{margin-left:2px}
 .edited{color:#8E8F94;font-size:.72rem;margin-left:6px}
 .olderNote{color:#8E8F94;font-size:.76rem;text-align:center;padding:6px 0 10px;border-bottom:1px solid rgba(255,255,255,.12)}
 
@@ -917,6 +933,19 @@ input[type=range]{width:100%;accent-color:var(--pink)}
   .ohd .btn{flex:none;white-space:nowrap}
   .boardBox .board{margin:0 !important}
 }
+
+/* PC header: everything packed to the left in one row (no stretched gap), a narrow seat menu */
+@media (min-width:960px){
+  #roomShell .top{flex-wrap:nowrap !important;gap:8px}
+  #roomShell .top .grow{display:none}
+  #roomShell .top h1{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #roomShell .top .btn,#roomShell .top .back{flex:none}
+  #roomShell .viewsel{flex:none;margin-left:8px;padding-left:12px;border-left:1px solid var(--line)}
+  #roomShell .viewsel select{width:auto;max-width:11em}
+}
+/* the turn-order list scrolls without a visible scrollbar (it sat right against the board) */
+#mapP .order{scrollbar-width:none}
+#mapP .order::-webkit-scrollbar{display:none}
 
 /* ===== phones: board operated in place, turn order as a ▶ fold-out column beside it, hand right under ===== */
 @media (max-width:720px){
@@ -1465,6 +1494,14 @@ function applyInner(room, a, by, pid) {
         else need(by === a.as, '自分のキャラクターとしてだけ発言できます');
       }
       const freeName = speakerName(room, by, a.name, pid);
+      // a reply quotes a message of the same tab (so it never shows anything the readers could not see already)
+      let reply;
+      if (a.reply) {
+        const o = room.logs.find(x => x.id === a.reply);
+        need(o && o.type === 'say' && o.tab === tab.id, '返信先の発言が見つかりません');
+        const body = o.dice ? (o.dice.secret ? 'シークレットダイス' : `${o.dice.comment ? o.dice.comment + ' ' : ''}${o.dice.result}`) : o.text;
+        reply = { id: o.id, name: o.name || '', pid: o.pid || null, by: o.by, text: String(body || '').replace(/\s+/g, ' ').slice(0, 60) };
+      }
       // a 特技 command spends its TP automatically; refuse before anything is logged if TP is short
       let tpCh = null;
       if (a.as && Number.isFinite(a.spendTP) && a.spendTP > 0) {
@@ -1475,7 +1512,7 @@ function applyInner(room, a, by, pid) {
       const pUrl = a.as ? (room.chars[a.as].data.portraits.find(p => p.label === a.portrait) || {}).url || null : null;
       const dice = parseDice(text);
       const color = a.as ? room.chars[a.as].color : (isHex(a.color) ? a.color : null);
-      log(room, { tab: tab.id, type: 'say', by, as: a.as || null, name: a.as ? room.chars[a.as].data.name : freeName, color, portrait: a.portrait || null, portraitUrl: pUrl, text, cmd: a.cmd || null, dice, fx: a.fx === 'wd' ? 'wd' : undefined });
+      log(room, { tab: tab.id, type: 'say', by, as: a.as || null, name: a.as ? room.chars[a.as].data.name : freeName, color, portrait: a.portrait || null, portraitUrl: pUrl, text, cmd: a.cmd || null, dice, fx: a.fx === 'wd' ? 'wd' : undefined, reply });
       if (tpCh) {
         const before = tpCh.cur.TP;
         tpCh.cur.TP = before - a.spendTP;
@@ -1935,6 +1972,7 @@ function renderRoom() {
               <div class="log" id="chatLog"></div>
               <div class="typing" id="typing" aria-live="polite"></div>
               <div class="composer">
+                <div class="replyRow" id="replyRow" hidden><span class="qarrow">↩</span><span id="replyInfo"></span><button class="btn small" id="replyClear" aria-label="返信をやめる">✕</button></div>
                 <div class="row" id="tpRow" hidden><span id="tpInfo" style="flex:1"></span><button class="btn small" id="cmdClear">コマンドをやめる</button></div>
                 <div class="speak">
                   <span id="speakFace"></span><button class="swatch" id="colorBtn" title="名前の色" aria-label="名前の色を選ぶ"></button>
@@ -2236,8 +2274,11 @@ function logHtml(room, l) {
   if (l.type === 'say') {
     const curP = c && (c.data.portraits.find(x => x.label === l.portrait) || c.data.portraits.find(x => x.label === c.portrait) || c.data.portraits[0]);
     const face = l.portraitUrl ? `<img class="pt" src="${esc(l.portraitUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" ${ptFallbackAttrs(c, curP && curP.url !== l.portraitUrl ? curP.url : '')}>` : c ? ptImg(c, l.portrait) : `<span class="pt none" style="background:var(--void-2)">${esc((l.name || '?').slice(0, 1))}</span>`;
-    return `<div class="msg">${face}
-      <div class="mbody"><div class="mname" style="${nameCss(l.color || (c ? c.color : '#B48CFF'))}">${esc(l.name || (c && c.data.name) || '')}<span class="t"> - ${time}</span>${l.edited ? '<span class="edited">（編集済み）</span>' : ''}${!l.dice && (ONLINE ? l.pid === myPid() : l.by === ui.viewerNow) ? `<button class="medit" data-editmsg="${l.id}">編集</button>` : ''}</div>
+    const mine = ONLINE ? l.pid === myPid() : l.by === ui.viewerNow;
+    const toMe = l.reply && !mine && (ONLINE ? l.reply.pid === myPid() : l.reply.by === ui.viewerNow);
+    const quote = l.reply ? `<button class="mquote" data-jump="${l.reply.id}" title="返信先の発言へ"><span class="qarrow">↩</span><b>${esc(l.reply.name)}</b><span class="qtext">${esc(l.reply.text)}</span></button>` : '';
+    return `<div class="msg ${toMe ? 'toMe' : ''}" data-lid="${l.id}">${face}
+      <div class="mbody">${quote}<div class="mname" style="${nameCss(l.color || (c ? c.color : '#B48CFF'))}">${esc(l.name || (c && c.data.name) || '')}<span class="t"> - ${time}</span>${l.edited ? '<span class="edited">（編集済み）</span>' : ''}<button class="medit" data-replymsg="${l.id}">返信</button>${!l.dice && mine ? `<button class="medit" data-editmsg="${l.id}">編集</button>` : ''}</div>
       ${diceHtml(l)}</div></div>`;
   }
   const who = esc(l.byName || seatName(room, l.by));
@@ -2286,7 +2327,7 @@ function diceHtml(l) {
 function logPlain(room, l) {
   const c = l.as ? room.chars[l.as] : null;
   const sn = l.seatName || seatName(room, l.seat);
-  if (l.type === 'say') return `${l.name || (c && c.data.name)}：${l.dice ? (l.dice.hidden ? 'シークレットダイス' : `${l.dice.comment ? l.dice.comment + ' ' : ''}${l.dice.result}`) : l.text}`;
+  if (l.type === 'say') return `${l.name || (c && c.data.name)}：${l.reply ? `（${l.reply.name}への返信）` : ''}${l.dice ? (l.dice.hidden ? 'シークレットダイス' : `${l.dice.comment ? l.dice.comment + ' ' : ''}${l.dice.result}`) : l.text}`;
   if (l.type === 'play') return `［${sn}］${l.cards.map(cardText).join(' ')} を${KIND[l.kind] || l.kind}${l.memo ? `（${l.memo}）` : ''}`;
   if (l.type === 'weapon') return `${l.charName}：` + l.weapons.map(w => { const at = Object.entries(w.attrs || {}).map(([k, x]) => `${k}:${x}`).join(' '); return `【武装】${w.suit ? SUIT[w.suit] + ' ' : ''}${w.name}${at ? `（${at}）` : ''}${w.text ? '\n' + w.text : ''}`; }).join('\n')
     + `\n使用した手札：${l.cards.length ? l.cards.map(cardText).join(' → ') : 'なし'}${l.targets.length ? `　対象：${l.targets.join('、')}` : ''}${l.memo ? `　${l.memo}` : ''}`;
@@ -2334,6 +2375,9 @@ function renderChat(room, ru) {
   box._sigs = next; box.dataset.key = key;
   if ((atBottom && changed) || box.dataset.tab !== ru.tab) box.scrollTop = box.scrollHeight;
   box.dataset.tab = ru.tab;
+  if (ui.reply && ui.reply.tab !== ru.tab) ui.reply = null;
+  $('replyRow').hidden = !ui.reply;
+  if (ui.reply) setHtml($('replyInfo'), `<b>${esc(ui.reply.name)}</b>への返信<span class="qtext">${esc(ui.reply.text)}</span>`);
   const opts = speakerOptions(room, v);
   if (!opts.some(o => o[0] === ru.as)) ru.as = opts[0][0];
   setHtml($('asSel'), opts.map(([id, n]) => `<option value="${id}" ${id === ru.as ? 'selected' : ''}>${esc(n)}</option>`).join(''));
@@ -2495,6 +2539,7 @@ function onNet(m) {
       r.logs.push(...(m.add || []));
       // the message replaces its "入力中" in the same frame
       for (const l of m.add || []) if (l.type === 'say' && l.pid && ui.typing[l.tab]) delete ui.typing[l.tab][l.pid];
+      for (const l of m.add || []) if (l.type === 'say' && l.reply && l.reply.pid === myPid() && l.pid !== myPid()) toast(`${l.name}があなたの発言に返信しました`);
     }
     queueRender(); return;
   }
@@ -3089,8 +3134,8 @@ function bindRoomStatic() {
     const cmd = ui.cmd && c && ui.cmd.cid === c.id ? ui.cmd : null;
     const spend = cmd && cmd.tp ? cmd.tp : null;
     const r = act({ type: 'say', tab: ru.tab, as: c ? c.id : null, name: c ? null : ($('freeName').value.trim() || seatName(room, ru.viewer)), color: c ? null : (ru.freeColor || null), portrait: c ? c.portrait : null, text,
-      cmd: cmd ? cmd.name : null, spendTP: Number.isFinite(spend) ? spend : null, fx: cmd && cmd.fx ? cmd.fx : undefined });
-    if (r !== FAIL) { $('sayText').value = ''; ui.cmd = null; $('sayText').blur(); renderRoom(); }
+      cmd: cmd ? cmd.name : null, spendTP: Number.isFinite(spend) ? spend : null, fx: cmd && cmd.fx ? cmd.fx : undefined, reply: ui.reply ? ui.reply.id : undefined });
+    if (r !== FAIL) { $('sayText').value = ''; ui.cmd = null; ui.reply = null; $('sayText').blur(); renderRoom(); }
   };
   $('sayBtn').onclick = send;
   $('palBtn').onclick = () => openModal('cmd');
@@ -3100,6 +3145,7 @@ function bindRoomStatic() {
     else colorDialog(ru.freeColor, col => { ru.freeColor = col; saveU(); renderRoom(); });
   };
   $('cmdClear').onclick = () => { ui.cmd = null; $('sayText').value = ''; renderRoom(); };
+  $('replyClear').onclick = () => { ui.reply = null; renderRoom(); };
   $('sayText').addEventListener('input', typingInput);
   $('sayText').addEventListener('blur', () => typingOff());
   $('sayText').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
@@ -3265,6 +3311,19 @@ document.addEventListener('click', e => {
     window.scrollTo(0, 0); return;
   }
   // chat
+  if ((el = q('[data-replymsg]'))) {
+    const l = room.logs.find(x => x.id === el.dataset.replymsg); if (!l) return;
+    const vl = viewLog(room, l, ru.viewer, myPid()) || l;
+    const body = vl.dice ? (vl.dice.hidden || vl.dice.secret ? 'シークレットダイス' : `${vl.dice.comment ? vl.dice.comment + ' ' : ''}${vl.dice.result}`) : vl.text;
+    ui.reply = { id: l.id, tab: ru.tab, name: l.name || '', text: String(body || '').replace(/\s+/g, ' ').slice(0, 60) };
+    renderRoom(); $('sayText').focus(); return;
+  }
+  if ((el = q('[data-jump]'))) {
+    const m = document.querySelector(`#chatLog [data-lid="${CSS.escape(el.dataset.jump)}"]`);
+    if (!m) { toast('返信先の発言は、表示している範囲より前にあります'); return; }
+    m.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    m.classList.remove('flash'); void m.offsetWidth; m.classList.add('flash'); return;
+  }
   if ((el = q('[data-editmsg]'))) {
     const l = room.logs.find(x => x.id === el.dataset.editmsg); if (!l) return;
     openDlg(`<h1>発言を編集</h1><textarea id="edText" rows="6" style="width:100%">${esc(l.text)}</textarea>
