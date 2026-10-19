@@ -130,6 +130,13 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pink)}
 .tok.enemy{background:var(--void);border-color:#1A1440}
 .tok.sel{box-shadow:0 0 0 4px var(--gold),0 3px 8px rgba(10,13,30,.45)}
 .tok.down{filter:grayscale(.9);opacity:.55}
+/* 巨大キャラクター: one big piece over 2×2 squares */
+.giantBox{position:relative;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2;min-width:0;min-height:0}
+.giantBox .tok{pointer-events:auto;cursor:pointer}
+.tok.giant{width:min(90%,180px) !important;border-radius:22%;border-width:4px;font-size:clamp(.9rem,3.4vw,1.5rem) !important}
+.cell.covered{background-image:linear-gradient(color-mix(in srgb,#FF5C5C 12%,transparent),color-mix(in srgb,#FF5C5C 12%,transparent))}
+.giantBox .cfx{position:absolute;top:4px;right:4px;min-width:17px;height:17px;border-radius:9px;background:#7C5CFF;color:#fff;font-size:.62rem;font-weight:800;line-height:17px;text-align:center;padding:0 4px;box-shadow:0 0 0 2px #fff;z-index:3;pointer-events:none}
+.mactions [data-setsize].on{border-color:#FF7A7A;color:#FF7A7A;background:color-mix(in srgb,#FF7A7A 14%,transparent)}
 .tok img{width:100%;height:100%;object-fit:cover;object-position:top}
 .mapbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:10px;max-width:620px;margin-left:auto;margin-right:auto}
 
@@ -216,9 +223,34 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pink)}
 .dice.ok .dverdict{background:var(--ok);color:#fff} .dice.ng .dverdict{background:var(--ng);color:#fff}
 .dice .dverdict.s{background:var(--void);color:#fff}
 .dice.secret{box-shadow:inset 0 0 0 1.5px var(--void-2)}
+/* a fresh roll: the total spins, then lands with the verdict */
+.dice.rolling .dverdict,.dice.rolling .dzoro{visibility:hidden}
+.dice.rolling .dres{opacity:.25}
+.dice.rolling .dtotal{animation:dShake .11s linear infinite;color:var(--ink-2)}
+.dice.landed .dtotal{animation:dPop .4s cubic-bezier(.2,1.6,.4,1)}
+.dice.landed .dverdict,.dice.landed .dzoro{animation:dPop .35s .05s cubic-bezier(.2,1.6,.4,1) both}
+.dice.landed.ok{animation:dOk 1.1s ease-out}
+.dice.landed.ng{animation:dNg .9s ease-out}
+.dice.crit{border-left-color:var(--gold);background:linear-gradient(100deg,color-mix(in srgb,var(--gold) 22%,var(--mist)),var(--mist) 70%)}
+.dice.crit{box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--gold) 70%,transparent)}
+.dice.fumble{box-shadow:inset 0 0 0 1.5px color-mix(in srgb,#6B4FA8 70%,transparent)}
+.dice.fumble{border-left-color:#6B4FA8;background:linear-gradient(100deg,color-mix(in srgb,#6B4FA8 22%,var(--mist)),var(--mist) 70%)}
+.dice .dzoro{font-weight:900;font-size:.78rem;border-radius:999px;padding:1px 9px;background:var(--gold);color:#4A3000}
+.dice.fumble .dzoro{background:#6B4FA8;color:#fff}
+.dice.landed.crit{animation:dCrit 1.4s ease-out}
+.dice.landed.crit .dtotal{animation:dPop .5s cubic-bezier(.2,1.8,.4,1);color:var(--gold);text-shadow:0 0 10px var(--gold)}
+.dice.landed.fumble .dtotal{animation:dDrop .6s ease-out}
+@keyframes dShake{0%{transform:translateY(-2px) rotate(-6deg)}50%{transform:translateY(2px) rotate(6deg)}100%{transform:translateY(-2px) rotate(-6deg)}}
+@keyframes dPop{0%{transform:scale(1.7);opacity:.3}100%{transform:none;opacity:1}}
+@keyframes dDrop{0%{transform:translateY(-10px);opacity:.3}60%{transform:translateY(3px)}100%{transform:none;opacity:1}}
+@keyframes dOk{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 70%,transparent)}100%{box-shadow:0 0 0 12px transparent}}
+@keyframes dNg{0%,100%{transform:none}20%{transform:translateX(-4px)}40%{transform:translateX(4px)}60%{transform:translateX(-2px)}}
+@keyframes dCrit{0%{box-shadow:0 0 0 0 var(--gold),0 0 24px var(--gold)}100%{box-shadow:0 0 0 16px transparent,0 0 0 transparent}}
+@media (prefers-reduced-motion:reduce){ .dice.rolling .dtotal,.dice.landed,.dice.landed *{animation:none !important} }
 .le{font-size:.86rem;padding:1px 0 1px 10px;border-left:3px solid var(--line);line-height:1.7;color:var(--ink-2)}
 .le .who{color:var(--ink)}
 .le.pc{border-left-color:var(--pink)} .le.gm{border-left-color:var(--void-2)} .le.sys{color:var(--ink-2)}
+.le.ko{color:#E2324A;font-weight:800;border-left-color:#E2324A}
 .le .who{font-weight:800;margin-right:6px}
 .le .kind{font-weight:800;font-size:.76rem;padding:1px 8px;border-radius:999px;background:var(--pink);color:#fff;margin:0 6px}
 .le.round{border-left:none;text-align:center;font-weight:800;color:var(--gold);letter-spacing:.04em;padding:6px 0;margin:4px 0;font-size:.82rem;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
@@ -565,6 +597,14 @@ dialog.mapDlg{max-width:min(760px,calc(100vw - 24px))}
 @media (hover:hover){.cell.target.reach:hover{background:#FFB3CF}}
 .mvtag{font-family:var(--num);font-size:.74rem;background:var(--pink);color:#fff;border-radius:999px;padding:0 8px;margin-left:6px}
 
+/* 同時使用: the cards that make a same-number set glow gold; other cards of the suits only get a faint dashed ring */
+.card.hint.combo{outline:3px solid var(--gold) !important;outline-offset:2px;box-shadow:0 0 14px color-mix(in srgb,var(--gold) 70%,transparent)}
+.card.hint.weak{outline:2px dashed color-mix(in srgb,var(--pink) 60%,transparent) !important;opacity:.6}
+.comboBar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 8px;padding:6px 10px;border-radius:10px;background:color-mix(in srgb,var(--gold) 14%,transparent);font-size:.82rem;font-weight:700}
+.comboBar.ok{background:color-mix(in srgb,var(--ok) 18%,transparent)}
+.comboBar.ng{background:color-mix(in srgb,#E2324A 14%,transparent);color:var(--ink)}
+.comboBar .comboGo{min-width:34px;font-family:var(--num);border-color:var(--gold)}
+.comboBar .muted{font-weight:400;font-size:.74rem}
 /* suit hint: an outline, so it shows in every theme and alongside the selection ring */
 .card.hint{outline:3px solid var(--pink);outline-offset:2px}
 :root[data-theme="light"] .card.hint{outline-color:#E23C79}
@@ -965,8 +1005,9 @@ dialog .mhead{z-index:8 !important}
 .cell.rng{box-shadow:inset 0 0 0 2px #FF9F1C;background-image:linear-gradient(rgba(255,159,28,.16),rgba(255,159,28,.16))}
 .cell.rng.reach{background-image:linear-gradient(rgba(255,92,150,.30),rgba(255,92,150,.30))}
 .tok.aimed{box-shadow:0 0 0 3px #FF9F1C,0 0 12px 3px rgba(255,159,28,.7) !important}
-.rangePick{flex:0 1 auto;min-width:0;max-width:11em;font-size:.76rem;padding:2px 4px;height:28px}
-.selbar .rangePick{max-width:14em}
+.rangePick{position:relative;flex:none;display:inline-flex;align-items:center;justify-content:center;height:28px;padding:0 10px;border:1px solid var(--line);border-radius:999px;background:var(--mist);color:var(--ink);font-size:.78rem;font-weight:800;white-space:nowrap;cursor:pointer}
+.rangePick.on{background:#FF9F1C;border-color:#FF9F1C;color:#2A1C00}
+.rangePick select{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:16px}
 /* weapon dialog: a small board with the range, and 射程内/外 on each target */
 .rangeBox{display:flex;align-items:center;gap:10px;margin:2px 0 8px;font-size:.78rem}
 .rangeMini{display:grid;grid-template-columns:repeat(8,1fr);width:136px;aspect-ratio:1;flex:none;border:1px solid var(--line);border-radius:4px;overflow:hidden}
@@ -1028,6 +1069,51 @@ dialog .mhead{z-index:8 !important}
 
 /* initiative: acted characters dim with 済, tied ones glow with a 動く button */
 .oitem.acted{opacity:.55}
+/* 戦闘不能 (HP 0 or less): out of the initiative, greyed until healed */
+.oitem.down{background:color-mix(in srgb,#B3263A 8%,var(--cloud))}
+.oitem.down .pt{filter:grayscale(1) brightness(.6)}
+.oitem.down .oname,.oitem.down .ometa,.oitem.down .ostat,.oitem.down .onum,.oitem.down .ofx{filter:grayscale(1);opacity:.5}
+.oitem.down::before{background:#7A7A7A}
+.koTag{align-self:flex-start;font-size:.62rem;font-weight:800;line-height:1.5;padding:0 6px;border-radius:4px;background:#C62E44;color:#fff;letter-spacing:.05em}
+.oitem.down.acted::after{display:none}
+.tok.down::after{content:"";position:absolute;inset:0;background:linear-gradient(45deg,transparent 46%,#E2324A 46% 54%,transparent 54%),linear-gradient(-45deg,transparent 46%,#E2324A 46% 54%,transparent 54%);opacity:.8}
+/* KO cut-in: the portrait drains to grey and falls, a red crack and 戦闘不能 */
+.fx-dd{--ddc:#C21E56}
+.fx-dd .ddShade{position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(60,0,40,.55) 0%,rgba(8,0,14,.92) 60%,#000 100%);animation:ddShade 2.8s ease forwards}
+.fx-dd .ddRing{position:absolute;left:50%;top:50%;width:60vmin;height:60vmin;margin:-30vmin;border-radius:50%;border:3px solid var(--ddc);box-shadow:0 0 40px var(--ddc),inset 0 0 40px var(--ddc);opacity:0;animation:ddRing 2.8s ease-out forwards}
+.fx-dd .ddWing{position:absolute;top:50%;width:52vw;height:56vh;margin-top:-30vh;opacity:0;
+  background:linear-gradient(180deg,#14001E 0%,#2B0033 55%,var(--ddc) 100%);filter:drop-shadow(0 0 18px var(--ddc));
+  clip-path:polygon(0 8%,22% 0,40% 14%,58% 2%,76% 18%,100% 30%,100% 44%,84% 46%,96% 64%,74% 60%,82% 84%,58% 70%,60% 100%,38% 76%,30% 92%,18% 64%,4% 72%,10% 44%)}
+.fx-dd .ddWing.l{right:50%;transform-origin:right 40%;animation:ddWingL 2.8s cubic-bezier(.2,.9,.2,1) forwards}
+.fx-dd .ddWing.r{left:50%;transform-origin:left 40%;animation:ddWingR 2.8s cubic-bezier(.2,.9,.2,1) forwards;clip-path:polygon(100% 8%,78% 0,60% 14%,42% 2%,24% 18%,0% 30%,0% 44%,16% 46%,4% 64%,26% 60%,18% 84%,42% 70%,40% 100%,62% 76%,70% 92%,82% 64%,96% 72%,90% 44%)}
+.fx-dd .ddShards{position:absolute;left:50%;top:50%;width:0;height:0}
+.fx-dd .ddShards i{position:absolute;left:-3px;top:-16px;width:6px;height:32px;background:linear-gradient(#fff,var(--ddc));clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);opacity:0;animation:ddShard 2.8s ease-out var(--d) forwards}
+.fx-dd .ddPt{position:relative;max-height:66vh;max-width:70vw;opacity:0;animation:ddPt 2.8s ease forwards}
+.fx-dd .ddText{position:absolute;left:0;right:0;bottom:14vh;--fxc:#C21E56;animation:ddText 2.8s ease forwards;opacity:0}
+.fx-dd .ddText b{position:relative;display:block;color:#FFE3EC;font-size:clamp(2rem,8vw,4.4rem);letter-spacing:.22em;text-shadow:0 0 18px var(--ddc),0 0 2px #000}
+.fx-dd .ddText b::before,.fx-dd .ddText b::after{content:attr(data-t);position:absolute;inset:0;opacity:.8;animation:ddGlitch 2.8s steps(1) forwards}
+.fx-dd .ddText b::before{color:#FF2E6E;transform:translateX(-4px);clip-path:inset(0 0 55% 0)}
+.fx-dd .ddText b::after{color:#7A5CFF;transform:translateX(4px);clip-path:inset(55% 0 0 0)}
+@keyframes ddShade{0%{opacity:0}8%{opacity:1}86%{opacity:1}100%{opacity:0}}
+@keyframes ddRing{0%,10%{opacity:0;transform:scale(.2)}22%{opacity:1}60%{opacity:0;transform:scale(2.2)}100%{opacity:0}}
+@keyframes ddWingL{0%,8%{opacity:0;transform:rotate(30deg) scale(.1,.4)}26%{opacity:1;transform:rotate(-4deg) scale(1)}80%{opacity:.95;transform:rotate(-8deg) scale(1.03)}100%{opacity:0;transform:rotate(-12deg) scale(1.08)}}
+@keyframes ddWingR{0%,8%{opacity:0;transform:rotate(-30deg) scale(.1,.4)}26%{opacity:1;transform:rotate(4deg) scale(1)}80%{opacity:.95;transform:rotate(8deg) scale(1.03)}100%{opacity:0;transform:rotate(12deg) scale(1.08)}}
+@keyframes ddShard{0%,14%{opacity:0;transform:rotate(var(--a)) translateY(0) scale(var(--s))}24%{opacity:1}70%{opacity:0;transform:rotate(var(--a)) translateY(-44vmin) scale(var(--s))}100%{opacity:0}}
+@keyframes ddPt{0%,14%{opacity:0;filter:brightness(0) drop-shadow(0 0 0 #C21E56);transform:scale(1.06)}30%{opacity:1;filter:brightness(0) drop-shadow(0 0 22px #C21E56)}46%{opacity:1;filter:brightness(1) saturate(.8) drop-shadow(0 0 18px #C21E56);transform:none}84%{opacity:1;filter:drop-shadow(0 0 12px #C21E56)}100%{opacity:0}}
+@keyframes ddText{0%,30%{opacity:0;transform:scale(1.3)}38%{opacity:1;transform:scale(1)}86%{opacity:1}100%{opacity:0}}
+@keyframes ddGlitch{0%,30%{opacity:0}32%{opacity:.9;transform:translateX(-10px)}35%{transform:translateX(6px)}38%{opacity:.6;transform:translateX(-3px)}44%{opacity:0}62%{opacity:.7;transform:translateX(5px)}64%{opacity:0}100%{opacity:0}}
+.fx-simple.fx-dd .ddWing,.fx-simple.fx-dd .ddPt,.fx-simple.fx-dd .ddText{animation:fxFade 2.8s ease forwards}
+.fx-simple.fx-dd .ddRing,.fx-simple.fx-dd .ddShards,.fx-simple.fx-dd .ddText b::before,.fx-simple.fx-dd .ddText b::after{display:none}
+.grp.dark{color:#E2477A}
+.fx-ko .koShade{position:absolute;inset:0;background:radial-gradient(circle,rgba(70,0,10,.55),rgba(0,0,0,.75));animation:fxFade 2.2s ease forwards}
+.fx-ko .koPt{position:relative;max-height:62vh;max-width:70vw;animation:koPt 2.2s ease forwards}
+.fx-ko .koCrack{position:absolute;left:-10vw;right:-10vw;top:50%;height:6px;margin-top:-3px;background:linear-gradient(90deg,transparent,#FF3B55 20%,#fff 50%,#FF3B55 80%,transparent);box-shadow:0 0 24px #FF3B55;transform:rotate(-8deg) scaleX(0);animation:koCrack 2.2s ease forwards}
+.fx-ko .fxText b{color:#FF5A6E;letter-spacing:.3em}
+.fx-ko .fxText{position:absolute;left:0;right:0;bottom:16vh;--fxc:#FF3B55;animation:fxText 2.2s ease forwards}
+.fx-ko .fxText b{display:block;font-size:clamp(2rem,8vw,3.6rem);font-weight:900}
+@keyframes koPt{0%{opacity:0;transform:scale(1.04)}12%{opacity:1;filter:none}40%{opacity:1;filter:grayscale(1) brightness(.6);transform:none}75%{opacity:.9;filter:grayscale(1) brightness(.5);transform:translateY(4vh) rotate(3deg)}100%{opacity:0;filter:grayscale(1) brightness(.4);transform:translateY(10vh) rotate(5deg)}}
+@keyframes koCrack{0%,20%{transform:rotate(-8deg) scaleX(0);opacity:1}32%{transform:rotate(-8deg) scaleX(1);opacity:1}80%{opacity:.8}100%{opacity:0;transform:rotate(-8deg) scaleX(1)}}
+.fx-simple.fx-ko .koPt,.fx-simple.fx-ko .koCrack{animation:fxFade 2.2s ease forwards;filter:grayscale(1) brightness(.6)}
 .oitem.acted::after{content:"済";position:absolute;top:4px;right:22px;font-size:.6rem;font-weight:800;color:var(--ink-2);border:1px solid var(--line);border-radius:4px;padding:0 4px;background:var(--cloud)}
 .oitem.tied{box-shadow:inset 0 0 0 2px #7C5CFF,0 0 12px rgba(124,92,255,.45) !important;animation:turnTag 1.6s ease-in-out infinite}
 .oitem .pickGo{position:absolute;right:6px;bottom:6px;z-index:2;padding:2px 10px !important}
@@ -1155,7 +1241,9 @@ dialog .mhead{z-index:8 !important}
   .phoneTool .btn{flex:1;justify-content:center;text-align:center;white-space:nowrap;font-size:.8rem !important;padding:5px 8px !important}
   .phoneTool.moving{background:var(--cloud);border:1.5px solid var(--gold);border-radius:999px;padding:0 4px 0 12px}
   .phoneTool.moving .btn{flex:none}
-  .phoneTool .mvname{flex:1;min-width:0;font-weight:800;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .phoneTool .mvname{flex:1;min-width:0;display:flex;align-items:center;font-weight:800;font-size:.82rem;white-space:nowrap}
+  .phoneTool .mvn{min-width:0;overflow:hidden;text-overflow:ellipsis}
+  .phoneTool .mvtag{flex:none}
   .phoneTool .mvtag{margin-left:6px;font-size:.72rem;color:var(--gold)}
   /* the column is exactly as tall as the board and scrolls inside */
   #mapP .order{grid-column:1;grid-row:2;display:flex !important;flex-direction:column !important;gap:6px !important;height:0;min-height:100%;max-height:none !important;overflow-y:auto !important;overflow-x:hidden !important;padding:0 !important;scrollbar-width:none}
@@ -1199,6 +1287,9 @@ dialog .mhead{z-index:8 !important}
   .handHead > *{flex:none}
   .handHead .handName,.handHead .myTurn{flex:0 1 auto;min-width:1.5em;overflow:hidden;text-overflow:ellipsis}
   .handHead .handName{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  /* narrow: "白雪姫 17枚 手番" instead of "白雪姫の手札 17枚 あなたの手番" */
+  .handHead .hlong{display:none}
+  .handHead .myTurn{white-space:nowrap}
   .piles{font-size:.74rem !important;padding:3px 8px !important}
   #myHand{display:flex;flex-wrap:nowrap;gap:0;align-items:flex-end;height:86px;min-height:0;margin:2px 0 0;padding-top:10px}
   #myHand > .muted{align-self:center}
@@ -1324,6 +1415,10 @@ function normalizeChar(raw) {
     variations: Array.isArray(raw.variations) ? raw.variations.map(v => ({ name: String(v?.name || 'バリエーション'), slots: slotsFrom(v?.slots), portrait: v?.portrait ? String(v.portrait) : null })) : [],
     basePortrait: raw.basePortrait ? String(raw.basePortrait) : null,
     wingDrive: raw.wingDrive ? item(raw.wingDrive) : null,
+    // enemies: any number of ダークドライブ (an enemy's counterpart of the ウイングドライブ), each with its own TP cost
+    darkDrives: (Array.isArray(raw.darkDrives) ? raw.darkDrives : []).map(x => { const t = x?.tp; return { ...item(x), tp: t != null && t !== '' && Number.isFinite(Number(t)) ? Number(t) : null }; }).filter(x => x.name),
+    // 巨大キャラクター: takes 2×2 squares on the board (x, y = its top-left square on screen)
+    size: Number(raw.size) === 2 ? 2 : 1,
     // {label, url}; a plain URL string (older sheets) gets a numbered label
     portraits: Array.isArray(raw.portraits) ? raw.portraits.map((p, i) => typeof p === 'string' ? { label: `立ち絵${i + 1}`, url: p } : p)
       .filter(p => p && typeof p.url === 'string' && p.url.trim()).map(p => ({ label: String(p.label || '立ち絵'), url: toDirectImage(p.url) })) : [],
@@ -1343,6 +1438,29 @@ const formPortrait = (ch, i) => (i === -1 ? ch.data.basePortrait : (ch.data.vari
 const portraitUrl = (ch, label) => (ch.data.portraits.find(p => p.label === label) || {}).url || null;
 // クロスユニゾン (an all-out attack): every PC lines up in the effect, the declarer first
 const UNISON = /クロスユニゾン/;
+// ----- board footprint: a 巨大キャラクター covers 2×2 squares from (x, y) -----
+const sizeOf = c => c && c.data && c.data.size === 2 ? 2 : 1;
+function cellsOf(c, x = c.x, y = c.y) {
+  const n = sizeOf(c), out = [];
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) out.push([x + i, y + j]);
+  return out;
+}
+// squares between two pieces (or a piece and a square {x, y}); a giant counts from its nearest square
+function gap(a, b) {
+  let best = Infinity;
+  for (const [ax, ay] of cellsOf(a)) for (const [bx, by] of cellsOf(b)) best = Math.min(best, Math.abs(ax - bx) + Math.abs(ay - by));
+  return best;
+}
+// whoever already stands on the squares ch would cover at (x, y)
+const blockerAt = (room, ch, x, y) => { const mine = cellsOf(ch, x, y); return Object.values(room.chars).find(o => o.id !== ch.id && o.x != null && cellsOf(o).some(([ox, oy]) => mine.some(([mx, my]) => mx === ox && my === oy))); };
+// after a change of size: keep the piece on the board if it still fits (pulled in from the edge), otherwise take it off
+function refit(room, ch) {
+  if (ch.x == null) return '';
+  const n = sizeOf(ch), x = Math.min(ch.x, 8 - n), y = Math.min(ch.y, 8 - n);
+  if (!blockerAt(room, ch, x, y)) { ch.x = x; ch.y = y; return ''; }
+  ch.x = ch.y = null;
+  return '（重なるため盤外に出しました）';
+}
 // クロスユニゾン and the ウイングドライブ are once per scenario: declaring them ticks their 使用済み box
 // ----- lasting effects (buffs / debuffs) -----
 // Read from the effect text by how long it lasts, which the rules always write the same way:
@@ -1423,6 +1541,7 @@ function detectEffects(d) {
   (d.skills || []).forEach(it => add('特技', it));
   (d.core?.functions || []).forEach(it => add('特殊機能', it));
   add('ウイングドライブ', d.wingDrive);
+  (d.darkDrives || []).forEach(it => add('ダークドライブ', it));
   (d.weapons?.common || []).forEach(it => add('武装', it));
   [d.weapons?.slots || [], ...(d.variations || []).map(v => v.slots || [])].forEach(sl => sl.forEach(it => add('武装', it)));
   return out;
@@ -1446,8 +1565,19 @@ function nextRound(room, by) {
   expireEffects(room, by, true);
   log(room, { tab: opsTab(room), type: 'round', by, start: room.turn.round, cid: room.turn.current || undefined, text: `第${room.turn.round}ラウンド開始${next ? `：${next}` : ''}` });
 }
-function markOncePerScenario(ch, { unison, wd }) {
+// 機械兵A → 機械兵B, 機械兵1 → 機械兵2, 機械兵 → 機械兵2 (the first name not in use)
+function nextCopyName(room, name) {
+  const used = new Set(Object.values(room.chars).map(c => c.data.name));
+  const n = String(name).normalize('NFKC');
+  let m;
+  if ((m = n.match(/^(.*?)([A-Z])$/))) { for (let c = m[2].charCodeAt(0) + 1; c <= 90; c++) { const t = m[1] + String.fromCharCode(c); if (!used.has(t)) return t; } }
+  if ((m = n.match(/^(.*?)(\d+)$/))) { for (let k = +m[2] + 1; k < 1000; k++) { const t = m[1] + k; if (!used.has(t)) return t; } }
+  for (let k = 2; k < 1000; k++) { const t = n + k; if (!used.has(t)) return t; }
+  return n + '（複製）';
+}
+function markOncePerScenario(ch, { unison, wd, dd }) {
   if (!ch) return;
+  if (dd >= 0) ch.used[`darkDrive:${dd}`] = true;
   if (unison) ch.data.weapons.common.forEach((w, i) => { if (UNISON.test(w.name || '')) ch.used[`common:${i}`] = true; });
   if (wd && ch.data.wingDrive) ch.used['wingDrive:0'] = true;
 }
@@ -1464,11 +1594,24 @@ function turnOrder(room) {
     .map(x => x.c);
 }
 
+function logValue(room, ch, a, by, before, v) {
+  if (room.settings.logValues === false) return;
+  // repeated +/- on the same value within a few seconds are folded into one log line (20 → 14)
+  const last = room.logs[room.logs.length - 1];
+  if (last && last.type === 'value' && !last.cmd && last.cid === a.cid && last.key === a.key && last.by === by && Date.now() - last.t < 8000) {
+    if (last.from === v) room.logs.pop();
+    else { last.to = v; last.t = Date.now(); last.text = `${ch.data.name}の${a.key}：${last.from} → ${v}`; }
+    return;
+  }
+  log(room, { tab: opsTab(room), type: 'value', by, cid: a.cid, key: a.key, from: before, to: v, text: `${ch.data.name}の${a.key}：${before} → ${v}` });
+}
 // SS値 is the initiative: the next to act is the highest SS値 among those who have not acted this round
 // (room.turn.done). A tie is not decided by the table order: the players choose (room.turn.pick).
+// HP 0 or less = 戦闘不能: skipped by the initiative until healed (characters without HP are never down)
+const isDown = c => !!c && Number.isFinite(c.cur.HP) && c.cur.HP <= 0;
 function nextActors(room) {
   const done = new Set(room.turn.done || []);
-  const left = turnOrder(room).filter(c => !done.has(c.id));
+  const left = turnOrder(room).filter(c => !done.has(c.id) && !isDown(c));
   return left.length ? left.filter(c => ssOf(c) === ssOf(left[0])) : [];
 }
 const tieText = g => `SS値${ssOf(g[0])}が同値：${g.map(c => c.data.name).join('、')}から次に動くキャラを選びます`;
@@ -1569,13 +1712,26 @@ function applyInner(room, a, by, pid) {
       ch.data = data; ch.dv = (ch.dv || 1) + 1;
       if (!(ch.variation < data.variations.length)) ch.variation = -1;
       if (ch.portrait && !data.portraits.some(p => p.label === ch.portrait)) ch.portrait = data.portraits[0]?.label || null;
-      log(room, { tab: opsTab(room), type: 'sys', by, text: `${data.name}のデータを更新しました` });
+      const off = refit(room, ch);
+      log(room, { tab: opsTab(room), type: 'sys', by, text: `${data.name}のデータを更新しました${off}` });
       return;
     }
     case 'setAutoFx': {
       need(ch && canControlChar(room, by, a.cid), 'このキャラクターは操作できません');
       ch.autoFx = cleanAutoFx(a.names) || [];
       return;
+    }
+    case 'cloneChar': { // GM: another copy of an enemy / NPC, fresh (full values, off the board), named with the next free suffix
+      need(by === 'gm', '複製できるのはGMだけです');
+      need(ch && (ch.side !== 'pc' || gmOwned(ch)), 'PLのキャラは複製できません');
+      const id = typeof a.id === 'string' && /^c[0-9a-z]{6,30}$/.test(a.id) && !room.chars[a.id] ? a.id : uid('c');
+      const name = nextCopyName(room, ch.data.name);
+      const data = clone(ch.data); data.name = name;
+      const cur = {}; for (const [k, st] of Object.entries(data.stats)) cur[k] = statStart(st);
+      room.chars[id] = { ...clone(ch), id, data, dv: 1, cur, used: {}, effects: [], x: null, y: null, owner: 'gm' };
+      if (ch.side === 'pc' || ch.side === 'npc') room.cards.hands[id] = [];
+      log(room, { tab: opsTab(room), type: 'sys', by, text: `${ch.data.name}を複製して${name}を追加しました` });
+      return id;
     }
     case 'addEffect': {
       need(ch && canControlChar(room, by, a.cid), 'このキャラクターは操作できません');
@@ -1609,23 +1765,19 @@ function applyInner(room, a, by, pid) {
       const v = Number(a.value);
       need(Number.isFinite(v), '数値を入れてください');
       if (before === v) return;
+      const wasDown = isDown(ch);
       ch.cur[a.key] = v;
-      if (room.settings.logValues === false) return;
-      // repeated +/- on the same value within a few seconds are folded into one log line (20 → 14)
-      const last = room.logs[room.logs.length - 1];
-      if (last && last.type === 'value' && !last.cmd && last.cid === a.cid && last.key === a.key && last.by === by && Date.now() - last.t < 8000) {
-        if (last.from === v) room.logs.pop();
-        else { last.to = v; last.t = Date.now(); last.text = `${ch.data.name}の${a.key}：${last.from} → ${v}`; }
-        return;
-      }
-      log(room, { tab: opsTab(room), type: 'value', by, cid: a.cid, key: a.key, from: before, to: v, text: `${ch.data.name}の${a.key}：${before} → ${v}` });
+      logValue(room, ch, a, by, before, v);
+      // crossing HP 0 is always told (even with value logs off): it takes the character out of / back into the initiative
+      if (a.key === 'HP' && isDown(ch) !== wasDown) log(room, { tab: opsTab(room), type: 'sys', by, cid: ch.id, fx: isDown(ch) ? 'ko' : undefined,
+        text: isDown(ch) ? `${ch.data.name}は戦闘不能になりました` : `${ch.data.name}が戦闘不能から復帰しました` });
       return;
     }
     case 'toggleUsed': {
       need(ch && canControlChar(room, by, a.cid), 'このキャラクターは操作できません');
       const k = `${a.group}:${a.idx}`;
       ch.used[k] = !ch.used[k];
-      const it = a.group === 'wingDrive' ? ch.data.wingDrive : a.group === 'common' ? ch.data.weapons.common[a.idx]
+      const it = a.group === 'wingDrive' ? ch.data.wingDrive : a.group === 'darkDrive' ? (ch.data.darkDrives || [])[a.idx] : a.group === 'common' ? ch.data.weapons.common[a.idx]
         : a.group.startsWith('slot') ? currentSlots(ch)[a.idx] : a.group === 'func' ? ch.data.core?.functions[a.idx] : ch.data[a.group]?.[a.idx];
       log(room, { tab: opsTab(room), type: 'value', by, text: `${ch.data.name}の「${it?.name || '?'}」を${ch.used[k] ? '使用済み' : '未使用'}にしました` });
       return;
@@ -1645,6 +1797,16 @@ function applyInner(room, a, by, pid) {
       const now = formPortrait(ch, ch.variation);
       if (a.forms && now) ch.portrait = now;
       if (!ch.data.portraits.some(p => p.label === ch.portrait)) ch.portrait = ch.data.portraits[0]?.label || null;
+      return;
+    }
+    case 'setSize': { // GM: make a piece a 巨大キャラクター (2×2) or back to one square
+      need(by === 'gm', '大きさを変えられるのはGMだけです');
+      need(ch, 'キャラクターが見つかりません');
+      const n = Number(a.size) === 2 ? 2 : 1;
+      if (sizeOf(ch) === n) return;
+      ch.data.size = n; ch.dv = (ch.dv || 1) + 1;
+      const off = refit(room, ch);
+      log(room, { tab: opsTab(room), type: 'sys', by, text: `${ch.data.name}を${n > 1 ? '巨大キャラクター（2×2マス）' : '1マスのキャラクター'}にしました${off}` });
       return;
     }
     case 'setColor': {
@@ -1727,10 +1889,11 @@ function applyInner(room, a, by, pid) {
       const from = ch.x == null ? '盤外' : coordName(ch.x, ch.y);
       if (a.x == null) { ch.x = ch.y = null; }
       else {
-        need(a.x >= 0 && a.x < 8 && a.y >= 0 && a.y < 8, 'マップの外です');
-        // one piece per square
-        const occ = Object.values(room.chars).find(o => o.id !== ch.id && o.x === a.x && o.y === a.y);
-        if (occ) throw new ActionError(`${coordName(a.x, a.y)}にはすでに${occ.data.name}がいます`);
+        const n = sizeOf(ch);
+        need(a.x >= 0 && a.x <= 8 - n && a.y >= 0 && a.y <= 8 - n, n > 1 ? '巨大キャラクターがマップからはみ出します' : 'マップの外です');
+        // one piece per square (a giant needs all four of its squares free)
+        const occ = blockerAt(room, ch, a.x, a.y);
+        if (occ) throw new ActionError(n > 1 ? `${occ.data.name}と重なります` : `${coordName(a.x, a.y)}にはすでに${occ.data.name}がいます`);
         ch.x = a.x; ch.y = a.y;
       }
       const to = ch.x == null ? '盤外' : coordName(ch.x, ch.y);
@@ -1891,9 +2054,10 @@ function applyInner(room, a, by, pid) {
       const unison = UNISON.test(a.cmd || '') || /^【武装】[^\n]*クロスユニゾン/.test(text);
       const wdChar = a.as && room.chars[a.as];
       const wd = a.fx === 'wd' || !!(wdChar && wdChar.data.wingDrive && a.cmd && a.cmd === wdChar.data.wingDrive.name);
-      markOncePerScenario(wdChar, { unison, wd });
+      const dd = wdChar && a.cmd ? (wdChar.data.darkDrives || []).findIndex(x => x.name === a.cmd) : -1;
+      markOncePerScenario(wdChar, { unison, wd, dd });
       if (wdChar && a.cmd) effectsFromText(room, wdChar, a.cmd, text, by);
-      log(room, { tab: tab.id, type: 'say', by, as: a.as || null, name: a.as ? room.chars[a.as].data.name : freeName, color, portrait: a.portrait || null, portraitUrl: pUrl, text, cmd: a.cmd || null, dice, fx: unison ? 'unison' : a.fx === 'wd' ? 'wd' : undefined, members: unison ? unisonMembers(room, a.as) : undefined, reply });
+      log(room, { tab: tab.id, type: 'say', by, as: a.as || null, name: a.as ? room.chars[a.as].data.name : freeName, color, portrait: a.portrait || null, portraitUrl: pUrl, text, cmd: a.cmd || null, dice, fx: unison ? 'unison' : dd >= 0 || a.fx === 'dd' ? 'dd' : a.fx === 'wd' ? 'wd' : undefined, members: unison ? unisonMembers(room, a.as) : undefined, reply });
       if (tpCh) {
         const before = tpCh.cur.TP;
         tpCh.cur.TP = before - a.spendTP;
@@ -2078,7 +2242,7 @@ function viewRoom(room, seat, pid) {
   return r;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { rangeProblems, effectTarget, rangeIssue, nextActors, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
+  module.exports = { rangeProblems, effectTarget, rangeIssue, nextActors, isDown, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
 }
 // =====================================================================
 // local storage + UI
@@ -2092,7 +2256,7 @@ const persist = () => { if (ONLINE) return; try { localStorage.setItem(KEY, JSON
 const UIKEY = 'pw-local-ui';
 let U = {}; try { U = JSON.parse(localStorage.getItem(UIKEY)) || {}; } catch (e) {}
 const saveU = () => { try { localStorage.setItem(UIKEY, JSON.stringify(U)); } catch (e) {} };
-const ui = { sel: [], memo: '', selTok: null, drawN: 1, history: [], palette: false, cmd: null, openSheets: new Set(), seenTab: {}, typing: {}, formView: {}, fxSeen: new Set() };
+const ui = { sel: [], memo: '', selTok: null, drawN: 1, history: [], palette: false, cmd: null, openSheets: new Set(), seenTab: {}, typing: {}, formView: {}, fxSeen: new Set(), sfxSeen: new Set(), sfxTo: {} };
 const roomUI = rid => (U[rid] = U[rid] || { viewer: 'gm', tab: 'main', sort: 'suit', as: '', name: '' });
 
 const $ = id => document.getElementById(id);
@@ -2117,7 +2281,7 @@ function act(a, opts = {}) {
   const room = curRoom(); if (!room) return;
   const ru = roomUI(room.id);
   if (ONLINE) {
-    if (a.type === 'addChar' && !a.id) a.id = uid('c');
+    if ((a.type === 'addChar' || a.type === 'cloneChar') && !a.id) a.id = uid('c');
     if (a.type === 'addTab' && !a.id) a.id = uid('t');
     let ret, copy;
     try { copy = roomCopy(room); ret = apply(copy, a, ru.viewer, myPid()); }   // check on a copy; the server decides
@@ -2190,6 +2354,129 @@ function fxMode() {
   return pref === 'off' ? 'off' : pref === 'simple' ? 'simple' : pref === 'anim' ? 'anim'
     : matchMedia('(prefers-reduced-motion: reduce)').matches ? 'simple' : 'anim';
 }
+// ---------------- sound effects (synthesized with Web Audio: no files to load) ----------------
+const SFX = { ctx: null, master: null, nb: null, off: 0 };
+function sfxCtx() {
+  if (U.sfx === false) return null;
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
+  try {
+    if (!SFX.ctx) { SFX.ctx = new AC(); SFX.master = SFX.ctx.createGain(); SFX.master.connect(SFX.ctx.destination); }
+    if (SFX.ctx.state === 'suspended') SFX.ctx.resume().catch(() => {});
+    SFX.master.gain.value = (U.sfxVol ?? 0.5) * 0.7;
+  } catch (e) { return null; }
+  return SFX.ctx;
+}
+// browsers start audio only after a tap / key press: the first one unlocks it
+['pointerdown', 'keydown'].forEach(t => document.addEventListener(t, () => { if (U.sfx !== false && (!SFX.ctx || SFX.ctx.state === 'suspended')) sfxCtx(); }, { capture: true, passive: true }));
+const ramp = (p, v, t, len) => { if (Array.isArray(v)) { p.setValueAtTime(v[0], t); p.exponentialRampToValueAtTime(v[1], t + len); } else p.setValueAtTime(v, t); };
+// one note: frequency (or [from, to] glide), start (s from now), length, wave, volume
+function tone(f, at, len, type = 'sine', vol = .25) {
+  const c = SFX.ctx, t = c.currentTime + SFX.off + at, o = c.createOscillator(), g = c.createGain();
+  o.type = type; ramp(o.frequency, f, t, len);
+  g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + .008); g.gain.exponentialRampToValueAtTime(.0001, t + len);
+  o.connect(g); g.connect(SFX.master); o.start(t); o.stop(t + len + .03);
+}
+// filtered noise: swishes, rattles, thuds
+function noise(at, len, freq, vol = .25, q = 1, type = 'bandpass') {
+  const c = SFX.ctx, t = c.currentTime + SFX.off + at;
+  if (!SFX.nb) { const n = c.sampleRate; SFX.nb = c.createBuffer(1, n, n); const d = SFX.nb.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; }
+  const src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+  src.buffer = SFX.nb; f.type = type; ramp(f.frequency, freq, t, len); f.Q.value = q;
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + len);
+  src.connect(f); f.connect(g); g.connect(SFX.master); src.start(t, Math.random() * .5); src.stop(t + len + .03);
+}
+const SOUNDS = {
+  card: () => { noise(0, .13, [6000, 1800], .35, .8); tone(520, .05, .05, 'triangle', .07); },
+  draw: () => { noise(0, .1, [3000, 6000], .28, .8); noise(.08, .1, [3000, 6500], .24, .8); },
+  dice: () => { for (let i = 0; i < 7; i++) { const t = i * .075 + Math.random() * .025; noise(t, .035, 1500 + Math.random() * 2500, .4, 5); tone(180 + Math.random() * 260, t, .03, 'square', .03); } },
+  land: () => { noise(0, .05, 900, .35, 2); tone(520, 0, .1, 'triangle', .14); },
+  ok: () => { SOUNDS.land(); tone(784, .04, .12, 'triangle', .2); tone(1047, .12, .14, 'triangle', .2); tone(1568, .2, .3, 'sine', .16); },
+  ng: () => { SOUNDS.land(); tone([392, 262], .04, .35, 'triangle', .2); },
+  crit: () => { SOUNDS.land(); [784, 988, 1175, 1568, 2093].forEach((f, i) => tone(f, .04 + i * .06, .35, 'triangle', .16)); noise(.3, .5, [4000, 9000], .08, .5, 'highpass'); },
+  fumble: () => { SOUNDS.land(); tone([262, 98], .04, .7, 'sawtooth', .09); tone([247, 92], .06, .7, 'sawtooth', .07); },
+  turn: () => { tone(784, 0, .2, 'sine', .22); tone(1047, .13, .32, 'sine', .22); },
+  myturn: () => { tone(784, 0, .16, 'triangle', .2); tone(1047, .1, .16, 'triangle', .2); tone(1568, .2, .45, 'sine', .22); },
+  round: () => { [392, 588, 784].forEach((f, i) => tone(f, 0, 1.1 - i * .2, i ? 'sine' : 'triangle', .2 / (i + 1))); noise(0, .6, [2500, 600], .1, .7); },
+  roundEnd: () => { tone(588, 0, .3, 'sine', .16); tone(392, .16, .5, 'sine', .16); },
+  form: () => { tone([260, 1200], 0, .5, 'sawtooth', .05); noise(0, .5, [500, 7000], .18, 1.2); [1568, 2093, 2637].forEach((f, i) => tone(f, .5 + i * .07, .3, 'sine', .12)); },
+  wd: () => { tone([90, 360], 0, .7, 'sawtooth', .1); noise(0, .7, [300, 6000], .25, 1); [523, 659, 784, 1047].forEach(f => tone(f, .62, .9, 'triangle', .1)); },
+  dd: () => { tone([55, 41], 0, 1.6, 'sawtooth', .16); tone([58, 43], 0, 1.6, 'sawtooth', .12); noise(0, 1.2, [6000, 200], .22, .9); noise(.5, .25, 300, .5, .7, 'lowpass'); [233, 247, 349].forEach(f => tone(f, .55, 1.3, 'triangle', .08)); tone([880, 110], .5, .4, 'square', .05); },
+  unison: () => { tone([80, 320], 0, .9, 'sawtooth', .1); noise(0, 1, [200, 8000], .25, .8); [392, 523, 659, 784, 1047].forEach((f, i) => tone(f, 1 + i * .03, 1.4, 'triangle', .09)); },
+  damage: () => { tone([170, 50], 0, .2, 'sine', .5); noise(0, .07, 700, .3, 1); },
+  heal: () => { tone(660, 0, .14, 'sine', .14); tone(990, .09, .22, 'sine', .14); },
+  ko: () => { noise(0, .3, 500, .5, .6, 'lowpass'); tone([320, 45], 0, 1, 'sawtooth', .13); tone([160, 40], .05, 1.1, 'sine', .3); },
+};
+function sfx(names) {
+  if (!names.length || !sfxCtx() || SFX.ctx.state !== 'running') return;
+  // several at once (a weapon + the next turn): the first two, a moment apart
+  [...new Set(names)].slice(0, 2).forEach((n, i) => { SFX.off = i * .18; try { SOUNDS[n](); } catch (e) {} });
+  SFX.off = 0;
+}
+const sfxKey = l => l.type === 'value' ? `${l.id}:${l.to}` : l.id;
+// "6ゾロ" / "1ゾロ": every die of a single nD roll (n ≥ 2) showing its top or 1
+function diceZoro(d) {
+  if (!d || d.kind !== 'dice' || !d.expr) return null;
+  const m = (d.expr.match(/D/g) || []).length === 1 && d.expr.match(/^(\d+)D(\d+)(?!\d)/), r = (d.result || '').match(/＞ -?\d+\[([\d,]+)\]/);
+  if (!m || !r || +m[1] < 2) return null;
+  const rolls = r[1].split(',').map(Number);
+  return rolls.every(x => x === +m[2]) ? { kind: 'crit', face: +m[2] } : rolls.every(x => x === 1) ? { kind: 'fumble', face: 1 } : null;
+}
+// new log lines → sounds; returns the dice lines that should roll on screen
+function logSounds(room, ru) {
+  if (!ui.sfxInit) { ui.sfxInit = true; room.logs.forEach(l => ui.sfxSeen.add(sfxKey(l))); return []; }
+  const names = [], rolls = [];
+  for (const raw of room.logs.slice(-8)) {
+    const key = sfxKey(raw);
+    if (ui.sfxSeen.has(key)) continue;
+    ui.sfxSeen.add(key);
+    const l = viewLog(room, raw, ru.viewer, myPid());
+    if (!l || Date.now() - l.t > 15000) continue;
+    if (l.fx === 'ko') names.unshift('ko');
+    else if (isUnisonLog(l)) names.push('unison');
+    else if (l.fx === 'wd') names.push('wd');
+    else if (l.fx === 'dd') names.push('dd');
+    else if (l.fx === 'form') names.push('form');
+    else if (l.type === 'round') { names.push(l.start ? 'round' : 'roundEnd'); if (l.start && l.cid && playsChar(room, room.chars[l.cid])) names.push('myturn'); }
+    else if (l.type === 'turn' && l.cid) names.push(playsChar(room, room.chars[l.cid]) ? 'myturn' : 'turn');
+    else if (l.type === 'play' || l.type === 'weapon' || l.type === 'give' || l.type === 'pick') names.push('card');
+    else if (l.type === 'draw') names.push('draw');
+    else if (l.type === 'value' && l.key === 'HP') {
+      const prev = ui.sfxTo[l.id] ?? l.from; ui.sfxTo[l.id] = l.to;
+      names.push(l.to < prev ? 'damage' : 'heal');
+    } else if (l.type === 'say' && l.dice) {
+      names.push('dice');
+      if (!l.dice.hidden) rolls.push(l);
+    }
+  }
+  sfx(names);
+  return rolls;
+}
+// a fresh dice line: the total spins for a moment, then lands; the verdict (and the sound) comes with the landing
+function rollDice(l) {
+  const d = l.dice, el = document.querySelector(`#chatLog [data-lid="${CSS.escape(l.id)}"] .dice`);
+  const z = diceZoro(d), result = z ? z.kind : d.ok === true ? 'ok' : d.ok === false ? 'ng' : 'land';
+  const landSound = () => { if (sfxCtx() && SFX.ctx.state === 'running') try { SOUNDS[result](); } catch (e) {} };
+  if (!el || fxMode() !== 'anim') { setTimeout(landSound, 560); return; }
+  const tot = el.querySelector('.dtotal'); if (!tot) return;
+  const final = tot.textContent;
+  // what flickers by: the choices, or totals the first dice term could make (plus whatever the rest added)
+  let pool = [], lo = 1, hi = 6;
+  if (d.kind === 'choice') pool = ((d.expr || '').match(/\[(.*)\]/) || [, ''])[1].split(',').filter(Boolean);
+  else {
+    const m = (d.expr || '').match(/^(\d*)D(\d+)/i), first = (d.result || '').match(/＞ (\d+)\[/);
+    const n = m ? +(m[1] || 1) : 1, f = m ? +m[2] : 6, rest = first ? +final - +first[1] : 0;
+    lo = n + rest; hi = n * f + rest;
+  }
+  el.classList.add('rolling');
+  const t0 = performance.now();
+  const tick = () => {
+    if (!el.isConnected) return;
+    if (performance.now() - t0 > 620) { tot.textContent = final; el.classList.remove('rolling'); el.classList.add('landed'); landSound(); return; }
+    tot.textContent = pool.length ? pool[Math.floor(Math.random() * pool.length)] : lo + Math.floor(Math.random() * (hi - lo + 1));
+    setTimeout(tick, 55);
+  };
+  tick();
+}
 // a character this browser plays (online: owns it; local: the seat being viewed)
 const playsChar = (room, c) => !!c && isPcSeat(room, c.id) && (ONLINE ? c.owner === myPid() : roomUI(room.id).viewer === c.id);
 const isTurnLog = l => (l.type === 'turn' && l.cid) || (l.type === 'round' && l.start);
@@ -2234,6 +2521,36 @@ function playUnison(l, mode) {
   const load = url => new Promise(res => { const im = new Image(); im.referrerPolicy = 'no-referrer'; im.onload = im.onerror = res; im.src = url; });
   Promise.race([Promise.all(m.filter(x => x.url).map(x => load(x.url))), new Promise(res => setTimeout(res, 1500))]).then(show);
 }
+// ダークドライブ: the screen goes black, dark wings of shards tear open in crimson, the name glitches in (2.8 s)
+function playDark(room, l, mode) {
+  const c = room.chars[l.as || l.cid];
+  const p = c && (c.data.portraits.find(x => x.label === c.portrait) || c.data.portraits[0]);
+  const el = document.createElement('div');
+  el.className = `fx fx-dd fx-${mode}`;
+  el.innerHTML = `<div class="ddShade"></div><div class="ddRing"></div>
+    <div class="ddWing l"></div><div class="ddWing r"></div>
+    <div class="ddShards">${Array.from({ length: 14 }, (_, i) => `<i style="--a:${i * 26 + 7}deg;--d:${(i % 4) * 60}ms;--s:${0.6 + (i % 3) * .3}"></i>`).join('')}</div>
+    ${p ? `<img class="ddPt" src="${esc(p.url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
+    <div class="fxText ddText"><b data-t="DARK DRIVE">DARK DRIVE</b><span>${esc(c ? c.data.name : l.name || '')}　${esc(l.cmd || '')}</span></div>`;
+  el.setAttribute('popover', 'manual');
+  document.body.appendChild(el);
+  try { el.showPopover(); } catch (e) { el.removeAttribute('popover'); }
+  setTimeout(() => el.remove(), 2900);
+}
+// 戦闘不能: shown to everyone (or with 自分のだけ, when it is your character that fell)
+function playKo(room, l, mode) {
+  const c = room.chars[l.cid]; if (!c) return;
+  if (U.fxWho === 'mine' && !playsChar(room, c)) return;
+  const p = c.data.portraits.find(x => x.label === c.portrait) || c.data.portraits[0];
+  const el = document.createElement('div');
+  el.className = `fx fx-ko fx-${mode}`;
+  el.innerHTML = `<div class="koShade"></div>${p ? `<img class="koPt" src="${esc(p.url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}<div class="koCrack"></div>
+    <div class="fxText"><b>戦闘不能</b><span>${esc(c.data.name)}</span></div>`;
+  el.setAttribute('popover', 'manual');
+  document.body.appendChild(el);
+  try { el.showPopover(); } catch (e) { el.removeAttribute('popover'); }
+  setTimeout(() => el.remove(), 2300);
+}
 function playFx(room, l) {
   if (ui.fxSeen.has(l.id)) return;
   ui.fxSeen.add(l.id);
@@ -2245,6 +2562,8 @@ function playFx(room, l) {
     if (U.fxWho !== 'mine' || l.pid === myPid() || members.some(x => x.name === (room.chars[roomUI(room.id).viewer] || { data: {} }).data.name)) playUnison({ ...l, members, charName: by }, mode);
     return;
   }
+  if (l.fx === 'ko') { playKo(room, l, mode); return; }
+  if (l.fx === 'dd') { if (U.fxWho !== 'mine' || (ONLINE ? l.pid === myPid() : l.by === roomUI(room.id).viewer)) playDark(room, l, mode); return; }
   if (U.fxWho === 'mine' && !(ONLINE ? l.pid === myPid() : l.by === roomUI(room.id).viewer)) return;
   const c = room.chars[l.cid || l.as];
   const p = c && (c.data.portraits.find(x => x.label === c.portrait) || c.data.portraits[0]);
@@ -2460,7 +2779,9 @@ function renderRoom() {
   // play effects for 換装 / ウイングドライブ lines that arrived since the last draw (never for old ones)
   if (!ui.fxInit) { ui.fxInit = true; room.logs.forEach(l => ui.fxSeen.add(l.id)); }
   else for (const l of room.logs.slice(-8)) if ((l.fx || isTurnLog(l) || isUnisonLog(l)) && !ui.fxSeen.has(l.id) && viewLog(room, l, ru.viewer, myPid())) (isTurnLog(l) ? playTurn : playFx)(room, l);
+  const rolls = logSounds(room, ru);
   renderMap(room, ru); renderCards(room, ru); renderChat(room, ru);
+  rolls.forEach(rollDice);
   ui.chatAtBottom = null;
   if (ui.expectPick && (room.turn.pick || []).length && !$('dlg').open) { ui.expectPick = false; pickMenu(room, ru); }
   else if (ui.expectPick && room.turn.current) ui.expectPick = false;
@@ -2493,23 +2814,23 @@ function computeUnread(room, ru) {
 // ---------------- map ----------------
 // lasting effects as small chips (name + summary); the tooltip has how long it lasts and the full text
 const fxChips = c => (c.effects || []).length ? `<div class="ofx">${c.effects.map(e => `<span class="fxc ${e.dur}" title="${esc(`${e.name}${e.note ? '（' + e.note + '）' : ''}：${EFFECT_DUR[e.dur] || ''}${e.text ? '\n' + e.text : ''}`)}">${esc(e.name)}${e.note ? `<b>${esc(e.note)}</b>` : ''}</span>`).join('')}</div>` : '';
-// a diagonal step counts as 2 squares
-const dist = (room, a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+// a diagonal step counts as 2 squares; a 巨大キャラクター is measured from its nearest square
+const dist = (room, a, b) => gap(a, b);
 // 射程 "1～2" / "1-2" / "2" → {min, max}; text such as 効果参照 has no range
 const rangeOf = w => parseRangeText(w && w.attrs && w.attrs['射程']);
 const rangeText = r => r.min === r.max ? `${r.max}` : `${r.min}～${r.max}`;
 // the weapons a character can use now (共通 + the equipped variation), each with a key and its range
 const weaponsNow = c => [...c.data.weapons.common.map((w, i) => ['c' + i, w]), ...currentSlots(c).map((w, i) => ['s' + i, w])]
   .filter(([, w]) => w && w.name).map(([k, w]) => ({ k, w, r: rangeOf(w) }));
-const inRange = (from, to, r) => from.x != null && to.x != null && r && (d => d >= r.min && d <= r.max)(Math.abs(from.x - to.x) + Math.abs(from.y - to.y));
+const inRange = (from, to, r) => from.x != null && to.x != null && r && (d => d >= r.min && d <= r.max)(gap(from, to));
 const foes = (room, c) => Object.values(room.chars).filter(o => o.id !== c.id && (c.side === 'enemy' ? o.side !== 'enemy' : o.side === 'enemy'));
 // クロスユニゾン still unused by one of these characters → a joker in hand is worth showing off
 const unisonReady = chars => chars.some(c => c.data.weapons.common.some((w, i) => /クロスユニゾン/.test(w.name || '') && !c.used[`common:${i}`]));
 function tokHtml(c, sel, aimed) {
   const p = c.data.portraits.find(x => x.label === c.portrait) || c.data.portraits[0];
-  const down = Object.keys(c.cur).includes('HP') && c.cur.HP <= 0;
+  const down = isDown(c);
   const nfx = (c.effects || []).length;
-  return `<div class="tok ${c.side === 'enemy' ? 'enemy' : 'pc'} ${sel ? 'sel' : ''} ${aimed ? 'aimed' : ''} ${down ? 'down' : ''} ${nfx ? 'hasfx' : ''} ${curRoom() && curRoom().turn.current === c.id ? 'turn' : ''}" ${nfx ? `data-nfx="${nfx}"` : ''} data-tok="${c.id}" title="${esc(c.data.name)}${nfx ? `（効果：${esc(c.effects.map(e => e.name).join('・'))}）` : ''}" style="${c.side !== 'enemy' ? `background:${c.color};color:${inkOn(c.color)}` : ''}">${p ? `<img src="${esc(p.url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createTextNode(${esc(JSON.stringify(c.data.name.slice(0, 2)))}))">` : esc(c.data.name.slice(0, 2))}</div>`;
+  return `<div class="tok ${c.side === 'enemy' ? 'enemy' : 'pc'} ${sizeOf(c) > 1 ? 'giant' : ''} ${sel ? 'sel' : ''} ${aimed ? 'aimed' : ''} ${down ? 'down' : ''} ${nfx ? 'hasfx' : ''} ${curRoom() && curRoom().turn.current === c.id ? 'turn' : ''}" ${nfx ? `data-nfx="${nfx}"` : ''} data-tok="${c.id}" title="${esc(c.data.name)}${nfx ? `（効果：${esc(c.effects.map(e => e.name).join('・'))}）` : ''}" style="${c.side !== 'enemy' ? `background:${c.color};color:${inkOn(c.color)}` : ''}">${p ? `<img src="${esc(p.url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createTextNode(${esc(JSON.stringify(c.data.name.slice(0, 2)))}))">` : esc(c.data.name.slice(0, 2))}</div>`;
 }
 function boardCells(room) {
   const chars = Object.values(room.chars);
@@ -2519,21 +2840,33 @@ function boardCells(room) {
   const rw = sel && ui.rangeW && ui.rangeW.cid === sel.id ? weaponsNow(sel).find(x => x.k === ui.rangeW.k) : null;
   const rng = rw && rw.r && sel.x != null ? rw.r : null;
   const foeIds = rng ? new Set(foes(room, sel).filter(o => inRange(sel, o, rng)).map(o => o.id)) : null;
-  const at = {}; chars.forEach(c => { if (c.x != null) (at[c.x + ',' + c.y] = at[c.x + ',' + c.y] || []).push(c); });
+  // one-square pieces sit in their square; a 巨大キャラクター is drawn once over its 2×2 squares (the squares only know they are covered)
+  const at = {}, cover = {};
+  chars.forEach(c => { if (c.x == null) return; if (sizeOf(c) > 1) cellsOf(c).forEach(([x, y]) => { cover[x + ',' + y] = c; }); else (at[c.x + ',' + c.y] = at[c.x + ',' + c.y] || []).push(c); });
+  const selBig = sel && sizeOf(sel) > 1;
   let cells = '';
+  // squares are placed explicitly, so the giants can lie over them in the same grid
+  const pos = (x, y) => `grid-row:${y + 1};grid-column:${x + 2}`;
   for (let y = 0; y < 8; y++) {
-    cells += `<div class="coord">${8 - y}</div>`;
+    cells += `<div class="coord" style="grid-row:${y + 1};grid-column:1">${8 - y}</div>`;
     for (let x = 0; x < 8; x++) {
-      const list = at[x + ',' + y] || [];
+      const key = x + ',' + y, list = at[key] || [], big = cover[key];
+      const taken = list.length || (big && big !== sel);
       const d = sel && sel.x != null ? dist(room, sel, { x, y }) : null;
-      // squares within 移動値 are highlighted; moving further is still allowed
-      const reach = d != null && d > 0 && Number.isFinite(mv) && d <= mv && !list.length;
+      // squares within 移動値 are highlighted; moving further is still allowed (a giant: where its top-left square can go)
+      const step = sel && sel.x != null ? Math.abs(sel.x - x) + Math.abs(sel.y - y) : null;
+      const fits = !selBig || (x <= 6 && y <= 6);
+      const reach = step != null && step > 0 && Number.isFinite(mv) && step <= mv && !taken && fits && !(selBig && blockerAt(room, sel, x, y));
       const inR = rng && d != null && d >= rng.min && d <= rng.max;
-      cells += `<div class="cell ${(x + y) % 2 ? 'alt' : ''} ${list.length > 1 ? 'multi' : ''} ${sel && !list.length ? 'target' : ''} ${reach ? 'reach' : ''} ${inR ? 'rng' : ''}" data-cell="${x},${y}" aria-label="${coordName(x, y)}${reach ? '（移動値の範囲内）' : ''}${inR ? '（射程内）' : ''}">
+      cells += `<div class="cell ${(x + y) % 2 ? 'alt' : ''} ${list.length > 1 ? 'multi' : ''} ${big ? 'covered' : ''} ${sel && !taken ? 'target' : ''} ${reach ? 'reach' : ''} ${inR ? 'rng' : ''}" style="${pos(x, y)}" data-cell="${x},${y}" aria-label="${coordName(x, y)}${big ? `（${esc(big.data.name)}）` : ''}${reach ? '（移動値の範囲内）' : ''}${inR ? '（射程内）' : ''}">
         ${list.map(c => tokHtml(c, sel && c.id === sel.id, foeIds && foeIds.has(c.id))).join('')}${(n => n ? `<span class="cfx" title="効果${n}件">${n}</span>` : '')(list.reduce((a, c) => a + (c.effects || []).length, 0))}${d != null && d > 0 ? `<span class="dist">${d}</span>` : ''}</div>`;
     }
   }
-  cells += `<div></div>` + [...'ABCDEFGH'].map(l => `<div class="coord">${l}</div>`).join('');
+  chars.filter(c => c.x != null && sizeOf(c) > 1).forEach(c => {
+    const n = (c.effects || []).length;
+    cells += `<div class="giantBox" style="grid-row:${c.y + 1}/span 2;grid-column:${c.x + 2}/span 2">${tokHtml(c, sel && c.id === sel.id, foeIds && foeIds.has(c.id))}${n ? `<span class="cfx" title="効果${n}件">${n}</span>` : ''}</div>`;
+  });
+  cells += `<div style="grid-row:9;grid-column:1"></div>` + [...'ABCDEFGH'].map((l, i) => `<div class="coord" style="grid-row:9;grid-column:${i + 2}">${l}</div>`).join('');
   return cells;
 }
 const isPhone = () => matchMedia('(max-width:720px)').matches;
@@ -2562,10 +2895,10 @@ function renderMap(room, ru) {
   const done = new Set(room.turn.done || []), pick = room.turn.pick || [];
   const canPick = c => pick.includes(c.id) && canControlChar(room, v, c.id);
   const item = (c, i) => `
-    <div class="oitem ${c.id === cur ? 'now' : ''} ${ui.selTok === c.id ? 'sel' : ''} ${done.has(c.id) && c.id !== cur ? 'acted' : ''} ${pick.includes(c.id) ? 'tied' : ''} ${c.side}" data-charopen="${c.id}" role="button" tabindex="0" title="${esc(c.data.name)}の詳細を開く">
+    <div class="oitem ${c.id === cur ? 'now' : ''} ${ui.selTok === c.id ? 'sel' : ''} ${done.has(c.id) && c.id !== cur ? 'acted' : ''} ${pick.includes(c.id) ? 'tied' : ''} ${isDown(c) ? 'down' : ''} ${c.side}" data-charopen="${c.id}" role="button" tabindex="0" title="${esc(c.data.name)}の詳細を開く">
       ${canPick(c) ? `<button class="btn small primary pickGo" data-pickturn="${c.id}">動く</button>` : ''}
       <div class="ohead">${i != null ? `<span class="onum">${i + 1}</span>` : ''}${ptImg(c, null, 'pt')}${(c.effects || []).length ? `<span class="ofxN" title="効果${c.effects.length}件">${c.effects.length}</span>` : ''}
-        <div class="otext"><span class="oname" style="${nameCss(c.color)}">${esc(c.data.name)}</span>
+        <div class="otext"><span class="oname" style="${nameCss(c.color)}">${esc(c.data.name)}</span>${isDown(c) ? '<span class="koTag">戦闘不能</span>' : ''}
           ${v === 'gm' && c.side !== 'npc' ? `<button class="oset" data-setturn="${c.id}" title="${c.id === cur ? '手番を外す' : 'このキャラの手番にする'}" aria-label="${esc(c.data.name)}の手番にする">▶</button>` : ''}
           <span class="ometa">${'HP' in c.cur ? `<span class="phoneOnly ${c.data.stats.HP && c.data.stats.HP.max && c.cur.HP / c.data.stats.HP.max <= 0.5 ? 'hpLow' : ''}">HP${c.cur.HP}${'TP' in c.cur ? ` TP${c.cur.TP}` : ''}<br></span>` : ''}${c.data.stats['SS値'] ? `SS${c.cur['SS値']}` : ''}${c.data.stats['移動値'] ? `　移${c.cur['移動値']}` : ''}${c.x == null ? '　盤外' : `　${coordName(c.x, c.y)}`}</span></div>
 </div>
@@ -2573,7 +2906,7 @@ function renderMap(room, ru) {
     </div>`;
   const canNext = cur && (v === 'gm' || v === cur);
   // the last one yet to act ends the round with the same button; a tie on SS値 asks who goes
-  const lastUp = cur && !order.some(c => c.id !== cur && !done.has(c.id));
+  const lastUp = cur && !order.some(c => c.id !== cur && !done.has(c.id) && !isDown(c));
   const pickable = pick.length && (v === 'gm' || pick.includes(v));
   const nextBtn = pickable ? '<button class="btn small primary" data-pickmenu title="SS値が同値のキャラから選ぶ">誰が動く？</button>'
     : canNext ? `<button class="btn small primary" data-nextturn title="${lastUp ? 'ラウンドを終えて次のラウンドへ' : '次のキャラの手番へ'}">${lastUp ? 'ラウンド終了 ›' : '次の手番 ›'}</button>`
@@ -2588,8 +2921,9 @@ function renderMap(room, ru) {
   const roundChip = `<button class="roundChip ${inCombat ? 'on' : ''}" ${roundAttrs}>${inCombat ? `第<b>${room.turn.round}</b>R` : '戦闘前'}</button>`;
   const ranged = sel && canControlChar(room, v, sel.id) && sel.x != null ? weaponsNow(sel).filter(x => x.r) : [];
   const rk = sel && ui.rangeW && ui.rangeW.cid === sel.id ? ui.rangeW.k : '';
-  const rangePick = ranged.length ? `<select class="rangePick" data-rangew="${sel.id}" aria-label="射程を表示する武装"><option value="">射程</option>${ranged.map(x => `<option value="${x.k}" ${x.k === rk ? 'selected' : ''}>${x.w.suit ? SUIT[x.w.suit] : ''}${esc(x.w.name)}（${rangeText(x.r)}）</option>`).join('')}</select>` : '';
-  const moving = sel ? `<span class="mvname">${esc(sel.data.name)}を移動中${Number.isFinite(sel.cur['移動値']) ? `<span class="mvtag">移動値${sel.cur['移動値']}</span>` : ''}</span>${rangePick}<button class="btn small" data-offboard>盤外へ</button><button class="btn small" data-unsel>やめる</button>` : '';
+  const rkW = rk && ranged.find(x => x.k === rk);
+  const rangePick = ranged.length ? `<label class="rangePick ${rkW ? 'on' : ''}" title="${rkW ? `射程：${esc(rkW.w.name)}（${rangeText(rkW.r)}）` : '射程を表示する武装を選ぶ'}"><span>射程</span><select data-rangew="${sel.id}" aria-label="射程を表示する武装"><option value="">表示しない</option>${ranged.map(x => `<option value="${x.k}" ${x.k === rk ? 'selected' : ''}>${x.w.suit ? SUIT[x.w.suit] : ''}${esc(x.w.name)}（${rangeText(x.r)}）</option>`).join('')}</select></label>` : '';
+  const moving = sel ? `<span class="mvname"><span class="mvn">${esc(sel.data.name)}を移動中</span>${Number.isFinite(sel.cur['移動値']) ? `<span class="mvtag">移動値${sel.cur['移動値']}</span>` : ''}</span>${rangePick}<button class="btn small" data-offboard>盤外へ</button><button class="btn small" data-unsel>やめる</button>` : '';
   const open = !!U.ordOpen;
   setHtml($('mapP'), `
     <div class="mapwrap ${open ? 'ordOpen' : ''}">
@@ -2632,11 +2966,11 @@ function renderCards(room, ru) {
   const n = ui.sel.length;
   const tc = room.chars[room.turn.current];
   const jokerUp = unisonReady(mySeat === 'gm' ? Object.values(room.chars).filter(c => gmOwned(c) && c.side !== 'enemy') : [room.chars[mySeat]].filter(Boolean));
-  const turnTag = !tc ? '' : mySeat === tc.id ? '<span class="myTurn">あなたの手番</span>'
+  const turnTag = !tc ? '' : mySeat === tc.id ? '<span class="myTurn"><span class="hlong">あなたの</span>手番</span>'
     : mySeat === 'gm' && (tc.side !== 'pc' || gmOwned(tc)) ? `<span class="myTurn">${esc(tc.data.name)}の手番</span>` : '';
   setHtml($('cardsP'), `
     <div class="trayRow handHead">
-      <b class="handName">${esc(seatName(room, mySeat))}の手札</b><span class="count">${myHand.length}<small>枚</small></span>${turnTag}
+      <b class="handName">${esc(seatName(room, mySeat))}<span class="hlong">の手札</span></b><span class="count">${myHand.length}<small>枚</small></span>${turnTag}
       <button class="btn small ghost" data-sort>${ru.sort === 'rank' ? '数字順' : 'スート順'}</button>
       <span class="grow"></span>
       ${piles}
@@ -2690,6 +3024,7 @@ function charSheetHtml(c, canEdit) {
       ${view !== c.variation ? `<span class="formNote">表示中（換装していません）</span>${canEdit ? `<button class="btn small primary" data-formchange="${c.id}" data-idx="${view}">「${esc(formName(view))}」に換装する</button>` : ''}` : '<span class="formNote on">装備中</span>'}</div>` : ''}
     ${(view === -1 ? d.weapons.slots : (d.variations[view] || {}).slots || currentSlots(c)).map((it, i) => item(it, vgroup, i, suitHead(it.suit))).join('')}
     ${d.wingDrive ? `<div class="grp">ウイングドライブ</div>${item(d.wingDrive, 'wingDrive', 0)}` : ''}
+    ${(d.darkDrives || []).length ? `<div class="grp dark">ダークドライブ</div>${d.darkDrives.map((it, i) => item(it, 'darkDrive', i, it.tp != null ? `<span class="attr">TP${it.tp}</span>` : '')).join('')}` : ''}
     ${d.memo ? `<div class="grp">メモ</div><div class="itext">${esc(d.memo)}</div>` : ''}
   </div>`;
 }
@@ -2798,7 +3133,7 @@ function logHtml(room, l) {
   const showWho = l.type !== 'sys' && !(l.byName && l.text && l.text.startsWith(l.byName));
   // 換装 that changed the 立ち絵: small before → after pictures
   const swapPics = l.type === 'variation' && l.ptFrom && l.ptTo ? `<span class="swapPics"><img src="${esc(l.ptFrom)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">→<img src="${esc(l.ptTo)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()"></span>` : '';
-  return `<div class="le ${l.type === 'sys' ? 'sys' : cls}">${showWho ? `<span class="who">${who}</span>` : ''}${esc(l.text)}${swapPics}<span class="t">${time}</span></div>`;
+  return `<div class="le ${l.type === 'sys' ? 'sys' : cls}${l.fx === 'ko' ? ' ko' : ''}">${showWho ? `<span class="who">${who}</span>` : ''}${esc(l.text)}${swapPics}<span class="t">${time}</span></div>`;
 }
 function diceHtml(l) {
   const d = l.dice;
@@ -2810,9 +3145,10 @@ function diceHtml(l) {
   }
   if (d.hidden) return `<div class="dice secret"><span class="dres">シークレットダイス</span></div>`;
   const cls = d.ok === true ? 'ok' : d.ok === false ? 'ng' : '';
+  const z = diceZoro(d);
   return `${d.comment ? `<div class="mtext">${esc(d.comment)}</div>` : ''}
-    <div class="dice ${cls}${d.secret ? ' secret' : ''}"><span class="dres">${esc(d.result)}</span>
-    <span class="dtotal">${esc(d.total)}</span>${d.ok != null ? `<span class="dverdict">${d.ok ? '成功' : '失敗'}</span>` : ''}${d.secret ? '<span class="dverdict s">シークレット</span>' : ''}</div>`;
+    <div class="dice ${cls}${d.secret ? ' secret' : ''}${z ? ' ' + z.kind : ''}"><span class="dres">${esc(d.result)}</span>
+    <span class="dtotal">${esc(d.total)}</span>${z ? `<span class="dzoro">${z.face}ゾロ${z.kind === 'crit' ? '！' : '…'}</span>` : ''}${d.ok != null ? `<span class="dverdict">${d.ok ? '成功' : '失敗'}</span>` : ''}${d.secret ? '<span class="dverdict s">シークレット</span>' : ''}</div>`;
 }
 function logPlain(room, l) {
   const c = l.as ? room.chars[l.as] : null;
@@ -2907,6 +3243,7 @@ function paletteItems(c, room) {
   d.skills.forEach((it, i) => out.push({ grp: '特技', label: it.name, text: cmdText('特技', it, it.tp != null ? `TP${it.tp} ` : ''), tp: it.tp, name: it.name, src: it, used: c.used[`skills:${i}`] }));
   (d.core?.functions || []).forEach((it, i) => out.push({ grp: '特殊機能', label: it.name, text: cmdText('特殊機能', it), name: it.name, src: it, used: c.used[`func:${i}`] }));
   if (d.wingDrive) out.push({ grp: 'ウイングドライブ', label: d.wingDrive.name, text: cmdText('ウイングドライブ', d.wingDrive), name: d.wingDrive.name, src: d.wingDrive, used: c.used['wingDrive:0'] });
+  (d.darkDrives || []).forEach((it, i) => out.push({ grp: 'ダークドライブ', label: it.name, text: cmdText('ダークドライブ', it, it.tp != null ? `TP${it.tp} ` : ''), tp: it.tp, name: it.name, src: it, used: c.used[`darkDrive:${i}`] }));
   d.weapons.common.forEach((it, i) => it.name && out.push({ grp: '武装', label: it.name, tag: '共通', text: cmdText('武装', it, '共通 '), name: it.name, src: it, used: c.used[`common:${i}`] }));
   const view = ui.cmdForm && ui.cmdForm.cid === c.id ? ui.cmdForm.idx : c.variation;
   const slots = view === -1 ? d.weapons.slots : (d.variations[view] || {}).slots || currentSlots(c);
@@ -2997,7 +3334,7 @@ function onNet(m) {
     NET.pending = []; NET.base = m.room;
     DB.rooms = { [m.room.id]: { ...m.room, logs: m.logs } };
     NET.olderLogs = m.olderLogs || 0;
-    (m.logs || []).forEach(l => ui.fxSeen.add(l.id)); ui.fxInit = true;
+    (m.logs || []).forEach(l => { ui.fxSeen.add(l.id); ui.sfxSeen.add(sfxKey(l)); }); ui.fxInit = ui.sfxInit = true;
     NET.locked = new Set(m.locked || []);
     saveLastSeat(m.room.id, m.seat);
     const ru = roomUI(m.room.id);
@@ -3260,6 +3597,8 @@ function charModalHtml(room, ru, cid) {
     <div class="mactions">
       ${v === 'gm' && c.side !== 'npc' ? `<button class="btn small" data-setturn="${c.id}">${room.turn.current === c.id ? '手番を外す' : '手番にする'}</button>` : ''}
       ${can ? `<button class="btn small" data-movechar="${c.id}">${c.x == null ? 'マップに置く' : '移動する'}</button><button class="btn small" data-portraits="${c.id}">立ち絵</button><button class="btn small" data-editchar="${c.id}">更新</button>` : ''}
+ ${v === 'gm' && c.side !== 'pc' ? `<button class="btn small ${sizeOf(c) > 1 ? 'on' : ''}" data-setsize="${c.id}" aria-pressed="${sizeOf(c) > 1}" title="巨大キャラクター：2×2の4マスを占める">${sizeOf(c) > 1 ? '巨大 2×2' : '巨大にする'}</button>` : ''}
+      ${v === 'gm' && (c.side !== 'pc' || gmOwned(c)) ? `<button class="btn small" data-clonechar="${c.id}" title="同じキャラを連番の名前でもう1体（HP満タン・盤外）">複製</button>` : ''}
       ${v === 'gm' || v === c.id ? `<button class="btn small danger" data-delchar="${c.id}">外す</button>` : ''}</div>
     ${ONLINE && isPcSeat(room, c.id) ? (() => {
       const ownerName = gmOwned(c) ? 'GM' : (room.players[c.owner] || {}).name || '（未設定）';
@@ -3271,15 +3610,37 @@ function charModalHtml(room, ru, cid) {
     ${can && c.data.variations.length ? `<div class="formBar"><span class="muted">換装</span>${[-1, ...c.data.variations.map((_, i) => i)].map(i =>
       i === c.variation ? `<span class="formNow">${esc(i === -1 ? '基本' : c.data.variations[i].name)}（装備中）</span>`
         : `<button class="btn small" data-formchange="${c.id}" data-idx="${i}">${esc(i === -1 ? '基本' : c.data.variations[i].name)}に換装</button>`).join('')}</div>` : ''}
-    ${fxPanel(c, can)}
     <div class="vals">${keys.map(k => {
       const st = c.data.stats[k] || {};
       if (st.max == null) return `<span class="val">${esc(k)} ${can && v === 'gm' ? `<input type="number" value="${c.cur[k]}" data-vset data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(k)}">` : `<b>${c.cur[k]}</b>`}</span>`;
       return `<span class="val">${esc(k)}${can ? `<button class="btn small" data-vstep="-1" data-cid="${c.id}" data-key="${esc(k)}">−</button><input type="number" value="${c.cur[k]}" data-vset data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(k)}"><button class="btn small" data-vstep="1" data-cid="${c.id}" data-key="${esc(k)}">＋</button>` : `<b>${c.cur[k]}</b>`}<span class="max">/ ${st.max}</span></span>`;
     }).join('')}</div>
-    ${charSheetHtml(c, can)}</div></div>`;
+    ${charSheetHtml(c, can)}
+    ${fxPanel(c, can)}</div></div>`;
 }
 // 武装を使う: pick any number of weapons, the cards to discard and the targets in one go
+// 同時使用: weapons used together are paid with cards of the same number, one per weapon in its suit.
+// Returns the numbers that can still make the set from this hand (narrowed by the cards already chosen), or null for a single suited weapon.
+function comboOf(picked, hand, chosen) {
+  const need = {};
+  picked.forEach(([, x]) => { if (x.suit) need[x.suit] = (need[x.suit] || 0) + 1; });
+  const n = Object.values(need).reduce((a, b) => a + b, 0);
+  if (n < 2) return null;
+  const have = {};   // "S7" → how many in hand
+  hand.forEach(c => { const k = cardOf(c); if (!k.joker) have[k.s + k.r] = (have[k.s + k.r] || 0) + 1; });
+  const fixed = [...new Set(chosen.map(cardOf).filter(k => !k.joker && need[k.s]).map(k => k.r))];
+  const all = [...new Set(hand.map(cardOf).filter(k => !k.joker).map(k => k.r))].sort((a, b) => a - b)
+    .filter(r => Object.entries(need).every(([s, m]) => (have[s + r] || 0) >= m));
+  const done = fixed.length === 1 && Object.entries(need).every(([s, m]) => chosen.filter(c => c[0] === s && cardOf(c).r === fixed[0]).length >= m);
+  return { need, n, ranks: fixed.length > 1 ? [] : fixed.length ? all.filter(r => r === fixed[0]) : all, all, fixed, done };
+}
+function comboBarHtml(cb) {
+  const suits = Object.entries(cb.need).map(([s, m]) => SUIT[s].repeat(m)).join('');
+  if (cb.fixed.length > 1) return `<div class="comboBar ng">同時使用は同じ数字のカードで払います（選んだカードの数字がそろっていません）</div>`;
+  if (cb.done) return `<div class="comboBar ok">✓ ${suits} が ${RANK(cb.fixed[0])} でそろいました</div>`;
+  if (!cb.ranks.length) return `<div class="comboBar ng">${suits} を同じ数字でそろえられる手札がありません</div>`;
+  return `<div class="comboBar">同じ数字で ${suits}：${cb.ranks.map(r => `<button class="btn small comboGo" data-wcombo="${r}" title="${RANK(r)}で${suits}をそろえて選ぶ">${RANK(r)}</button>`).join('')}<span class="muted">押すとそろえて選びます</span></div>`;
+}
 function weaponModalHtml(room, ru) {
   const v = ru.viewer, w = ui.w;
   const actors = Object.values(room.chars).filter(c => canControlChar(room, v, c.id) && !(v === 'gm' && c.side === 'pc' && !gmOwned(c)));
@@ -3300,11 +3661,12 @@ function weaponModalHtml(room, ru) {
   const anyIn = o => pickedR.some(r => inRange(ch, o, r));
   const showRange = pickedR.length && ch.x != null;
   const unisonPicked = picked.some(([, x]) => /クロスユニゾン/.test(x.name));
+  const combo = comboOf(picked, hand, w.cards);
   const rangeBoard = !showRange ? '' : (() => {
-    const at = {}; Object.values(room.chars).forEach(o => { if (o.x != null) at[o.x + ',' + o.y] = o; });
+    const at = {}; Object.values(room.chars).forEach(o => { if (o.x != null) cellsOf(o).forEach(([x, y]) => { at[x + ',' + y] = o; }); });
     let cells = '';
     for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
-      const d = Math.abs(ch.x - x) + Math.abs(ch.y - y), o = at[x + ',' + y];
+      const d = gap(ch, { x, y }), o = at[x + ',' + y];
       const inR = pickedR.some(r => d >= r.min && d <= r.max);
       cells += `<span class="rc ${(x + y) % 2 ? 'alt' : ''} ${inR ? 'in' : ''} ${o ? (o.id === ch.id ? 'me' : o.side === 'enemy' ? 'foe' : 'ally') : ''}" ${o ? `title="${esc(o.data.name)}"` : ''}>${o ? esc(o.data.name.slice(0, 1)) : ''}</span>`;
     }
@@ -3322,8 +3684,11 @@ function weaponModalHtml(room, ru) {
           <span class="wtop">${x.suit ? `<span class="suit ${'HD'.includes(x.suit) ? 'red' : ''}">${SUIT[x.suit]}</span>` : ''}${tag ? `<span class="attr">${tag}</span>` : ''}<b>${esc(x.name)}</b></span>
           <span class="wstats">${['威力', '射程', '回避'].filter(a => x.attrs[a] != null).map(a => `${a}<b>${esc(x.attrs[a])}</b>`).join('')}</span>
         </button>`).join('')}</div></section>
-      <section><h2>出すカード（押した順に並びます）${suits.size ? `<span class="muted">　${[...suits].map(s => SUIT[s]).join('')} のカードを強調中・どれでも選べます</span>` : ''}</h2>
-        <div class="cards">${hand.map(x => { const k = cardOf(x); const hint = k.joker ? unisonPicked : suits.has(k.s); let h = cardHtml(x, { sel: w.cards.includes(x), attr: `data-wcard="${x}"` }).replace('class="card', `class="card ${hint ? 'hint' : ''}`);
+      <section><h2>出すカード（押した順に並びます）${suits.size && !combo ? `<span class="muted">　${[...suits].map(s => SUIT[s]).join('')} のカードを強調中・どれでも選べます</span>` : ''}</h2>
+        ${combo ? comboBarHtml(combo) : ''}
+        <div class="cards">${hand.map(x => { const k = cardOf(x); const hint = k.joker ? unisonPicked : suits.has(k.s);
+          const cmb = combo && !k.joker && combo.need[k.s] && combo.ranks.includes(k.r);
+          let h = cardHtml(x, { sel: w.cards.includes(x), attr: `data-wcard="${x}"` }).replace('class="card', `class="card ${cmb ? 'hint combo' : hint ? (combo ? 'hint weak' : 'hint') : ''}`);
           if (w.cards.includes(x)) h = h.replace(/<\/button>$/, `<span class="ord">${w.cards.indexOf(x) + 1}</span></button>`);
           return h; }).join('') || '<span class="muted">手札はありません</span>'}</div>
         <h2 style="margin-top:12px">対象</h2>
@@ -3364,7 +3729,7 @@ function useCommand(i, sendNow) {
   const room = curRoom(), ru = roomUI(room.id), c = room.chars[ru.as];
   const it = paletteItems(c, room)[i]; if (!it) return;
   if (it.grp === '換装') { closeDlg(); act({ type: 'variation', cid: c.id, idx: it.form }); if (ui.cmdForm) ui.cmdForm = null; return; }
-  ui.cmd = it.grp === 'ダイス' || !c ? null : { cid: c.id, name: it.name || it.label, tp: it.tp ?? null, label: it.label, fx: it.grp === 'ウイングドライブ' ? 'wd' : null };
+  ui.cmd = it.grp === 'ダイス' || !c ? null : { cid: c.id, name: it.name || it.label, tp: it.tp ?? null, label: it.label, fx: it.grp === 'ウイングドライブ' ? 'wd' : it.grp === 'ダークドライブ' ? 'dd' : null };
   closeDlg();
   if (it.offForm) toast('換装していないバリエーションの武装です（換装はキャラの詳細から）');
   $('sayText').value = it.text;
@@ -3396,6 +3761,17 @@ function weaponClick(t, room, ru) {
   const tog = (arr, x) => arr.includes(x) ? arr.filter(y => y !== x) : [...arr, x];
   if ((el = t.closest('[data-wtoggle]'))) { w.weapons = tog(w.weapons, el.dataset.wtoggle); refreshModal(); return true; }
   if ((el = t.closest('[data-wcard]'))) { w.cards = tog(w.cards, el.dataset.wcard); refreshModal(); return true; }
+  if ((el = t.closest('[data-wcombo]'))) {
+    // pick one card per weapon, in the order the weapons were chosen; jokers and cards of other suits already chosen stay
+    const r = +el.dataset.wcombo, ch = room.chars[w.cid], seat = isPcSeat(room, ch.id) ? ch.id : 'gm';
+    const hand = viewHand(room, seat, ru.viewer) || [];
+    const formSlots = w.form === -1 ? ch.data.weapons.slots : (ch.data.variations[w.form] || {}).slots || currentSlots(ch);
+    const suitOf = k => k[0] === 'c' ? ch.data.weapons.common[+k.slice(1)]?.suit : formSlots[+(k[0] === 'v' ? k.split('_')[1] : k.slice(1))]?.suit;
+    const keep = w.cards.filter(c => { const k = cardOf(c); return k.joker || !w.weapons.some(x => suitOf(x) === k.s); });
+    const used = new Set(keep), pickN = [];
+    w.weapons.map(suitOf).filter(Boolean).forEach(s => { const c = hand.find(c => !used.has(c) && c[0] === s && cardOf(c).r === r); if (c) { used.add(c); pickN.push(c); } });
+    w.cards = [...keep, ...pickN]; refreshModal(); return true;
+  }
   if ((el = t.closest('[data-wtarget]'))) { w.targets = tog(w.targets, el.dataset.wtarget); refreshModal(); return true; }
   if (t.closest('[data-wgo]')) {
     const go = keys => {
@@ -3602,10 +3978,15 @@ function menuDialog(room) {
       <option value="simple" ${U.fx === 'simple' ? 'selected' : ''}>静止画（ふわっと出て消える）</option>
       <option value="off" ${U.fx === false || U.fx === 'off' ? 'selected' : ''}>表示しない</option></select></div>
     <div class="field">演出を出すのは<select id="mnFxWho">
-      <option value="all" ${U.fxWho !== 'mine' ? 'selected' : ''}>全員の換装・ウイングドライブ</option>
+      <option value="all" ${U.fxWho !== 'mine' ? 'selected' : ''}>全員の換装・ドライブ</option>
       <option value="mine" ${U.fxWho === 'mine' ? 'selected' : ''}>自分のだけ</option></select></div>
+    <div class="field">効果音（カード・ダイス・手番・演出）<div class="row"><label class="row"><input type="checkbox" id="mnSfx" ${U.sfx !== false ? 'checked' : ''}> 鳴らす</label><input type="range" id="mnSfxVol" min="0" max="1" step="0.05" value="${U.sfxVol ?? 0.5}" style="flex:1" aria-label="効果音の音量"><button class="btn small" id="mnSfxTest">試聴</button></div></div>
     <div class="row"><button class="btn small" data-theme-toggle></button><span style="flex:1"></span><button class="btn" data-close>閉じる</button></div>`, () => {
     applyTheme();
+    $('mnSfx').onchange = e => { U.sfx = e.target.checked; saveU(); if (U.sfx) sfx(['ok']); };
+    $('mnSfxVol').oninput = e => { U.sfxVol = +e.target.value; saveU(); };
+    $('mnSfxVol').onchange = () => sfx(['card']);
+    $('mnSfxTest').onclick = () => { if (U.sfx === false) { toast('効果音がオフです'); return; } sfxCtx(); setTimeout(() => sfx(['dice']), 30); setTimeout(() => { try { SOUNDS.ok(); } catch (e) {} }, 620); };
     if ($('mnSave')) $('mnSave').onclick = () => {
       const n = $('mnName').value.trim(); if (!n) { toast('名前を入れてください'); return; }
       saveMe({ ...me(), name: n });
@@ -3622,12 +4003,15 @@ function bgmDialog(room, ru) {
   openDlg(`<h1>BGM</h1>
     <p class="muted">${i ? `再生中：<b>${esc(i.name)}</b>` : '再生していません'}${BGM.blocked ? '<br>ブラウザの制限で止まっています。「この端末で再生」を押してください。' : ''}</p>
     <div class="field">音量（この端末だけ）<input type="range" id="bgVol" min="0" max="1" step="0.05" value="${U.bgmVol ?? 0.5}"></div>
+    <div class="field">効果音の音量（メニューでオン・オフ）<input type="range" id="bgSfxVol" min="0" max="1" step="0.05" value="${U.sfxVol ?? 0.5}" ${U.sfx === false ? 'disabled' : ''}></div>
     <div class="row" style="margin-bottom:12px"><label class="row"><input type="checkbox" id="bgMute" ${U.bgmMute ? 'checked' : ''}> ミュート</label>${i ? '<button class="btn small" id="bgPlay">この端末で再生</button>' : ''}</div>
     ${gm ? `<div class="field">GM：音声ファイルを流す（20MBまで・保存はされません）<input type="file" id="bgFile" accept="audio/*"></div>
       <div class="row">${i ? `<label class="row"><input type="checkbox" id="bgLoop" ${i.loop ? 'checked' : ''}> ループ</label><button class="btn small danger" id="bgStop">停止</button>` : ''}</div>` : '<p class="muted">BGMを選べるのはGMです。</p>'}
     <div class="row" style="margin-top:12px"><span style="flex:1"></span><button class="btn" data-close>閉じる</button></div>`, () => {
     $('bgVol').oninput = e => { U.bgmVol = +e.target.value; saveU(); bgmEl(); };
     $('bgMute').onchange = e => { U.bgmMute = e.target.checked; saveU(); bgmEl(); };
+    $('bgSfxVol').oninput = e => { U.sfxVol = +e.target.value; saveU(); };
+    $('bgSfxVol').onchange = () => sfx(['card']);
     if ($('bgPlay')) $('bgPlay').onclick = () => { bgmEl().play().catch(() => toast('再生できませんでした')); };
     if ($('bgFile')) $('bgFile').onchange = async e => { const f = e.target.files[0]; if (!f) return; toast('送信中…'); await bgmUpload(f); closeDlg(); };
     if ($('bgLoop')) $('bgLoop').onchange = e => bgmLoop(e.target.checked);
@@ -3713,7 +4097,8 @@ function bindRoomStatic() {
     if (statCmd(room, ru, text)) return;
     const c = room.chars[ru.as];
     const cmd = ui.cmd && c && ui.cmd.cid === c.id ? ui.cmd : null;
-    const spend = cmd && cmd.tp ? cmd.tp : null;
+    // a character without TP (enemies often have none) just declares it
+    const spend = cmd && cmd.tp && Number.isFinite(c.cur.TP) ? cmd.tp : null;
     const r = act({ type: 'say', tab: ru.tab, as: c ? c.id : null, name: c ? null : ($('freeName').value.trim() || seatName(room, ru.viewer)), color: c ? null : (ru.freeColor || null), portrait: c ? c.portrait : null, text,
       cmd: cmd ? cmd.name : null, spendTP: Number.isFinite(spend) ? spend : null, fx: cmd && cmd.fx ? cmd.fx : undefined, reply: ui.reply ? ui.reply.id : undefined });
     if (r !== FAIL) { $('sayText').value = ''; ui.cmd = null; ui.reply = null; $('sayText').blur(); renderRoom(); }
@@ -3845,6 +4230,8 @@ function mapClick(t, room, ru) {
     autoFxDialog(c.data.name, detectEffects(c.data), c.autoFx || [], names => { act({ type: 'setAutoFx', cid: c.id, names }); openModal('char', c.id); });
     return true;
   }
+  if ((el = q('[data-setsize]'))) { const c = room.chars[el.dataset.setsize]; act({ type: 'setSize', cid: c.id, size: sizeOf(c) > 1 ? 1 : 2 }); return true; }
+  if ((el = q('[data-clonechar]'))) { const nm = nextCopyName(room, room.chars[el.dataset.clonechar].data.name); if (act({ type: 'cloneChar', cid: el.dataset.clonechar }) !== FAIL) toast(`${nm}を追加しました（盤外）`); return true; }
   if ((el = q('[data-fxdel]'))) { act({ type: 'removeEffect', cid: el.dataset.cid, eid: el.dataset.fxdel }); return true; }
   if ((el = q('[data-fxadd]'))) {
     if (act({ type: 'addEffect', cid: el.dataset.fxadd, name: $('fxName').value, note: $('fxNote').value, dur: $('fxDur').value }) !== FAIL) ui.fxDraft = null;
@@ -3859,7 +4246,9 @@ function mapClick(t, room, ru) {
   if (q('[data-resetround]')) { ask('ラウンド数を1に戻し、SS値がいちばん大きいキャラの手番から始めます。', '戦闘を開始', () => act({ type: 'resetRound' })); return true; }
   // a selected token + a tap on an empty square = move there (a square holds one piece; tapping a piece selects it)
   if ((el = q('[data-cell]')) && ui.selTok && !q('[data-tok]')) {
-    const [x, y] = el.dataset.cell.split(',').map(Number);
+    let [x, y] = el.dataset.cell.split(',').map(Number);
+    // a giant goes with its top-left square on the tapped one, pulled back from the right / bottom edge
+    const n = sizeOf(room.chars[ui.selTok]); x = Math.min(x, 8 - n); y = Math.min(y, 8 - n);
     if (act({ type: 'move', cid: ui.selTok, x, y }, { silent: true }) !== FAIL) ui.selTok = null;
     renderRoom(); return true;
   }

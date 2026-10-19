@@ -96,6 +96,10 @@ function normalizeChar(raw) {
     variations: Array.isArray(raw.variations) ? raw.variations.map(v => ({ name: String(v?.name || 'バリエーション'), slots: slotsFrom(v?.slots), portrait: v?.portrait ? String(v.portrait) : null })) : [],
     basePortrait: raw.basePortrait ? String(raw.basePortrait) : null,
     wingDrive: raw.wingDrive ? item(raw.wingDrive) : null,
+    // enemies: any number of ダークドライブ (an enemy's counterpart of the ウイングドライブ), each with its own TP cost
+    darkDrives: (Array.isArray(raw.darkDrives) ? raw.darkDrives : []).map(x => { const t = x?.tp; return { ...item(x), tp: t != null && t !== '' && Number.isFinite(Number(t)) ? Number(t) : null }; }).filter(x => x.name),
+    // 巨大キャラクター: takes 2×2 squares on the board (x, y = its top-left square on screen)
+    size: Number(raw.size) === 2 ? 2 : 1,
     // {label, url}; a plain URL string (older sheets) gets a numbered label
     portraits: Array.isArray(raw.portraits) ? raw.portraits.map((p, i) => typeof p === 'string' ? { label: `立ち絵${i + 1}`, url: p } : p)
       .filter(p => p && typeof p.url === 'string' && p.url.trim()).map(p => ({ label: String(p.label || '立ち絵'), url: toDirectImage(p.url) })) : [],
@@ -115,6 +119,29 @@ const formPortrait = (ch, i) => (i === -1 ? ch.data.basePortrait : (ch.data.vari
 const portraitUrl = (ch, label) => (ch.data.portraits.find(p => p.label === label) || {}).url || null;
 // クロスユニゾン (an all-out attack): every PC lines up in the effect, the declarer first
 const UNISON = /クロスユニゾン/;
+// ----- board footprint: a 巨大キャラクター covers 2×2 squares from (x, y) -----
+const sizeOf = c => c && c.data && c.data.size === 2 ? 2 : 1;
+function cellsOf(c, x = c.x, y = c.y) {
+  const n = sizeOf(c), out = [];
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) out.push([x + i, y + j]);
+  return out;
+}
+// squares between two pieces (or a piece and a square {x, y}); a giant counts from its nearest square
+function gap(a, b) {
+  let best = Infinity;
+  for (const [ax, ay] of cellsOf(a)) for (const [bx, by] of cellsOf(b)) best = Math.min(best, Math.abs(ax - bx) + Math.abs(ay - by));
+  return best;
+}
+// whoever already stands on the squares ch would cover at (x, y)
+const blockerAt = (room, ch, x, y) => { const mine = cellsOf(ch, x, y); return Object.values(room.chars).find(o => o.id !== ch.id && o.x != null && cellsOf(o).some(([ox, oy]) => mine.some(([mx, my]) => mx === ox && my === oy))); };
+// after a change of size: keep the piece on the board if it still fits (pulled in from the edge), otherwise take it off
+function refit(room, ch) {
+  if (ch.x == null) return '';
+  const n = sizeOf(ch), x = Math.min(ch.x, 8 - n), y = Math.min(ch.y, 8 - n);
+  if (!blockerAt(room, ch, x, y)) { ch.x = x; ch.y = y; return ''; }
+  ch.x = ch.y = null;
+  return '（重なるため盤外に出しました）';
+}
 // クロスユニゾン and the ウイングドライブ are once per scenario: declaring them ticks their 使用済み box
 // ----- lasting effects (buffs / debuffs) -----
 // Read from the effect text by how long it lasts, which the rules always write the same way:
@@ -195,6 +222,7 @@ function detectEffects(d) {
   (d.skills || []).forEach(it => add('特技', it));
   (d.core?.functions || []).forEach(it => add('特殊機能', it));
   add('ウイングドライブ', d.wingDrive);
+  (d.darkDrives || []).forEach(it => add('ダークドライブ', it));
   (d.weapons?.common || []).forEach(it => add('武装', it));
   [d.weapons?.slots || [], ...(d.variations || []).map(v => v.slots || [])].forEach(sl => sl.forEach(it => add('武装', it)));
   return out;
@@ -218,8 +246,19 @@ function nextRound(room, by) {
   expireEffects(room, by, true);
   log(room, { tab: opsTab(room), type: 'round', by, start: room.turn.round, cid: room.turn.current || undefined, text: `第${room.turn.round}ラウンド開始${next ? `：${next}` : ''}` });
 }
-function markOncePerScenario(ch, { unison, wd }) {
+// 機械兵A → 機械兵B, 機械兵1 → 機械兵2, 機械兵 → 機械兵2 (the first name not in use)
+function nextCopyName(room, name) {
+  const used = new Set(Object.values(room.chars).map(c => c.data.name));
+  const n = String(name).normalize('NFKC');
+  let m;
+  if ((m = n.match(/^(.*?)([A-Z])$/))) { for (let c = m[2].charCodeAt(0) + 1; c <= 90; c++) { const t = m[1] + String.fromCharCode(c); if (!used.has(t)) return t; } }
+  if ((m = n.match(/^(.*?)(\d+)$/))) { for (let k = +m[2] + 1; k < 1000; k++) { const t = m[1] + k; if (!used.has(t)) return t; } }
+  for (let k = 2; k < 1000; k++) { const t = n + k; if (!used.has(t)) return t; }
+  return n + '（複製）';
+}
+function markOncePerScenario(ch, { unison, wd, dd }) {
   if (!ch) return;
+  if (dd >= 0) ch.used[`darkDrive:${dd}`] = true;
   if (unison) ch.data.weapons.common.forEach((w, i) => { if (UNISON.test(w.name || '')) ch.used[`common:${i}`] = true; });
   if (wd && ch.data.wingDrive) ch.used['wingDrive:0'] = true;
 }
@@ -236,11 +275,24 @@ function turnOrder(room) {
     .map(x => x.c);
 }
 
+function logValue(room, ch, a, by, before, v) {
+  if (room.settings.logValues === false) return;
+  // repeated +/- on the same value within a few seconds are folded into one log line (20 → 14)
+  const last = room.logs[room.logs.length - 1];
+  if (last && last.type === 'value' && !last.cmd && last.cid === a.cid && last.key === a.key && last.by === by && Date.now() - last.t < 8000) {
+    if (last.from === v) room.logs.pop();
+    else { last.to = v; last.t = Date.now(); last.text = `${ch.data.name}の${a.key}：${last.from} → ${v}`; }
+    return;
+  }
+  log(room, { tab: opsTab(room), type: 'value', by, cid: a.cid, key: a.key, from: before, to: v, text: `${ch.data.name}の${a.key}：${before} → ${v}` });
+}
 // SS値 is the initiative: the next to act is the highest SS値 among those who have not acted this round
 // (room.turn.done). A tie is not decided by the table order: the players choose (room.turn.pick).
+// HP 0 or less = 戦闘不能: skipped by the initiative until healed (characters without HP are never down)
+const isDown = c => !!c && Number.isFinite(c.cur.HP) && c.cur.HP <= 0;
 function nextActors(room) {
   const done = new Set(room.turn.done || []);
-  const left = turnOrder(room).filter(c => !done.has(c.id));
+  const left = turnOrder(room).filter(c => !done.has(c.id) && !isDown(c));
   return left.length ? left.filter(c => ssOf(c) === ssOf(left[0])) : [];
 }
 const tieText = g => `SS値${ssOf(g[0])}が同値：${g.map(c => c.data.name).join('、')}から次に動くキャラを選びます`;
@@ -341,13 +393,26 @@ function applyInner(room, a, by, pid) {
       ch.data = data; ch.dv = (ch.dv || 1) + 1;
       if (!(ch.variation < data.variations.length)) ch.variation = -1;
       if (ch.portrait && !data.portraits.some(p => p.label === ch.portrait)) ch.portrait = data.portraits[0]?.label || null;
-      log(room, { tab: opsTab(room), type: 'sys', by, text: `${data.name}のデータを更新しました` });
+      const off = refit(room, ch);
+      log(room, { tab: opsTab(room), type: 'sys', by, text: `${data.name}のデータを更新しました${off}` });
       return;
     }
     case 'setAutoFx': {
       need(ch && canControlChar(room, by, a.cid), 'このキャラクターは操作できません');
       ch.autoFx = cleanAutoFx(a.names) || [];
       return;
+    }
+    case 'cloneChar': { // GM: another copy of an enemy / NPC, fresh (full values, off the board), named with the next free suffix
+      need(by === 'gm', '複製できるのはGMだけです');
+      need(ch && (ch.side !== 'pc' || gmOwned(ch)), 'PLのキャラは複製できません');
+      const id = typeof a.id === 'string' && /^c[0-9a-z]{6,30}$/.test(a.id) && !room.chars[a.id] ? a.id : uid('c');
+      const name = nextCopyName(room, ch.data.name);
+      const data = clone(ch.data); data.name = name;
+      const cur = {}; for (const [k, st] of Object.entries(data.stats)) cur[k] = statStart(st);
+      room.chars[id] = { ...clone(ch), id, data, dv: 1, cur, used: {}, effects: [], x: null, y: null, owner: 'gm' };
+      if (ch.side === 'pc' || ch.side === 'npc') room.cards.hands[id] = [];
+      log(room, { tab: opsTab(room), type: 'sys', by, text: `${ch.data.name}を複製して${name}を追加しました` });
+      return id;
     }
     case 'addEffect': {
       need(ch && canControlChar(room, by, a.cid), 'このキャラクターは操作できません');
@@ -381,23 +446,19 @@ function applyInner(room, a, by, pid) {
       const v = Number(a.value);
       need(Number.isFinite(v), '数値を入れてください');
       if (before === v) return;
+      const wasDown = isDown(ch);
       ch.cur[a.key] = v;
-      if (room.settings.logValues === false) return;
-      // repeated +/- on the same value within a few seconds are folded into one log line (20 → 14)
-      const last = room.logs[room.logs.length - 1];
-      if (last && last.type === 'value' && !last.cmd && last.cid === a.cid && last.key === a.key && last.by === by && Date.now() - last.t < 8000) {
-        if (last.from === v) room.logs.pop();
-        else { last.to = v; last.t = Date.now(); last.text = `${ch.data.name}の${a.key}：${last.from} → ${v}`; }
-        return;
-      }
-      log(room, { tab: opsTab(room), type: 'value', by, cid: a.cid, key: a.key, from: before, to: v, text: `${ch.data.name}の${a.key}：${before} → ${v}` });
+      logValue(room, ch, a, by, before, v);
+      // crossing HP 0 is always told (even with value logs off): it takes the character out of / back into the initiative
+      if (a.key === 'HP' && isDown(ch) !== wasDown) log(room, { tab: opsTab(room), type: 'sys', by, cid: ch.id, fx: isDown(ch) ? 'ko' : undefined,
+        text: isDown(ch) ? `${ch.data.name}は戦闘不能になりました` : `${ch.data.name}が戦闘不能から復帰しました` });
       return;
     }
     case 'toggleUsed': {
       need(ch && canControlChar(room, by, a.cid), 'このキャラクターは操作できません');
       const k = `${a.group}:${a.idx}`;
       ch.used[k] = !ch.used[k];
-      const it = a.group === 'wingDrive' ? ch.data.wingDrive : a.group === 'common' ? ch.data.weapons.common[a.idx]
+      const it = a.group === 'wingDrive' ? ch.data.wingDrive : a.group === 'darkDrive' ? (ch.data.darkDrives || [])[a.idx] : a.group === 'common' ? ch.data.weapons.common[a.idx]
         : a.group.startsWith('slot') ? currentSlots(ch)[a.idx] : a.group === 'func' ? ch.data.core?.functions[a.idx] : ch.data[a.group]?.[a.idx];
       log(room, { tab: opsTab(room), type: 'value', by, text: `${ch.data.name}の「${it?.name || '?'}」を${ch.used[k] ? '使用済み' : '未使用'}にしました` });
       return;
@@ -417,6 +478,16 @@ function applyInner(room, a, by, pid) {
       const now = formPortrait(ch, ch.variation);
       if (a.forms && now) ch.portrait = now;
       if (!ch.data.portraits.some(p => p.label === ch.portrait)) ch.portrait = ch.data.portraits[0]?.label || null;
+      return;
+    }
+    case 'setSize': { // GM: make a piece a 巨大キャラクター (2×2) or back to one square
+      need(by === 'gm', '大きさを変えられるのはGMだけです');
+      need(ch, 'キャラクターが見つかりません');
+      const n = Number(a.size) === 2 ? 2 : 1;
+      if (sizeOf(ch) === n) return;
+      ch.data.size = n; ch.dv = (ch.dv || 1) + 1;
+      const off = refit(room, ch);
+      log(room, { tab: opsTab(room), type: 'sys', by, text: `${ch.data.name}を${n > 1 ? '巨大キャラクター（2×2マス）' : '1マスのキャラクター'}にしました${off}` });
       return;
     }
     case 'setColor': {
@@ -499,10 +570,11 @@ function applyInner(room, a, by, pid) {
       const from = ch.x == null ? '盤外' : coordName(ch.x, ch.y);
       if (a.x == null) { ch.x = ch.y = null; }
       else {
-        need(a.x >= 0 && a.x < 8 && a.y >= 0 && a.y < 8, 'マップの外です');
-        // one piece per square
-        const occ = Object.values(room.chars).find(o => o.id !== ch.id && o.x === a.x && o.y === a.y);
-        if (occ) throw new ActionError(`${coordName(a.x, a.y)}にはすでに${occ.data.name}がいます`);
+        const n = sizeOf(ch);
+        need(a.x >= 0 && a.x <= 8 - n && a.y >= 0 && a.y <= 8 - n, n > 1 ? '巨大キャラクターがマップからはみ出します' : 'マップの外です');
+        // one piece per square (a giant needs all four of its squares free)
+        const occ = blockerAt(room, ch, a.x, a.y);
+        if (occ) throw new ActionError(n > 1 ? `${occ.data.name}と重なります` : `${coordName(a.x, a.y)}にはすでに${occ.data.name}がいます`);
         ch.x = a.x; ch.y = a.y;
       }
       const to = ch.x == null ? '盤外' : coordName(ch.x, ch.y);
@@ -663,9 +735,10 @@ function applyInner(room, a, by, pid) {
       const unison = UNISON.test(a.cmd || '') || /^【武装】[^\n]*クロスユニゾン/.test(text);
       const wdChar = a.as && room.chars[a.as];
       const wd = a.fx === 'wd' || !!(wdChar && wdChar.data.wingDrive && a.cmd && a.cmd === wdChar.data.wingDrive.name);
-      markOncePerScenario(wdChar, { unison, wd });
+      const dd = wdChar && a.cmd ? (wdChar.data.darkDrives || []).findIndex(x => x.name === a.cmd) : -1;
+      markOncePerScenario(wdChar, { unison, wd, dd });
       if (wdChar && a.cmd) effectsFromText(room, wdChar, a.cmd, text, by);
-      log(room, { tab: tab.id, type: 'say', by, as: a.as || null, name: a.as ? room.chars[a.as].data.name : freeName, color, portrait: a.portrait || null, portraitUrl: pUrl, text, cmd: a.cmd || null, dice, fx: unison ? 'unison' : a.fx === 'wd' ? 'wd' : undefined, members: unison ? unisonMembers(room, a.as) : undefined, reply });
+      log(room, { tab: tab.id, type: 'say', by, as: a.as || null, name: a.as ? room.chars[a.as].data.name : freeName, color, portrait: a.portrait || null, portraitUrl: pUrl, text, cmd: a.cmd || null, dice, fx: unison ? 'unison' : dd >= 0 || a.fx === 'dd' ? 'dd' : a.fx === 'wd' ? 'wd' : undefined, members: unison ? unisonMembers(room, a.as) : undefined, reply });
       if (tpCh) {
         const before = tpCh.cur.TP;
         tpCh.cur.TP = before - a.spendTP;
@@ -850,5 +923,5 @@ function viewRoom(room, seat, pid) {
   return r;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { rangeProblems, effectTarget, rangeIssue, nextActors, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
+  module.exports = { rangeProblems, effectTarget, rangeIssue, nextActors, isDown, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
 }
