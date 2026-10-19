@@ -625,7 +625,8 @@ function applyInner(room, a, by, pid) {
       const got = room.cards.deck.splice(0, n);
       (room.cards.hands[seat] = room.cards.hands[seat] || []).push(...got);
       // a GM draw only shows how many; PC draws are open to the PC side
-      log(room, { tab: opsTab(room), type: 'draw', by, seat, n, cards: got, secretCards: seat === 'gm' });
+      // the count is 'count': 'n' is the server's log sequence number
+      log(room, { tab: opsTab(room), type: 'draw', by, seat, count: n, cards: got, secretCards: seat === 'gm' });
       return;
     }
     case 'play': {

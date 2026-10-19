@@ -132,6 +132,15 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pink)}
 .tok.down{filter:grayscale(.9);opacity:.55}
 /* a value changed with ± and about to be sent */
 .ostat b.draft{color:var(--gold)}
+/* GM: which hand the tray plays */
+.handTabs{display:inline-flex;gap:5px;flex-wrap:nowrap;min-width:0;overflow-x:auto;scrollbar-width:none;padding:4px 4px 1px 0;margin:-4px 0 -1px}
+.handTabs::-webkit-scrollbar{display:none}
+.htab{flex:none;border:1px solid var(--line);background:var(--cloud);color:var(--ink-2);border-radius:999px;padding:2px 10px;font-weight:700;font-size:.82rem;white-space:nowrap;cursor:pointer}
+.htab b{font-family:var(--num);color:var(--gold);margin-left:5px}
+.htab.on{background:var(--pink);border-color:var(--pink);color:#fff}
+.htab.on b{color:#fff}
+.htab{position:relative}
+.htab.turn::after{content:"";position:absolute;top:-3px;right:-2px;width:9px;height:9px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 2px var(--cloud)}
 /* 巨大キャラクター: one big piece over 2×2 squares */
 .giantBox{position:relative;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2;min-width:0;min-height:0}
 .giantBox .tok{pointer-events:auto;cursor:pointer}
@@ -1963,7 +1972,8 @@ function applyInner(room, a, by, pid) {
       const got = room.cards.deck.splice(0, n);
       (room.cards.hands[seat] = room.cards.hands[seat] || []).push(...got);
       // a GM draw only shows how many; PC draws are open to the PC side
-      log(room, { tab: opsTab(room), type: 'draw', by, seat, n, cards: got, secretCards: seat === 'gm' });
+      // the count is 'count': 'n' is the server's log sequence number
+      log(room, { tab: opsTab(room), type: 'draw', by, seat, count: n, cards: got, secretCards: seat === 'gm' });
       return;
     }
     case 'play': {
@@ -2596,13 +2606,13 @@ function playDark(room, l, mode) {
   try { el.showPopover(); } catch (e) { el.removeAttribute('popover'); }
   setTimeout(() => el.remove(), 2900);
 }
-// a joker attack (カオティックムーン and the like): a blood-red moon rises behind the attacker, a joker card flips in, the weapon name strikes (2.8 s)
+// a joker attack (カオティックムーン and the like): a blood-red moon rises behind the attacker and the weapon name strikes (2.8 s)
 function playJoker(room, l, mode) {
   const c = room.chars[l.cid || l.as];
   const p = c && (c.data.portraits.find(x => x.label === c.portrait) || c.data.portraits[0]);
   const el = document.createElement('div');
   el.className = `fx fx-joker fx-${mode}`;
-  el.innerHTML = `<div class="jkShade"></div><div class="jkMoon"></div><div class="jkCard"><span>JOKER</span></div>
+  el.innerHTML = `<div class="jkShade"></div><div class="jkMoon"></div>
     ${p ? `<img class="jkPt" src="${esc(p.url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
     <div class="jkSlash"></div>
     <div class="fxText jkText"><b>${esc(l.jokerName || 'JOKER')}</b><span>${esc(c ? c.data.name : l.charName || l.name || '')}</span></div>`;
@@ -3023,15 +3033,26 @@ function cardHtml(c, opts = {}) {
   return `<button class="card ${'HD'.includes(k.s) ? 'red' : ''} ${opts.mini ? 'mini' : ''} ${opts.sel ? 'sel' : ''}" ${opts.attr || ''} aria-label="${cardText(c)}"><span class="r">${RANK(k.r)}</span><span class="s">${SUIT[k.s]}</span><span class="s2" aria-hidden="true">${SUIT[k.s]}</span></button>`;
 }
 const chipHtml = c => { const k = cardOf(c); return k.joker ? `<span class="chip">JK</span>` : `<span class="chip ${'HD'.includes(k.s) ? 'red' : ''}">${SUIT[k.s]}${RANK(k.r)}</span>`; };
+// the GM plays more than one hand: its own (enemies) and those of the characters it holds. The tray switches between
+// them without changing the 視点; it follows the turn to a held character, and the GM can switch any time.
+function gmHandSeats(room) { return ['gm', ...Object.values(room.chars).filter(c => isPcSeat(room, c.id) && gmOwned(c)).map(c => c.id)]; }
+function handSeat(room, ru) {
+  if (ru.viewer !== 'gm') return ru.viewer;
+  const seats = gmHandSeats(room), cur = room.turn.current;
+  if (ru.handTurn !== cur) { ru.handTurn = cur; if (cur) ru.handSeat = seats.includes(cur) ? cur : room.chars[cur] && room.chars[cur].side === 'enemy' ? 'gm' : ru.handSeat; }
+  return seats.includes(ru.handSeat) ? ru.handSeat : 'gm';
+}
 function renderCards(room, ru) {
   const v = ru.viewer;
-  const mySeat = v === 'gm' || isPcSeat(room, v) ? v : null;
+  const mySeat = v === 'gm' ? handSeat(room, ru) : isPcSeat(room, v) ? v : null;
+  const gmSeats = v === 'gm' ? gmHandSeats(room) : [];
+  if (ui.selSeat !== mySeat) { ui.sel = []; ui.selSeat = mySeat; }
   const myHand = mySeat ? sortCards(viewHand(room, mySeat, v) || [], ru.sort) : [];
   ui.sel = ui.sel.filter(c => myHand.includes(c));
-  const allies = Object.values(room.chars).filter(c => isPcSeat(room, c.id) && c.id !== v);
+  const allies = Object.values(room.chars).filter(c => isPcSeat(room, c.id) && c.id !== mySeat);
   const gmCount = (room.cards.hands.gm || []).length;
   // everyone else's count at a glance (tap: their cards); deck and discard with the card on top
-  const othersRow = `<button class="handOthers" data-handsall title="みんなの手札を見る">${allies.map(c => `<span class="ho"><i style="background:${c.color}"></i><span class="hn">${esc(c.data.name)}</span><b>${(room.cards.hands[c.id] || []).length}</b></span>`).join('')}${v !== 'gm' ? `<span class="ho"><i class="gm"></i>GM<b>${gmCount}</b></span>` : ''}<span class="hoMore">みんなの手札 ›</span></button>`;
+  const othersRow = `<button class="handOthers" data-handsall title="みんなの手札を見る">${allies.map(c => `<span class="ho"><i style="background:${c.color}"></i><span class="hn">${esc(c.data.name)}</span><b>${(room.cards.hands[c.id] || []).length}</b></span>`).join('')}${mySeat !== 'gm' ? `<span class="ho"><i class="gm"></i>GM<b>${gmCount}</b></span>` : ''}<span class="hoMore">みんなの手札 ›</span></button>`;
   const top = room.cards.discard[room.cards.discard.length - 1];
   const piles = `<button class="btn small piles" data-deckmenu title="山札と捨て札">山札<b>${room.cards.deck.length}</b>捨て札<b>${room.cards.discard.length}</b>${top ? chipHtml(top) : ''}</button>`;
   if (!mySeat) {
@@ -3041,11 +3062,14 @@ function renderCards(room, ru) {
   const n = ui.sel.length;
   const tc = room.chars[room.turn.current];
   const jokerUp = unisonReady(mySeat === 'gm' ? Object.values(room.chars).filter(c => gmOwned(c) && c.side !== 'enemy') : [room.chars[mySeat]].filter(Boolean));
-  const turnTag = !tc ? '' : mySeat === tc.id ? '<span class="myTurn"><span class="hlong">あなたの</span>手番</span>'
-    : mySeat === 'gm' && (tc.side !== 'pc' || gmOwned(tc)) ? `<span class="myTurn">${esc(tc.data.name)}の手番</span>` : '';
+  const turnTag = !tc ? '' : mySeat === tc.id ? `<span class="myTurn">${v === 'gm' ? '' : '<span class="hlong">あなたの</span>'}手番</span>`
+    : mySeat === 'gm' && tc.side === 'enemy' ? `<span class="myTurn">${esc(tc.data.name)}の手番</span>` : '';
+  // GM with held characters: one tab per hand (name + count)
+  const turnSeat = tc ? (tc.side === 'enemy' ? 'gm' : tc.id) : null;
+  const seatTabs = gmSeats.length > 1 ? `<span class="handTabs" role="tablist" aria-label="操作する手札">${gmSeats.map(s => `<button role="tab" class="htab ${s === mySeat ? 'on' : ''} ${s === turnSeat ? 'turn' : ''}" data-handseat="${s}" aria-selected="${s === mySeat}" ${s === turnSeat ? 'title="手番"' : ''}>${esc(s === 'gm' ? 'GM' : room.chars[s].data.name)}<b>${(room.cards.hands[s] || []).length}</b></button>`).join('')}</span>` : '';
   setHtml($('cardsP'), `
     <div class="trayRow handHead">
-      <b class="handName">${esc(seatName(room, mySeat))}<span class="hlong">の手札</span></b><span class="count">${myHand.length}<small>枚</small></span>${turnTag}
+      ${seatTabs || `<b class="handName">${esc(seatName(room, mySeat))}<span class="hlong">の手札</span></b><span class="count">${myHand.length}<small>枚</small></span>${turnTag}`}
       <button class="btn small ghost" data-sort>${ru.sort === 'rank' ? '数字順' : 'スート順'}</button>
       <span class="grow"></span>
       ${piles}
@@ -3204,7 +3228,7 @@ function logHtml(room, l) {
   if (l.type === 'give') return `<div class="le ${cls}"><span class="who">${seatWho}</span>${l.cards.map(chipHtml).join(' ')} を${esc(l.toName)}に渡した<span class="t">${time}</span></div>`;
   if (l.type === 'round') return `<div class="le round">${esc(l.text)}</div>`;
   if (l.type === 'turn') return `<div class="le turn">${esc(l.text)}<span class="t">${time}</span></div>`;
-  if (l.type === 'draw') return `<div class="le ${cls}"><span class="who">${seatWho}</span>${l.n}枚ドロー ${l.cards ? l.cards.map(chipHtml).join(' ') : ''}<span class="t">${time}</span></div>`;
+  if (l.type === 'draw') return `<div class="le ${cls}"><span class="who">${seatWho}</span>${l.count ?? l.n}枚ドロー ${l.cards ? l.cards.map(chipHtml).join(' ') : ''}<span class="t">${time}</span></div>`;
   const showWho = l.type !== 'sys' && !(l.byName && l.text && l.text.startsWith(l.byName));
   // 換装 that changed the 立ち絵: small before → after pictures
   const swapPics = l.type === 'variation' && l.ptFrom && l.ptTo ? `<span class="swapPics"><img src="${esc(l.ptFrom)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">→<img src="${esc(l.ptTo)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()"></span>` : '';
@@ -3236,7 +3260,7 @@ function logPlain(room, l) {
   if (l.type === 'give') return `［${sn}］${l.cards.map(cardText).join(' ')} を${l.toName}に渡した`;
   if (l.type === 'round') return `―― ${l.text} ――`;
   if (l.type === 'turn') return `▶ ${l.text}`;
-  if (l.type === 'draw') return `［${sn}］${l.n}枚ドロー${l.cards ? ' ' + l.cards.map(cardText).join(' ') : ''}`;
+  if (l.type === 'draw') return `［${sn}］${l.count ?? l.n}枚ドロー${l.cards ? ' ' + l.cards.map(cardText).join(' ') : ''}`;
   return `［${l.type === 'sys' ? 'システム' : (l.byName || seatName(room, l.by))}］${l.text}`;
 }
 const CHAT_MAX = 300;   // lines kept on screen per tab (the rest stays in the log)
@@ -4047,7 +4071,7 @@ function discardDialog(room, ru) {
     draw();
     $('dsList').onclick = e => {
       const pk = e.target.closest('[data-dspick]');
-      if (pk) { act({ type: 'pick', card: pk.dataset.dspick }); draw(); return; }
+      if (pk) { act({ type: 'pick', card: pk.dataset.dspick, seat: handSeat(curRoom(), ru) }); draw(); return; }
       const b = e.target.closest('[data-dsmove]'); if (!b) return;
       const card = b.dataset.dsmove, to = document.querySelector(`[data-dsto="${card}"]`).value;
       act({ type: 'moveCard', card, from: 'discard', to }); draw();
@@ -4125,12 +4149,13 @@ function bgmDialog(room, ru) {
   });
 }
 function giveDialog(room, ru) {
-  const allies = Object.values(room.chars).filter(c => c.side === 'pc' && c.id !== ru.viewer);
+  const from = handSeat(room, ru);
+  const allies = Object.values(room.chars).filter(c => c.side === 'pc' && c.id !== from);
   const cards = [...ui.sel];
   openDlg(`<h1>味方に渡す</h1><p>${cards.map(chipHtml).join(' ')} を渡します。</p>
     <div class="field">渡す相手<select id="gvTo">${allies.map(c => `<option value="${c.id}">${esc(c.data.name)}</option>`).join('')}</select></div>
     <div class="row"><span style="flex:1"></span><button class="btn" data-close>やめる</button><button class="btn primary" id="gvOk">渡す</button></div>`, () => {
-    $('gvOk').onclick = () => { if (act({ type: 'give', cards, to: $('gvTo').value }) !== FAIL) { ui.sel = []; closeDlg(); renderRoom(); } };
+    $('gvOk').onclick = () => { if (act({ type: 'give', cards, to: $('gvTo').value, seat: from }) !== FAIL) { ui.sel = []; closeDlg(); renderRoom(); } };
   });
 }
 function fixCardDialog(room, card, from) {
@@ -4237,11 +4262,12 @@ function commonClick(t, room, ru) {
   if (q('[data-sort]')) { ru.sort = ru.sort === 'rank' ? 'suit' : 'rank'; saveU(); renderCards(room, ru); return true; }
   if ((el = q('[data-play]'))) {
     const cards = [...ui.sel], memo = ui.memo;
-    if (act({ type: 'play', cards, kind: el.dataset.play, memo }, { silent: true }) !== FAIL) { ui.sel = []; ui.memo = ''; }
+    if (act({ type: 'play', cards, kind: el.dataset.play, memo, seat: handSeat(room, ru) }, { silent: true }) !== FAIL) { ui.sel = []; ui.memo = ''; }
     renderRoom(); return true;
   }
   if ((el = q('[data-drawstep]'))) { ui.drawN = Math.max(1, Math.min(20, ui.drawN + +el.dataset.drawstep)); renderCards(room, ru); return true; }
-  if (q('[data-draw]')) { act({ type: 'draw', n: ui.drawN }); return true; }
+  if (q('[data-draw]')) { act({ type: 'draw', n: ui.drawN, seat: handSeat(room, ru) }); return true; }
+  if ((el = q('[data-handseat]'))) { ru.handSeat = el.dataset.handseat; renderCards(room, ru); return true; }
   if (q('[data-shuffleback]')) { act({ type: 'shuffleBack' }); return true; }
   if (q('[data-adddeck]')) { ask('トランプをもう1組、今の山札に混ぜてシャッフルします。', 'トランプを追加', () => act({ type: 'addDeck' })); return true; }
   if (q('[data-resetdeck]')) { ask(`全員の手札と捨て札を回収し、${room.settings.decks || 1}組で山札を作り直します。`, '山札を作り直す', () => act({ type: 'resetDeck' }), true); return true; }
@@ -4379,7 +4405,7 @@ document.addEventListener('click', e => {
   if (q('[data-pickmenu]')) { pickMenu(room, ru); return; }
   if (t.closest('[data-vstep],[data-setturn]') && t.closest('[data-charopen]')) { /* buttons inside the list row act, the row does not open */ }
   else if ((el = q('[data-charopen]'))) { openModal('char', el.dataset.charopen); return; }
-  if (q('[data-weapon]')) { ui.w = { cid: isPcSeat(room, ru.viewer) ? ru.viewer : (room.turn.current && room.chars[room.turn.current]?.side === 'enemy' ? room.turn.current : null), weapons: [], cards: [...ui.sel], targets: [], memo: ui.memo }; openModal('weapon'); return; }
+  if (q('[data-weapon]')) { const hs = handSeat(room, ru); ui.w = { cid: isPcSeat(room, hs) ? hs : (room.turn.current && room.chars[room.turn.current]?.side === 'enemy' ? room.turn.current : null), weapons: [], cards: [...ui.sel], targets: [], memo: ui.memo }; openModal('weapon'); return; }
   if (q('[data-handsall]')) { openModal('hands'); return; }
   if (q('[data-deckmenu]')) { openModal('deck'); return; }
   if (q('[data-ordtoggle]')) { U.ordOpen = !U.ordOpen; saveU(); renderRoom(); return; }
