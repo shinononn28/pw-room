@@ -188,8 +188,9 @@ function sendState(conn) {
   const v = core.viewRoom(room, conn.seat, conn.pid);
   conn.sentDv = conn.sentDv || {};
   for (const [cid, ch] of Object.entries(v.chars)) {
-    if (conn.sentDv[cid] === ch.dv) delete ch.data;      // the browser keeps the sheet it already has
-    else conn.sentDv[cid] = ch.dv;
+    const dv = ch.dvView ?? ch.dv;                         // (a player's view of an enemy changes when a ダークドライブ opens)
+    if (conn.sentDv[cid] === dv) delete ch.data;          // the browser keeps the sheet it already has
+    else conn.sentDv[cid] = dv;
   }
   send(conn.ws, { t: 'state', seat: conn.seat, room: v, locked: Object.keys(conn.entry.seatKeyHashes), ack: conn.ack });
 }

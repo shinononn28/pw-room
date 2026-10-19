@@ -1066,6 +1066,15 @@ function viewRoom(room, seat, pid) {
   r.cards.deck = Array(room.cards.deck.length).fill('?');
   if (seat !== 'gm') r.cards.hands.gm = Array((room.cards.hands.gm || []).length).fill('?');
   r.tabs = r.tabs.filter(t => canSeeTab(room, t, seat, pid));
+  // enemies are open to the players except their ダークドライブ: each one shows only once it has been used
+  // (it keeps its own index in idx, which the used marks go by); its name stays out of the auto-effect list until then
+  if (seat !== 'gm') for (const c of Object.values(r.chars)) {
+    if (c.side !== 'enemy' || !Array.isArray(c.data.darkDrives) || !c.data.darkDrives.length) continue;
+    const hidden = new Set();
+    c.data.darkDrives = c.data.darkDrives.map((d, i) => { if (c.used && c.used[`darkDrive:${i}`]) return { ...d, idx: i }; hidden.add(d.name); return null; }).filter(Boolean);
+    c.dvView = `${c.dv}|dd${c.data.darkDrives.map(d => d.idx).join('.')}`;   // a newly opened one is sent again
+    if (Array.isArray(c.autoFx)) c.autoFx = c.autoFx.filter(n => !hidden.has(n));
+  }
   return r;
 }
 if (typeof module !== 'undefined' && module.exports) {
