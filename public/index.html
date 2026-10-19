@@ -130,6 +130,8 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pink)}
 .tok.enemy{background:var(--void);border-color:#1A1440}
 .tok.sel{box-shadow:0 0 0 4px var(--gold),0 3px 8px rgba(10,13,30,.45)}
 .tok.down{filter:grayscale(.9);opacity:.55}
+/* a value changed with ± and about to be sent */
+.ostat b.draft{color:var(--gold)}
 /* 巨大キャラクター: one big piece over 2×2 squares */
 .giantBox{position:relative;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2;min-width:0;min-height:0}
 .giantBox .tok{pointer-events:auto;cursor:pointer}
@@ -849,6 +851,7 @@ input[type=range]{width:100%;accent-color:var(--pink)}
 .fxBurst{position:absolute;width:140vmax;height:140vmax;border-radius:50%;background:radial-gradient(circle, color-mix(in srgb, var(--fxc) 55%, #fff) 0%, transparent 55%);opacity:0;transform:scale(.1);animation:fxBurst 1.2s ease-out forwards}
 .fxText{position:relative;text-align:center;color:#fff;text-shadow:0 0 12px var(--fxc),0 0 2px #000;opacity:0;animation:fxText 2.2s ease-out forwards}
 .fxText b{display:block;font-family:var(--num);font-size:clamp(2rem,7vw,4.2rem);letter-spacing:.18em;font-weight:700}
+.fxText b.long{font-size:clamp(1.6rem,5vw,3.2rem);letter-spacing:.06em}
 .fxText span{display:block;font-size:clamp(.9rem,2.4vw,1.3rem);font-weight:800;margin-top:4px}
 .fxPt{position:absolute;height:min(70vh,520px);opacity:0;animation:fxPt 2.2s ease-out forwards;filter:drop-shadow(0 0 18px var(--fxc))}
 .fxWing{display:none}
@@ -1105,6 +1108,22 @@ dialog .mhead{z-index:8 !important}
 .fx-simple.fx-dd .ddWing,.fx-simple.fx-dd .ddPt,.fx-simple.fx-dd .ddText{animation:fxFade 2.8s ease forwards}
 .fx-simple.fx-dd .ddRing,.fx-simple.fx-dd .ddShards,.fx-simple.fx-dd .ddText b::before,.fx-simple.fx-dd .ddText b::after{display:none}
 .grp.dark{color:#E2477A}
+.fx-joker .jkShade{position:absolute;inset:0;background:radial-gradient(circle at 50% 42%,rgba(90,0,20,.5),rgba(4,0,10,.9) 70%);animation:ddShade 2.8s ease forwards}
+.fx-joker .jkMoon{position:absolute;left:50%;top:44%;width:62vmin;height:62vmin;margin:-31vmin;border-radius:50%;
+  background:radial-gradient(circle at 38% 36%,#FF9A8A,#D21F3C 45%,#5A0414 78%);box-shadow:0 0 80px 10px rgba(210,31,60,.55);opacity:0;animation:jkMoon 2.8s ease-out forwards}
+.fx-joker .jkCard{position:absolute;left:50%;top:44%;width:16vmin;height:23vmin;margin:-11.5vmin -8vmin;border-radius:1.4vmin;background:#F7F5EE;border:.5vmin solid #1B1B2E;
+  display:flex;align-items:center;justify-content:center;opacity:0;animation:jkCard 2.8s cubic-bezier(.2,.9,.2,1) forwards}
+.fx-joker .jkCard span{writing-mode:vertical-rl;font-family:var(--num);font-weight:800;letter-spacing:.2em;color:#C2185B;font-size:3.2vmin}
+.fx-joker .jkPt{position:relative;max-height:64vh;max-width:70vw;opacity:0;animation:jkPt 2.8s ease forwards}
+.fx-joker .jkSlash{position:absolute;left:-10vw;right:-10vw;top:46%;height:5px;background:linear-gradient(90deg,transparent,#fff 40%,#FF3B55 60%,transparent);box-shadow:0 0 20px #FF3B55;transform:rotate(-12deg) scaleX(0);animation:jkSlash 2.8s ease forwards}
+.fx-joker .jkText{position:absolute;left:0;right:0;bottom:14vh;--fxc:#D21F3C;opacity:0;animation:ddText 2.8s ease forwards}
+.fx-joker .jkText b{display:block;color:#FFE9EC;font-size:clamp(1.8rem,7vw,3.8rem);letter-spacing:.14em;text-shadow:0 0 18px #D21F3C,0 0 2px #000}
+@keyframes jkMoon{0%{opacity:0;transform:translateY(12vh) scale(.7)}25%{opacity:1;transform:none}85%{opacity:1}100%{opacity:0;transform:scale(1.04)}}
+@keyframes jkCard{0%,6%{opacity:0;transform:rotateY(90deg) scale(.6)}18%{opacity:1;transform:rotateY(0) scale(1.1)}30%{opacity:1;transform:scale(1)}40%{opacity:0;transform:scale(2.2)}100%{opacity:0}}
+@keyframes jkPt{0%,34%{opacity:0;transform:scale(1.08);filter:brightness(0)}46%{opacity:1;transform:none;filter:brightness(1) drop-shadow(0 0 20px #D21F3C)}86%{opacity:1}100%{opacity:0}}
+@keyframes jkSlash{0%,40%{transform:rotate(-12deg) scaleX(0);opacity:1}50%{transform:rotate(-12deg) scaleX(1);opacity:1}100%{opacity:0;transform:rotate(-12deg) scaleX(1)}}
+.fx-simple.fx-joker .jkMoon,.fx-simple.fx-joker .jkPt,.fx-simple.fx-joker .jkText{animation:fxFade 2.8s ease forwards}
+.fx-simple.fx-joker .jkCard,.fx-simple.fx-joker .jkSlash{display:none}
 .fx-ko .koShade{position:absolute;inset:0;background:radial-gradient(circle,rgba(70,0,10,.55),rgba(0,0,0,.75));animation:fxFade 2.2s ease forwards}
 .fx-ko .koPt{position:relative;max-height:62vh;max-width:70vw;animation:koPt 2.2s ease forwards}
 .fx-ko .koCrack{position:absolute;left:-10vw;right:-10vw;top:50%;height:6px;margin-top:-3px;background:linear-gradient(90deg,transparent,#FF3B55 20%,#fff 50%,#FF3B55 80%,transparent);box-shadow:0 0 24px #FF3B55;transform:rotate(-8deg) scaleX(0);animation:koCrack 2.2s ease forwards}
@@ -1419,6 +1438,8 @@ function normalizeChar(raw) {
     darkDrives: (Array.isArray(raw.darkDrives) ? raw.darkDrives : []).map(x => { const t = x?.tp; return { ...item(x), tp: t != null && t !== '' && Number.isFinite(Number(t)) ? Number(t) : null }; }).filter(x => x.name),
     // 巨大キャラクター: takes 2×2 squares on the board (x, y = its top-left square on screen)
     size: Number(raw.size) === 2 ? 2 : 1,
+    // enemies: what the change of variation is called — 'morph' (メタモルフォーゼ) or 'swap' (換装); unset = decided by the weapons
+    formStyle: raw.formStyle === 'morph' || raw.formStyle === 'swap' ? raw.formStyle : null,
     // {label, url}; a plain URL string (older sheets) gets a numbered label
     portraits: Array.isArray(raw.portraits) ? raw.portraits.map((p, i) => typeof p === 'string' ? { label: `立ち絵${i + 1}`, url: p } : p)
       .filter(p => p && typeof p.url === 'string' && p.url.trim()).map(p => ({ label: String(p.label || '立ち絵'), url: toDirectImage(p.url) })) : [],
@@ -1438,6 +1459,18 @@ const formPortrait = (ch, i) => (i === -1 ? ch.data.basePortrait : (ch.data.vari
 const portraitUrl = (ch, label) => (ch.data.portraits.find(p => p.label === label) || {}).url || null;
 // クロスユニゾン (an all-out attack): every PC lines up in the effect, the declarer first
 const UNISON = /クロスユニゾン/;
+// what a change of variation is called: PCs 換装; an enemy as set (a princess on the other side 換装s too),
+// and when unset, メタモルフォーゼ if it has a 〈メタモルフォーゼ〉 weapon
+const formWord = ch => {
+  if (!ch || ch.side === 'pc') return '換装';
+  const st = ch.data.formStyle;
+  if (st) return st === 'morph' ? 'メタモルフォーゼ' : '換装';
+  return [ch.data.weapons.slots, ...ch.data.variations.map(v => v.slots)].some(sl => (sl || []).some(w => isMorphWeapon(w))) ? 'メタモルフォーゼ' : '換装';
+};
+// a weapon paid with a joker (カオティックムーン and the like; クロスユニゾン has its own effect)
+const isJokerWeapon = w => !!w && !UNISON.test(w.name || '') && /ジョーカー\s*1?\s*枚?\s*を?\s*提出/.test(String(w.text || '').normalize('NFKC'));
+// a weapon that switches to バリエーション① and back (〈メタモルフォーゼ〉)
+const isMorphWeapon = w => !!w && /メタモルフォーゼ/.test(w.name || '') && /バリエーション/.test(w.text || '');
 // ----- board footprint: a 巨大キャラクター covers 2×2 squares from (x, y) -----
 const sizeOf = c => c && c.data && c.data.size === 2 ? 2 : 1;
 function cellsOf(c, x = c.x, y = c.y) {
@@ -1577,8 +1610,13 @@ function nextCopyName(room, name) {
   for (let k = 2; k < 1000; k++) { const t = n + k; if (!used.has(t)) return t; }
   return n + '（複製）';
 }
-function markOncePerScenario(ch, { unison, wd, dd }) {
+function markOncePerScenario(ch, { unison, wd, dd, joker }) {
   if (!ch) return;
+  if (joker) {
+    const once = w => w && w.name === joker && /1シナリオに1回/.test(String(w.text || '').normalize('NFKC'));
+    ch.data.weapons.common.forEach((w, i) => { if (once(w)) ch.used[`common:${i}`] = true; });
+    currentSlots(ch).forEach((w, i) => { if (once(w)) ch.used[`slot${ch.variation}:${i}`] = true; });
+  }
   if (dd >= 0) ch.used[`darkDrive:${dd}`] = true;
   if (unison) ch.data.weapons.common.forEach((w, i) => { if (UNISON.test(w.name || '')) ch.used[`common:${i}`] = true; });
   if (wd && ch.data.wingDrive) ch.used['wingDrive:0'] = true;
@@ -1607,6 +1645,19 @@ function logValue(room, ch, a, by, before, v) {
   }
   log(room, { tab: opsTab(room), type: 'value', by, cid: a.cid, key: a.key, from: before, to: v, text: `${ch.data.name}の${a.key}：${before} → ${v}` });
 }
+function changeForm(room, ch, i, by) {
+  if (ch.variation === i) return;
+  ch.variation = i;
+  // a variation with a linked 立ち絵 changes the portrait too; when it really changes, the effect shows before → after
+  const from = portraitUrl(ch, ch.portrait), link = formPortrait(ch, i);
+  if (link) ch.portrait = link;
+  const to = portraitUrl(ch, ch.portrait), swap = from && to && from !== to;
+  const name = i === -1 ? '基本' : ch.data.variations[i].name;
+  log(room, { tab: opsTab(room), type: 'variation', by, cid: ch.id, fx: 'form', formName: name, ptFrom: swap ? from : undefined, ptTo: swap ? to : undefined,
+    text: formWord(ch) === 'メタモルフォーゼ' ? `${ch.data.name}がメタモルフォーゼ：「${name}」になりました` : `${ch.data.name}の武装を「${name}」に切り替えました` });
+}
+// 〈メタモルフォーゼ〉: to バリエーション① and, from there, back to the original
+const morph = (room, ch, by) => { if (ch.data.variations.length) changeForm(room, ch, ch.variation === -1 ? 0 : -1, by); };
 // SS値 is the initiative: the next to act is the highest SS値 among those who have not acted this round
 // (room.turn.done). A tie is not decided by the table order: the players choose (room.turn.pick).
 // HP 0 or less = 戦闘不能: skipped by the initiative until healed (characters without HP are never down)
@@ -1801,6 +1852,12 @@ function applyInner(room, a, by, pid) {
       if (!ch.data.portraits.some(p => p.label === ch.portrait)) ch.portrait = ch.data.portraits[0]?.label || null;
       return;
     }
+    case 'setFormStyle': { // GM: an enemy's change of variation is called 換装 or メタモルフォーゼ
+      need(by === 'gm', '変更できるのはGMだけです');
+      need(ch && ch.side !== 'pc', 'PCは換装です');
+      ch.data.formStyle = a.style === 'morph' ? 'morph' : 'swap'; ch.dv = (ch.dv || 1) + 1;
+      return;
+    }
     case 'setSize': { // GM: make a piece a 巨大キャラクター (2×2) or back to one square
       need(by === 'gm', '大きさを変えられるのはGMだけです');
       need(ch, 'キャラクターが見つかりません');
@@ -1823,14 +1880,7 @@ function applyInner(room, a, by, pid) {
       need(ch && canControlChar(room, by, a.cid), 'このキャラクターは操作できません');
       const i = a.idx | 0;
       need(i === -1 || ch.data.variations[i], 'そのバリエーションはありません');
-      if (ch.variation === i) return;
-      ch.variation = i;
-      // a variation with a linked 立ち絵 changes the portrait too; when it really changes, the effect shows before → after
-      const from = portraitUrl(ch, ch.portrait), link = formPortrait(ch, i);
-      if (link) ch.portrait = link;
-      const to = portraitUrl(ch, ch.portrait), swap = from && to && from !== to;
-      log(room, { tab: opsTab(room), type: 'variation', by, cid: a.cid, fx: 'form', formName: i === -1 ? '基本' : ch.data.variations[i].name, ptFrom: swap ? from : undefined, ptTo: swap ? to : undefined,
-        text: `${ch.data.name}の武装を「${i === -1 ? '基本' : ch.data.variations[i].name}」に切り替えました` });
+      changeForm(room, ch, i, by);
       return;
     }
 
@@ -1970,12 +2020,14 @@ function applyInner(room, a, by, pid) {
       need(ws.length, '武装を選んでください');
       room.cards.hands[seat] = hand.filter(x => !cards.includes(x));
       room.cards.discard.push(...cards);
-      markOncePerScenario(ch, { unison: ws.some(w => UNISON.test(w.name)) });
+      const unisonUsed = ws.some(w => UNISON.test(w.name)), jw = !unisonUsed && ws.find(isJokerWeapon);
+      markOncePerScenario(ch, { unison: unisonUsed, joker: jw ? jw.name : null });
       ws.forEach(w => effectsFromText(room, ch, w.name, w.text, by, Array.isArray(a.targets) ? a.targets.filter(id => room.chars[id]) : []));
       log(room, { tab: opsTab(room), type: 'weapon', by, seat, cid: ch.id, charName: ch.data.name,
         weapons: ws.map(w => ({ name: w.name, suit: w.suit || null, attrs: { ...(w.attrs || {}) }, text: w.text || '' })),
         cards, targets: (Array.isArray(a.targets) ? a.targets : []).map(id => room.chars[id]?.data.name).filter(Boolean), memo: String(a.memo || '').trim(), offForm,
-        ...(ws.some(w => UNISON.test(w.name)) ? { fx: 'unison', members: unisonMembers(room, ch.id) } : {}) });
+        ...(unisonUsed ? { fx: 'unison', members: unisonMembers(room, ch.id) } : jw ? { fx: 'joker', jokerName: jw.name } : {}) });
+      if (ws.some(isMorphWeapon)) morph(room, ch, by);
       return;
     }
     case 'shuffleBack': {
@@ -2057,9 +2109,12 @@ function applyInner(room, a, by, pid) {
       const wdChar = a.as && room.chars[a.as];
       const wd = a.fx === 'wd' || !!(wdChar && wdChar.data.wingDrive && a.cmd && a.cmd === wdChar.data.wingDrive.name);
       const dd = wdChar && a.cmd ? (wdChar.data.darkDrives || []).findIndex(x => x.name === a.cmd) : -1;
-      markOncePerScenario(wdChar, { unison, wd, dd });
+      const cmdWeapon = wdChar && a.cmd ? [...wdChar.data.weapons.common, ...currentSlots(wdChar)].find(w => w && w.name === a.cmd) : null;
+      const joker = !unison && isJokerWeapon(cmdWeapon);
+      markOncePerScenario(wdChar, { unison, wd, dd, joker: joker ? cmdWeapon.name : null });
       if (wdChar && a.cmd) effectsFromText(room, wdChar, a.cmd, text, by);
-      log(room, { tab: tab.id, type: 'say', by, as: a.as || null, name: a.as ? room.chars[a.as].data.name : freeName, color, portrait: a.portrait || null, portraitUrl: pUrl, text, cmd: a.cmd || null, dice, fx: unison ? 'unison' : dd >= 0 || a.fx === 'dd' ? 'dd' : a.fx === 'wd' ? 'wd' : undefined, members: unison ? unisonMembers(room, a.as) : undefined, reply });
+      log(room, { tab: tab.id, type: 'say', by, as: a.as || null, name: a.as ? room.chars[a.as].data.name : freeName, color, portrait: a.portrait || null, portraitUrl: pUrl, text, cmd: a.cmd || null, dice, fx: unison ? 'unison' : joker ? 'joker' : dd >= 0 || a.fx === 'dd' ? 'dd' : a.fx === 'wd' ? 'wd' : undefined, jokerName: joker ? cmdWeapon.name : undefined, members: unison ? unisonMembers(room, a.as) : undefined, reply });
+      if (isMorphWeapon(cmdWeapon)) morph(room, wdChar, by);
       if (tpCh) {
         const before = tpCh.cur.TP;
         tpCh.cur.TP = before - a.spendTP;
@@ -2244,7 +2299,7 @@ function viewRoom(room, seat, pid) {
   return r;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { rangeProblems, effectTarget, rangeIssue, nextActors, isDown, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
+  module.exports = { rangeProblems, effectTarget, rangeIssue, nextActors, isDown, formWord, isJokerWeapon, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
 }
 // =====================================================================
 // local storage + UI
@@ -2258,7 +2313,7 @@ const persist = () => { if (ONLINE) return; try { localStorage.setItem(KEY, JSON
 const UIKEY = 'pw-local-ui';
 let U = {}; try { U = JSON.parse(localStorage.getItem(UIKEY)) || {}; } catch (e) {}
 const saveU = () => { try { localStorage.setItem(UIKEY, JSON.stringify(U)); } catch (e) {} };
-const ui = { sel: [], memo: '', selTok: null, drawN: 1, history: [], palette: false, cmd: null, openSheets: new Set(), seenTab: {}, typing: {}, formView: {}, fxSeen: new Set(), sfxSeen: new Set(), sfxTo: {} };
+const ui = { sel: [], memo: '', selTok: null, drawN: 1, history: [], palette: false, cmd: null, openSheets: new Set(), seenTab: {}, typing: {}, formView: {}, fxSeen: new Set(), sfxSeen: new Set(), sfxTo: {}, valDraft: {} };
 const roomUI = rid => (U[rid] = U[rid] || { viewer: 'gm', tab: 'main', sort: 'suit', as: '', name: '' });
 
 const $ = id => document.getElementById(id);
@@ -2403,6 +2458,7 @@ const SOUNDS = {
   form: () => { tone([260, 1200], 0, .5, 'sawtooth', .05); noise(0, .5, [500, 7000], .18, 1.2); [1568, 2093, 2637].forEach((f, i) => tone(f, .5 + i * .07, .3, 'sine', .12)); },
   wd: () => { tone([90, 360], 0, .7, 'sawtooth', .1); noise(0, .7, [300, 6000], .25, 1); [523, 659, 784, 1047].forEach(f => tone(f, .62, .9, 'triangle', .1)); },
   dd: () => { tone([55, 41], 0, 1.6, 'sawtooth', .16); tone([58, 43], 0, 1.6, 'sawtooth', .12); noise(0, 1.2, [6000, 200], .22, .9); noise(.5, .25, 300, .5, .7, 'lowpass'); [233, 247, 349].forEach(f => tone(f, .55, 1.3, 'triangle', .08)); tone([880, 110], .5, .4, 'square', .05); },
+  joker: () => { noise(0, .25, [800, 6000], .2, 1); tone([1200, 300], 0, .25, 'square', .05); tone([70, 50], .3, 1.2, 'sawtooth', .14); [220, 233, 330, 466].forEach(f => tone(f, .32, 1.2, 'triangle', .08)); noise(.32, .4, 400, .4, .7, 'lowpass'); },
   unison: () => { tone([80, 320], 0, .9, 'sawtooth', .1); noise(0, 1, [200, 8000], .25, .8); [392, 523, 659, 784, 1047].forEach((f, i) => tone(f, 1 + i * .03, 1.4, 'triangle', .09)); },
   damage: () => { tone([170, 50], 0, .2, 'sine', .5); noise(0, .07, 700, .3, 1); },
   heal: () => { tone(660, 0, .14, 'sine', .14); tone(990, .09, .22, 'sine', .14); },
@@ -2437,6 +2493,7 @@ function logSounds(room, ru) {
     else if (isUnisonLog(l)) names.push('unison');
     else if (l.fx === 'wd') names.push('wd');
     else if (l.fx === 'dd') names.push('dd');
+    else if (l.fx === 'joker') names.push('joker');
     else if (l.fx === 'form') names.push('form');
     else if (l.type === 'round') { names.push(l.start ? 'round' : 'roundEnd'); if (l.start && l.cid && playsChar(room, room.chars[l.cid])) names.push('myturn'); }
     else if (l.type === 'turn' && l.cid) names.push(playsChar(room, room.chars[l.cid]) ? 'myturn' : 'turn');
@@ -2539,6 +2596,21 @@ function playDark(room, l, mode) {
   try { el.showPopover(); } catch (e) { el.removeAttribute('popover'); }
   setTimeout(() => el.remove(), 2900);
 }
+// a joker attack (カオティックムーン and the like): a blood-red moon rises behind the attacker, a joker card flips in, the weapon name strikes (2.8 s)
+function playJoker(room, l, mode) {
+  const c = room.chars[l.cid || l.as];
+  const p = c && (c.data.portraits.find(x => x.label === c.portrait) || c.data.portraits[0]);
+  const el = document.createElement('div');
+  el.className = `fx fx-joker fx-${mode}`;
+  el.innerHTML = `<div class="jkShade"></div><div class="jkMoon"></div><div class="jkCard"><span>JOKER</span></div>
+    ${p ? `<img class="jkPt" src="${esc(p.url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
+    <div class="jkSlash"></div>
+    <div class="fxText jkText"><b>${esc(l.jokerName || 'JOKER')}</b><span>${esc(c ? c.data.name : l.charName || l.name || '')}</span></div>`;
+  el.setAttribute('popover', 'manual');
+  document.body.appendChild(el);
+  try { el.showPopover(); } catch (e) { el.removeAttribute('popover'); }
+  setTimeout(() => el.remove(), 2900);
+}
 // 戦闘不能: shown to everyone (or with 自分のだけ, when it is your character that fell)
 function playKo(room, l, mode) {
   const c = room.chars[l.cid]; if (!c) return;
@@ -2565,11 +2637,12 @@ function playFx(room, l) {
     return;
   }
   if (l.fx === 'ko') { playKo(room, l, mode); return; }
+  if (l.fx === 'joker') { playJoker(room, l, mode); return; }
   if (l.fx === 'dd') { if (U.fxWho !== 'mine' || (ONLINE ? l.pid === myPid() : l.by === roomUI(room.id).viewer)) playDark(room, l, mode); return; }
   if (U.fxWho === 'mine' && !(ONLINE ? l.pid === myPid() : l.by === roomUI(room.id).viewer)) return;
   const c = room.chars[l.cid || l.as];
   const p = c && (c.data.portraits.find(x => x.label === c.portrait) || c.data.portraits[0]);
-  const title = l.fx === 'form' ? '換 装' : 'WING DRIVE';
+  const title = l.fx === 'form' ? (formWord(c) === 'メタモルフォーゼ' ? 'メタモルフォーゼ' : '換 装') : 'WING DRIVE';
   const sub = l.fx === 'form' ? `${c ? c.data.name : ''}　${l.formName || ''}` : `${c ? c.data.name : ''}　${l.cmd || ''}`;
   // 換装 that changes the 立ち絵: the old one turns to light and the new one comes out of the flash
   const swap = l.fx === 'form' && l.ptFrom && l.ptTo;
@@ -2580,10 +2653,10 @@ function playFx(room, l) {
     ? `<div class="swShade"></div><div class="fxBurst"></div><div class="swRing"></div><div class="swRing r2"></div>
        <div class="swStage"><img class="swOld" src="${esc(l.ptFrom)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()"><img class="swNew" src="${esc(l.ptTo)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()"><div class="swFlash"></div></div>
        <div class="swSparks">${Array.from({ length: 12 }, (_, i) => `<i style="--a:${i * 30 + 8}deg;--d:${(i % 3) * 50}ms"></i>`).join('')}</div>
-       <div class="fxText swText"><b>${title}</b><span>${esc(sub)}</span></div>`
+       <div class="fxText swText"><b class="${title.length > 4 ? 'long' : ''}">${title}</b><span>${esc(sub)}</span></div>`
     : `<div class="fxStreak"></div><div class="fxBurst"></div><div class="fxWing l"></div><div class="fxWing r"></div>
        ${p ? `<img class="fxPt" src="${esc(p.url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
-       <div class="fxText"><b>${title}</b><span>${esc(sub)}</span></div>`;
+       <div class="fxText"><b class="${title.length > 4 ? 'long' : ''}">${title}</b><span>${esc(sub)}</span></div>`;
   const show = () => {
     // a popover sits in the top layer, so it shows even over an open modal
     el.setAttribute('popover', 'manual');
@@ -2885,7 +2958,7 @@ function statLine(room, ru, c, k) {
   const low = k === 'HP' && pct <= 50 ? (pct <= 25 ? 'crit' : 'low') : '';
   return `<div class="ostat ${k === 'TP' ? 'tp' : ''} ${low}"><i>${esc(k)}</i>
     ${can ? `<button class="step" data-vstep="-1" data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(c.data.name)}の${esc(k)}を1減らす">−</button>` : ''}
-    <b>${c.cur[k]}</b><em>/${st.max}</em>
+    <b class="${isDraft(c.id, k) ? 'draft' : ''}">${c.cur[k]}</b><em>/${st.max}</em>
     ${can ? `<button class="step" data-vstep="1" data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(c.data.name)}の${esc(k)}を1増やす">＋</button>` : ''}
     <span class="bar"><span style="width:${pct}%"></span></span></div>`;
 }
@@ -3023,7 +3096,7 @@ function charSheetHtml(c, canEdit) {
     ${d.weapons.common.map((it, i) => item(it, 'common', i, '<span class="attr">共通</span>')).join('')}
     ${d.variations.length ? `<div class="row" style="margin:6px 0"><span class="muted">バリエーション</span>
       <select data-viewform="${c.id}" aria-label="表示するバリエーション"><option value="-1" ${view === -1 ? 'selected' : ''}>基本${c.variation === -1 ? '（装備中）' : ''}</option>${d.variations.map((x, i) => `<option value="${i}" ${view === i ? 'selected' : ''}>${esc(x.name)}${c.variation === i ? '（装備中）' : ''}</option>`).join('')}</select>
-      ${view !== c.variation ? `<span class="formNote">表示中（換装していません）</span>${canEdit ? `<button class="btn small primary" data-formchange="${c.id}" data-idx="${view}">「${esc(formName(view))}」に換装する</button>` : ''}` : '<span class="formNote on">装備中</span>'}</div>` : ''}
+      ${view !== c.variation ? `<span class="formNote">表示中（${formWord(c)}していません）</span>${canEdit ? `<button class="btn small primary" data-formchange="${c.id}" data-idx="${view}">「${esc(formName(view))}」に${formWord(c)}する</button>` : ''}` : '<span class="formNote on">装備中</span>'}</div>` : ''}
     ${(view === -1 ? d.weapons.slots : (d.variations[view] || {}).slots || currentSlots(c)).map((it, i) => item(it, vgroup, i, suitHead(it.suit))).join('')}
     ${d.wingDrive ? `<div class="grp">ウイングドライブ</div>${item(d.wingDrive, 'wingDrive', 0)}` : ''}
     ${(d.darkDrives || []).length ? `<div class="grp dark">ダークドライブ</div>${d.darkDrives.map((it, i) => item(it, 'darkDrive', i, it.tp != null ? `<span class="attr">TP${it.tp}</span>` : '')).join('')}` : ''}
@@ -3241,7 +3314,7 @@ function paletteItems(c, room) {
   const d = c.data;
   // 換装 first: it is the big moment, and it acts immediately
   if (d.variations.length) [-1, ...d.variations.map((_, i) => i)].filter(i => i !== c.variation).forEach(i =>
-    out.push({ grp: '換装', label: `「${i === -1 ? '基本' : d.variations[i].name}」に換装`, text: '', form: i, name: i === -1 ? '基本' : d.variations[i].name }));
+    out.push({ grp: formWord(c), label: formWord(c) === 'メタモルフォーゼ' ? `メタモルフォーゼ：「${i === -1 ? '基本' : d.variations[i].name}」へ` : `「${i === -1 ? '基本' : d.variations[i].name}」に換装`, text: '', form: i, name: i === -1 ? '基本' : d.variations[i].name }));
   d.skills.forEach((it, i) => out.push({ grp: '特技', label: it.name, text: cmdText('特技', it, it.tp != null ? `TP${it.tp} ` : ''), tp: it.tp, name: it.name, src: it, used: c.used[`skills:${i}`] }));
   (d.core?.functions || []).forEach((it, i) => out.push({ grp: '特殊機能', label: it.name, text: cmdText('特殊機能', it), name: it.name, src: it, used: c.used[`func:${i}`] }));
   if (d.wingDrive) out.push({ grp: 'ウイングドライブ', label: d.wingDrive.name, text: cmdText('ウイングドライブ', d.wingDrive), name: d.wingDrive.name, src: d.wingDrive, used: c.used['wingDrive:0'] });
@@ -3271,12 +3344,42 @@ function renderPalette(room, c) {
 const NET = { ws: null, roomId: null, wantSeat: null, backoff: 500, status: 'idle', renderQueued: false, seq: 0, pending: [], base: null };
 // the server's latest room with our not-yet-confirmed actions applied on top (dropped if they no longer apply)
 function withPending(base, logs) {
-  if (!NET.pending.length) return { ...base, logs };
+  const drafts = Object.values(ui.valDraft);
+  if (!NET.pending.length && !drafts.length) return { ...base, logs };
   const r = roomCopy({ ...base, logs });
   NET.pending = NET.pending.filter(p => { try { apply(r, p.a, p.viewer, myPid()); return true; } catch (e) { return false; } });
+  // ± presses not sent yet stay on screen while other updates arrive
+  for (const d of drafts) if (r.chars[d.cid]) r.chars[d.cid].cur[d.key] = d.v;
   r.logs = logs;
   return r;
 }
+// ---------------- ± on HP / TP: shown at once, sent once the presses stop ----------------
+// a run of presses becomes one change; a run that ends where it started sends nothing
+const VAL_SETTLE_MS = 450;
+function stepValue(room, cid, key, d) {
+  const c = room.chars[cid]; if (!c || !(key in c.cur)) return;
+  if (!ONLINE) { act({ type: 'setValue', cid, key, value: c.cur[key] + d }); return; }
+  if (!canControlChar(room, roomUI(room.id).viewer, cid)) { toast('このキャラクターの値は変えられません'); return; }
+  const k = cid + '|' + key;
+  const dr = ui.valDraft[k] || (ui.valDraft[k] = { cid, key, from: c.cur[key] });
+  dr.v = c.cur[key] + d;
+  c.cur[key] = dr.v;
+  clearTimeout(dr.t); dr.t = setTimeout(() => flushValue(k), VAL_SETTLE_MS);
+  renderRoom();
+}
+function flushValue(k) {
+  const dr = ui.valDraft[k]; if (!dr) return;
+  clearTimeout(dr.t); delete ui.valDraft[k];
+  const room = curRoom(); if (!room || !NET.base) return;
+  if (dr.v === dr.from) { DB.rooms[room.id] = withPending(NET.base, room.logs); queueRender(); return; }
+  act({ type: 'setValue', cid: dr.cid, key: dr.key, value: dr.v });
+}
+const flushValues = () => Object.keys(ui.valDraft).forEach(flushValue);
+function dropDraft(cid, key) { const k = cid + '|' + key; if (ui.valDraft[k]) { clearTimeout(ui.valDraft[k].t); delete ui.valDraft[k]; } }
+const isDraft = (cid, key) => !!ui.valDraft[cid + '|' + key];
+// leaving the page or switching apps sends what is waiting
+addEventListener('pagehide', flushValues);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushValues(); });
 const loadJson = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
 const gmKeys = () => loadJson('pw-gmkeys', {});
 function saveGmKey(id, key) { const o = gmKeys(); o[id] = key; try { localStorage.setItem('pw-gmkeys', JSON.stringify(o)); } catch (e) {} }
@@ -3500,7 +3603,7 @@ function cmdModalHtml(room, ru) {
       return `<div class="citem ${it.used ? 'used' : ''}" data-ci="${i}" role="button" tabindex="0">
         <div class="ctop">${it.suit ? `<span class="suit ${'HD'.includes(it.suit) ? 'red' : ''}">${SUIT[it.suit]}</span>` : ''}${it.tag ? `<span class="attr">${it.tag}</span>` : ''}
           <b class="cname">${esc(it.label)}</b>${it.tp != null ? `<span class="tpcost ${short ? 'short' : ''}">TP${it.tp}</span>` : ''}${it.used ? '<span class="attr">使用済み</span>' : ''}
-          <span style="flex:1"></span>${it.grp === '換装' ? '<span class="attr">押すと換装</span>' : `<button class="btn small" data-csend="${i}" ${short ? 'disabled' : ''}>すぐ送る</button>`}</div>
+          <span style="flex:1"></span>${it.form != null ? `<span class="attr">押すと${it.grp}</span>` : `<button class="btn small" data-csend="${i}" ${short ? 'disabled' : ''}>すぐ送る</button>`}</div>
         ${s && Object.keys(s.attrs || {}).length ? `<div class="attrs">${Object.entries(s.attrs).map(([k, v]) => `<span class="attr">${esc(k)}：${esc(v)}</span>`).join('')}</div>` : ''}
         ${s && s.text ? `<div class="itext">${esc(s.text)}</div>` : g.name === 'ダイス' ? `<div class="itext muted">${esc(it.text.trim())}</div>` : ''}
       </div>`; }).join('')}</div></section>`).join('')}`;
@@ -3609,9 +3712,9 @@ function charModalHtml(room, ru, cid) {
       return `<div class="seatRow"><span class="muted">持ち主：<b>${esc(ownerName)}</b></span>
         ${mineToGive ? `<select id="giveTo"><option value="">譲渡先を選ぶ</option>${targets.map(([pid, p]) => `<option value="${pid}">${esc(p.name)}</option>`).join('')}${!gmOwned(c) ? '<option value="gm">GM</option>' : ''}</select><button class="btn small" data-givechar="${c.id}">譲渡する</button>` : ''}</div>`;
     })() : ''}
-    ${can && c.data.variations.length ? `<div class="formBar"><span class="muted">換装</span>${[-1, ...c.data.variations.map((_, i) => i)].map(i =>
+    ${can && c.data.variations.length ? `<div class="formBar"><span class="muted">${formWord(c)}</span>${[-1, ...c.data.variations.map((_, i) => i)].map(i =>
       i === c.variation ? `<span class="formNow">${esc(i === -1 ? '基本' : c.data.variations[i].name)}（装備中）</span>`
-        : `<button class="btn small" data-formchange="${c.id}" data-idx="${i}">${esc(i === -1 ? '基本' : c.data.variations[i].name)}に換装</button>`).join('')}</div>` : ''}
+        : `<button class="btn small" data-formchange="${c.id}" data-idx="${i}">${esc(i === -1 ? '基本' : c.data.variations[i].name)}${formWord(c) === 'メタモルフォーゼ' ? 'へ' : 'に換装'}</button>`).join('')}${v === 'gm' && c.side !== 'pc' ? `<select data-formstyle="${c.id}" aria-label="形態変化の呼び方" title="形態変化の呼び方"><option value="swap" ${formWord(c) === '換装' ? 'selected' : ''}>換装と呼ぶ</option><option value="morph" ${formWord(c) === 'メタモルフォーゼ' ? 'selected' : ''}>メタモルフォーゼと呼ぶ</option></select>` : ''}</div>` : ''}
     <div class="vals">${keys.map(k => {
       const st = c.data.stats[k] || {};
       if (st.max == null) return `<span class="val">${esc(k)} ${can && v === 'gm' ? `<input type="number" value="${c.cur[k]}" data-vset data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(k)}">` : `<b>${c.cur[k]}</b>`}</span>`;
@@ -3677,7 +3780,7 @@ function weaponModalHtml(room, ru) {
   const preview = picked.length ? `${esc(ch.data.name)}：${picked.map(([, x]) => (x.suit ? SUIT[x.suit] : '') + esc(x.name)).join('＋')}${w.cards.length ? `　${w.cards.map(cardText).join(' → ')}` : ''}${w.targets.length ? ` → ${w.targets.map(id => esc(room.chars[id]?.data.name || '')).join('、')}` : ''}` : '武装を選んでください';
   return `<div class="mhead"><h1>武装を使う</h1>
       ${actors.length > 1 ? `<select data-wactor aria-label="使うキャラクター">${actors.map(c => `<option value="${c.id}" ${c.id === w.cid ? 'selected' : ''}>${esc(c.data.name)}</option>`).join('')}</select>` : `<span class="muted">${esc(ch.data.name)}</span>`}
-      ${ch.data.variations.length ? `<select data-wform aria-label="表示するバリエーション"><option value="-1" ${w.form === -1 ? 'selected' : ''}>基本${ch.variation === -1 ? '（装備中）' : ''}</option>${ch.data.variations.map((x, i) => `<option value="${i}" ${w.form === i ? 'selected' : ''}>${esc(x.name)}${ch.variation === i ? '（装備中）' : ''}</option>`).join('')}</select>${w.form !== ch.variation ? '<span class="formNote">換装していません</span>' : ''}` : ''}
+      ${ch.data.variations.length ? `<select data-wform aria-label="表示するバリエーション"><option value="-1" ${w.form === -1 ? 'selected' : ''}>基本${ch.variation === -1 ? '（装備中）' : ''}</option>${ch.data.variations.map((x, i) => `<option value="${i}" ${w.form === i ? 'selected' : ''}>${esc(x.name)}${ch.variation === i ? '（装備中）' : ''}</option>`).join('')}</select>${w.form !== ch.variation ? '<span class="formNote">${formWord(ch)}していません</span>' : ''}` : ''}
       <span style="flex:1"></span><button class="btn" data-close>閉じる</button></div>
     <div class="wgrid">
       <section><h2>武装（いくつでも選べます）</h2><div class="wlist">${list.map(([k, x, tag]) => `
@@ -3730,10 +3833,10 @@ function refreshModal(first) {
 function useCommand(i, sendNow) {
   const room = curRoom(), ru = roomUI(room.id), c = room.chars[ru.as];
   const it = paletteItems(c, room)[i]; if (!it) return;
-  if (it.grp === '換装') { closeDlg(); act({ type: 'variation', cid: c.id, idx: it.form }); if (ui.cmdForm) ui.cmdForm = null; return; }
+  if (it.form != null) { closeDlg(); act({ type: 'variation', cid: c.id, idx: it.form }); if (ui.cmdForm) ui.cmdForm = null; return; }
   ui.cmd = it.grp === 'ダイス' || !c ? null : { cid: c.id, name: it.name || it.label, tp: it.tp ?? null, label: it.label, fx: it.grp === 'ウイングドライブ' ? 'wd' : it.grp === 'ダークドライブ' ? 'dd' : null };
   closeDlg();
-  if (it.offForm) toast('換装していないバリエーションの武装です（換装はキャラの詳細から）');
+  if (it.offForm) toast(`${formWord(c)}していないバリエーションの武装です（${formWord(c)}はキャラの詳細から）`);
   $('sayText').value = it.text;
   if (sendNow) { $('sayBtn').click(); return; }
   renderRoom(); $('sayText').focus();
@@ -3784,9 +3887,9 @@ function weaponClick(t, room, ru) {
     if (!off.length) { go(w.weapons); return true; }
     const ch = room.chars[w.cid], fname = w.form === -1 ? '基本' : (ch.data.variations[w.form] || {}).name;
     const keep = { ...w };
-    openDlg(`<h1>換装していません</h1><p>「${esc(fname)}」の武装が含まれていますが、今の装備は「${esc(ch.variation === -1 ? '基本' : ch.data.variations[ch.variation].name)}」です。</p>
+    openDlg(`<h1>${formWord(ch)}していません</h1><p>「${esc(fname)}」の武装が含まれていますが、今の装備は「${esc(ch.variation === -1 ? '基本' : ch.data.variations[ch.variation].name)}」です。</p>
       <div class="row" style="margin-top:14px"><span style="flex:1"></span><button class="btn" data-close>やめる</button>
-      <button class="btn" id="offAsIs">このまま使う</button><button class="btn primary" id="offSwap">換装してから使う</button></div>`, () => {
+      <button class="btn" id="offAsIs">このまま使う</button><button class="btn primary" id="offSwap">${formWord(ch)}してから使う</button></div>`, () => {
       $('offAsIs').onclick = () => { ui.w = keep; go(keep.weapons); };
       $('offSwap').onclick = () => {
         ui.w = keep;
@@ -3804,7 +3907,8 @@ $('dlgBody').addEventListener('change', e => {
   e.stopPropagation(); // the modal re-renders; the old element must not reach the page-level handler
   const t = e.target;
   if (t.matches('[data-wactor]')) { ui.w = { cid: t.value, weapons: [], cards: [], targets: [], memo: ui.w.memo }; refreshModal(); return; }
-  if (t.matches('[data-vset]')) { act({ type: 'setValue', cid: t.dataset.cid, key: t.dataset.key, value: t.value }); return; }
+  if (t.matches('[data-vset]')) { dropDraft(t.dataset.cid, t.dataset.key); act({ type: 'setValue', cid: t.dataset.cid, key: t.dataset.key, value: t.value }); return; }
+  if (t.matches('[data-formstyle]')) { act({ type: 'setFormStyle', cid: t.dataset.formstyle, style: t.value }); return; }
   if (t.matches('[data-viewform]')) { ui.formView[t.dataset.viewform] = +t.value; refreshModal(); return; }
   if (t.matches('[data-cmdform]')) { ui.cmdForm = { cid: t.dataset.cmdform, idx: +t.value }; refreshModal(); return; }
   if (t.matches('[data-wform]')) { ui.w.form = +t.value; ui.w.weapons = ui.w.weapons.filter(k => k[0] === 'c'); refreshModal(); return; }
@@ -4159,7 +4263,7 @@ function commonClick(t, room, ru) {
   if ((el = q('[data-sheetopen]'))) { openModal('sheet', el.dataset.sheetopen); return true; }
   if ((el = q('[data-portraits]'))) { portraitDialog(room, el.dataset.portraits); return true; }
   if ((el = q('[data-delchar]'))) { const c = room.chars[el.dataset.delchar]; ask(`${c.data.name}を部屋から外します。手札は捨て札に移ります。`, 'キャラクターを外す', () => act({ type: 'removeChar', cid: c.id }), true); return true; }
-  if ((el = q('[data-vstep]'))) { const c = room.chars[el.dataset.cid], k = el.dataset.key; act({ type: 'setValue', cid: c.id, key: k, value: c.cur[k] + +el.dataset.vstep }); return true; }
+  if ((el = q('[data-vstep]'))) { stepValue(room, el.dataset.cid, el.dataset.key, +el.dataset.vstep); return true; }
 
   if (q('[data-opensettings]')) { settingsDialog(room); return true; }
   return false;
@@ -4334,7 +4438,8 @@ document.addEventListener('click', e => {
 document.addEventListener('change', e => {
   const room = curRoom(); if (!room || !e.target.isConnected || e.target.closest('dialog')) return;
   const t = e.target;
-  if (t.matches('[data-vset]')) act({ type: 'setValue', cid: t.dataset.cid, key: t.dataset.key, value: t.value });
+  if (t.matches('[data-vset]')) { dropDraft(t.dataset.cid, t.dataset.key); act({ type: 'setValue', cid: t.dataset.cid, key: t.dataset.key, value: t.value }); }
+  if (t.matches('[data-formstyle]')) act({ type: 'setFormStyle', cid: t.dataset.formstyle, style: t.value });
   if (t.matches('[data-rangew]')) { ui.rangeW = t.value ? { cid: t.dataset.rangew, k: t.value } : null; renderRoom(); return; }
 
   if (t.matches('[data-used]')) act({ type: 'toggleUsed', cid: t.dataset.used, group: t.dataset.group, idx: +t.dataset.idx });

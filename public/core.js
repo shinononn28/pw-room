@@ -100,6 +100,8 @@ function normalizeChar(raw) {
     darkDrives: (Array.isArray(raw.darkDrives) ? raw.darkDrives : []).map(x => { const t = x?.tp; return { ...item(x), tp: t != null && t !== '' && Number.isFinite(Number(t)) ? Number(t) : null }; }).filter(x => x.name),
     // 巨大キャラクター: takes 2×2 squares on the board (x, y = its top-left square on screen)
     size: Number(raw.size) === 2 ? 2 : 1,
+    // enemies: what the change of variation is called — 'morph' (メタモルフォーゼ) or 'swap' (換装); unset = decided by the weapons
+    formStyle: raw.formStyle === 'morph' || raw.formStyle === 'swap' ? raw.formStyle : null,
     // {label, url}; a plain URL string (older sheets) gets a numbered label
     portraits: Array.isArray(raw.portraits) ? raw.portraits.map((p, i) => typeof p === 'string' ? { label: `立ち絵${i + 1}`, url: p } : p)
       .filter(p => p && typeof p.url === 'string' && p.url.trim()).map(p => ({ label: String(p.label || '立ち絵'), url: toDirectImage(p.url) })) : [],
@@ -119,6 +121,18 @@ const formPortrait = (ch, i) => (i === -1 ? ch.data.basePortrait : (ch.data.vari
 const portraitUrl = (ch, label) => (ch.data.portraits.find(p => p.label === label) || {}).url || null;
 // クロスユニゾン (an all-out attack): every PC lines up in the effect, the declarer first
 const UNISON = /クロスユニゾン/;
+// what a change of variation is called: PCs 換装; an enemy as set (a princess on the other side 換装s too),
+// and when unset, メタモルフォーゼ if it has a 〈メタモルフォーゼ〉 weapon
+const formWord = ch => {
+  if (!ch || ch.side === 'pc') return '換装';
+  const st = ch.data.formStyle;
+  if (st) return st === 'morph' ? 'メタモルフォーゼ' : '換装';
+  return [ch.data.weapons.slots, ...ch.data.variations.map(v => v.slots)].some(sl => (sl || []).some(w => isMorphWeapon(w))) ? 'メタモルフォーゼ' : '換装';
+};
+// a weapon paid with a joker (カオティックムーン and the like; クロスユニゾン has its own effect)
+const isJokerWeapon = w => !!w && !UNISON.test(w.name || '') && /ジョーカー\s*1?\s*枚?\s*を?\s*提出/.test(String(w.text || '').normalize('NFKC'));
+// a weapon that switches to バリエーション① and back (〈メタモルフォーゼ〉)
+const isMorphWeapon = w => !!w && /メタモルフォーゼ/.test(w.name || '') && /バリエーション/.test(w.text || '');
 // ----- board footprint: a 巨大キャラクター covers 2×2 squares from (x, y) -----
 const sizeOf = c => c && c.data && c.data.size === 2 ? 2 : 1;
 function cellsOf(c, x = c.x, y = c.y) {
@@ -258,8 +272,13 @@ function nextCopyName(room, name) {
   for (let k = 2; k < 1000; k++) { const t = n + k; if (!used.has(t)) return t; }
   return n + '（複製）';
 }
-function markOncePerScenario(ch, { unison, wd, dd }) {
+function markOncePerScenario(ch, { unison, wd, dd, joker }) {
   if (!ch) return;
+  if (joker) {
+    const once = w => w && w.name === joker && /1シナリオに1回/.test(String(w.text || '').normalize('NFKC'));
+    ch.data.weapons.common.forEach((w, i) => { if (once(w)) ch.used[`common:${i}`] = true; });
+    currentSlots(ch).forEach((w, i) => { if (once(w)) ch.used[`slot${ch.variation}:${i}`] = true; });
+  }
   if (dd >= 0) ch.used[`darkDrive:${dd}`] = true;
   if (unison) ch.data.weapons.common.forEach((w, i) => { if (UNISON.test(w.name || '')) ch.used[`common:${i}`] = true; });
   if (wd && ch.data.wingDrive) ch.used['wingDrive:0'] = true;
@@ -288,6 +307,19 @@ function logValue(room, ch, a, by, before, v) {
   }
   log(room, { tab: opsTab(room), type: 'value', by, cid: a.cid, key: a.key, from: before, to: v, text: `${ch.data.name}の${a.key}：${before} → ${v}` });
 }
+function changeForm(room, ch, i, by) {
+  if (ch.variation === i) return;
+  ch.variation = i;
+  // a variation with a linked 立ち絵 changes the portrait too; when it really changes, the effect shows before → after
+  const from = portraitUrl(ch, ch.portrait), link = formPortrait(ch, i);
+  if (link) ch.portrait = link;
+  const to = portraitUrl(ch, ch.portrait), swap = from && to && from !== to;
+  const name = i === -1 ? '基本' : ch.data.variations[i].name;
+  log(room, { tab: opsTab(room), type: 'variation', by, cid: ch.id, fx: 'form', formName: name, ptFrom: swap ? from : undefined, ptTo: swap ? to : undefined,
+    text: formWord(ch) === 'メタモルフォーゼ' ? `${ch.data.name}がメタモルフォーゼ：「${name}」になりました` : `${ch.data.name}の武装を「${name}」に切り替えました` });
+}
+// 〈メタモルフォーゼ〉: to バリエーション① and, from there, back to the original
+const morph = (room, ch, by) => { if (ch.data.variations.length) changeForm(room, ch, ch.variation === -1 ? 0 : -1, by); };
 // SS値 is the initiative: the next to act is the highest SS値 among those who have not acted this round
 // (room.turn.done). A tie is not decided by the table order: the players choose (room.turn.pick).
 // HP 0 or less = 戦闘不能: skipped by the initiative until healed (characters without HP are never down)
@@ -482,6 +514,12 @@ function applyInner(room, a, by, pid) {
       if (!ch.data.portraits.some(p => p.label === ch.portrait)) ch.portrait = ch.data.portraits[0]?.label || null;
       return;
     }
+    case 'setFormStyle': { // GM: an enemy's change of variation is called 換装 or メタモルフォーゼ
+      need(by === 'gm', '変更できるのはGMだけです');
+      need(ch && ch.side !== 'pc', 'PCは換装です');
+      ch.data.formStyle = a.style === 'morph' ? 'morph' : 'swap'; ch.dv = (ch.dv || 1) + 1;
+      return;
+    }
     case 'setSize': { // GM: make a piece a 巨大キャラクター (2×2) or back to one square
       need(by === 'gm', '大きさを変えられるのはGMだけです');
       need(ch, 'キャラクターが見つかりません');
@@ -504,14 +542,7 @@ function applyInner(room, a, by, pid) {
       need(ch && canControlChar(room, by, a.cid), 'このキャラクターは操作できません');
       const i = a.idx | 0;
       need(i === -1 || ch.data.variations[i], 'そのバリエーションはありません');
-      if (ch.variation === i) return;
-      ch.variation = i;
-      // a variation with a linked 立ち絵 changes the portrait too; when it really changes, the effect shows before → after
-      const from = portraitUrl(ch, ch.portrait), link = formPortrait(ch, i);
-      if (link) ch.portrait = link;
-      const to = portraitUrl(ch, ch.portrait), swap = from && to && from !== to;
-      log(room, { tab: opsTab(room), type: 'variation', by, cid: a.cid, fx: 'form', formName: i === -1 ? '基本' : ch.data.variations[i].name, ptFrom: swap ? from : undefined, ptTo: swap ? to : undefined,
-        text: `${ch.data.name}の武装を「${i === -1 ? '基本' : ch.data.variations[i].name}」に切り替えました` });
+      changeForm(room, ch, i, by);
       return;
     }
 
@@ -651,12 +682,14 @@ function applyInner(room, a, by, pid) {
       need(ws.length, '武装を選んでください');
       room.cards.hands[seat] = hand.filter(x => !cards.includes(x));
       room.cards.discard.push(...cards);
-      markOncePerScenario(ch, { unison: ws.some(w => UNISON.test(w.name)) });
+      const unisonUsed = ws.some(w => UNISON.test(w.name)), jw = !unisonUsed && ws.find(isJokerWeapon);
+      markOncePerScenario(ch, { unison: unisonUsed, joker: jw ? jw.name : null });
       ws.forEach(w => effectsFromText(room, ch, w.name, w.text, by, Array.isArray(a.targets) ? a.targets.filter(id => room.chars[id]) : []));
       log(room, { tab: opsTab(room), type: 'weapon', by, seat, cid: ch.id, charName: ch.data.name,
         weapons: ws.map(w => ({ name: w.name, suit: w.suit || null, attrs: { ...(w.attrs || {}) }, text: w.text || '' })),
         cards, targets: (Array.isArray(a.targets) ? a.targets : []).map(id => room.chars[id]?.data.name).filter(Boolean), memo: String(a.memo || '').trim(), offForm,
-        ...(ws.some(w => UNISON.test(w.name)) ? { fx: 'unison', members: unisonMembers(room, ch.id) } : {}) });
+        ...(unisonUsed ? { fx: 'unison', members: unisonMembers(room, ch.id) } : jw ? { fx: 'joker', jokerName: jw.name } : {}) });
+      if (ws.some(isMorphWeapon)) morph(room, ch, by);
       return;
     }
     case 'shuffleBack': {
@@ -738,9 +771,12 @@ function applyInner(room, a, by, pid) {
       const wdChar = a.as && room.chars[a.as];
       const wd = a.fx === 'wd' || !!(wdChar && wdChar.data.wingDrive && a.cmd && a.cmd === wdChar.data.wingDrive.name);
       const dd = wdChar && a.cmd ? (wdChar.data.darkDrives || []).findIndex(x => x.name === a.cmd) : -1;
-      markOncePerScenario(wdChar, { unison, wd, dd });
+      const cmdWeapon = wdChar && a.cmd ? [...wdChar.data.weapons.common, ...currentSlots(wdChar)].find(w => w && w.name === a.cmd) : null;
+      const joker = !unison && isJokerWeapon(cmdWeapon);
+      markOncePerScenario(wdChar, { unison, wd, dd, joker: joker ? cmdWeapon.name : null });
       if (wdChar && a.cmd) effectsFromText(room, wdChar, a.cmd, text, by);
-      log(room, { tab: tab.id, type: 'say', by, as: a.as || null, name: a.as ? room.chars[a.as].data.name : freeName, color, portrait: a.portrait || null, portraitUrl: pUrl, text, cmd: a.cmd || null, dice, fx: unison ? 'unison' : dd >= 0 || a.fx === 'dd' ? 'dd' : a.fx === 'wd' ? 'wd' : undefined, members: unison ? unisonMembers(room, a.as) : undefined, reply });
+      log(room, { tab: tab.id, type: 'say', by, as: a.as || null, name: a.as ? room.chars[a.as].data.name : freeName, color, portrait: a.portrait || null, portraitUrl: pUrl, text, cmd: a.cmd || null, dice, fx: unison ? 'unison' : joker ? 'joker' : dd >= 0 || a.fx === 'dd' ? 'dd' : a.fx === 'wd' ? 'wd' : undefined, jokerName: joker ? cmdWeapon.name : undefined, members: unison ? unisonMembers(room, a.as) : undefined, reply });
+      if (isMorphWeapon(cmdWeapon)) morph(room, wdChar, by);
       if (tpCh) {
         const before = tpCh.cur.TP;
         tpCh.cur.TP = before - a.spendTP;
@@ -925,5 +961,5 @@ function viewRoom(room, seat, pid) {
   return r;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { rangeProblems, effectTarget, rangeIssue, nextActors, isDown, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
+  module.exports = { rangeProblems, effectTarget, rangeIssue, nextActors, isDown, formWord, isJokerWeapon, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
 }
