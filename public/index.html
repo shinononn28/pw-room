@@ -132,6 +132,24 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pink)}
 .tok.down{filter:grayscale(.9);opacity:.55}
 /* a value changed with ± and about to be sent */
 .ostat b.draft{color:var(--gold)}
+/* 台詞「」: dialogue in a bubble of the speaker's colour, action lines (ト書き) quieter beneath */
+.speech{display:grid;gap:4px;margin-top:2px;justify-items:start}
+.speech .sline{font-size:1.05em;line-height:1.65;padding:5px 12px;border-radius:4px 14px 14px 14px;white-space:pre-wrap;word-break:break-word;max-width:100%;
+  background:color-mix(in srgb,var(--sc) 16%,var(--mist));border:1px solid color-mix(in srgb,var(--sc) 45%,transparent)}
+.speech .aline{color:var(--ink-2);font-size:.92em;line-height:1.6;padding-left:10px;border-left:2px solid color-mix(in srgb,var(--sc) 40%,var(--line));white-space:pre-wrap;word-break:break-word}
+.checks3{display:grid;gap:6px;margin-top:4px}
+.sayAs{font-size:.78rem;font-weight:800;white-space:nowrap;border-radius:999px;padding:2px 10px;color:#fff;background:color-mix(in srgb,var(--sc,#B48CFF) 75%,#141A3A)}
+.checks3 .row{align-items:flex-start;gap:8px;font-size:.88rem;line-height:1.5}
+/* the stage: the speaker over the board for a few seconds */
+#stage{position:fixed;z-index:40;pointer-events:none;overflow:hidden;opacity:0;transition:opacity .3s ease}
+#stage.show{opacity:1}
+#stage .stPt{position:absolute;left:2%;bottom:0;height:82%;max-width:46%;object-fit:contain;object-position:bottom;filter:drop-shadow(0 8px 18px rgba(10,13,30,.45));animation:stIn .4s cubic-bezier(.2,.9,.2,1)}
+#stage .stBubble{position:absolute;left:40%;right:3%;bottom:6%;display:grid;gap:2px;background:rgba(255,255,255,.95);color:#1E1B3A;border:2px solid var(--sc);border-radius:16px 16px 16px 4px;
+  padding:10px 14px;box-shadow:0 8px 24px rgba(10,13,30,.3);font-size:clamp(.9rem,1.6vw,1.1rem);line-height:1.6;white-space:pre-wrap;word-break:break-word;animation:stIn .3s ease-out}
+#stage .stBubble b{font-size:.8em;color:color-mix(in oklab,var(--sc) 70%,#141A3A)}
+#stage.noPt .stBubble{left:3%}
+@keyframes stIn{0%{opacity:0;transform:translateY(12px)}100%{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){ #stage .stPt,#stage .stBubble{animation:none} }
 /* GM: which hand the tray plays */
 .handTabs{display:inline-flex;gap:5px;flex-wrap:nowrap;min-width:0;overflow-x:auto;scrollbar-width:none;padding:4px 4px 1px 0;margin:-4px 0 -1px}
 .handTabs::-webkit-scrollbar{display:none}
@@ -2323,7 +2341,7 @@ const persist = () => { if (ONLINE) return; try { localStorage.setItem(KEY, JSON
 const UIKEY = 'pw-local-ui';
 let U = {}; try { U = JSON.parse(localStorage.getItem(UIKEY)) || {}; } catch (e) {}
 const saveU = () => { try { localStorage.setItem(UIKEY, JSON.stringify(U)); } catch (e) {} };
-const ui = { sel: [], memo: '', selTok: null, drawN: 1, history: [], palette: false, cmd: null, openSheets: new Set(), seenTab: {}, typing: {}, formView: {}, fxSeen: new Set(), sfxSeen: new Set(), sfxTo: {}, valDraft: {} };
+const ui = { sel: [], memo: '', selTok: null, drawN: 1, history: [], palette: false, cmd: null, openSheets: new Set(), seenTab: {}, typing: {}, formView: {}, fxSeen: new Set(), sfxSeen: new Set(), stageSeen: new Set(), sfxTo: {}, valDraft: {} };
 const roomUI = rid => (U[rid] = U[rid] || { viewer: 'gm', tab: 'main', sort: 'suit', as: '', name: '' });
 
 const $ = id => document.getElementById(id);
@@ -2829,6 +2847,7 @@ function renderRoom() {
                   <span id="speakFace"></span><button class="swatch" id="colorBtn" title="名前の色" aria-label="名前の色を選ぶ"></button>
                   <select id="asSel" aria-label="発言するキャラクター"></select><select id="ptSel" aria-label="立ち絵"></select>
                   <input type="text" id="freeName" placeholder="名前（NPCなど）">
+                  <span class="sayAs" id="sayAs" hidden></span>
                 </div>
                 <textarea id="sayText" rows="3"></textarea>
                 <div class="row"><button class="btn small" id="palBtn" aria-expanded="false">コマンド</button><button class="btn small ghost" id="copyLog">ログをコピー</button><span style="flex:1"></span><button class="btn primary" id="sayBtn">送信</button></div>
@@ -2867,6 +2886,9 @@ function renderRoom() {
   const rolls = logSounds(room, ru);
   renderMap(room, ru); renderCards(room, ru); renderChat(room, ru);
   rolls.forEach(rollDice);
+  // a new line with 「台詞」 puts the speaker on the stage (never for old lines)
+  if (!ui.stageInit) { ui.stageInit = true; room.logs.forEach(l => ui.stageSeen.add(l.id)); }
+  else for (const l of room.logs.slice(-6)) if (l.type === 'say' && !l.dice && !ui.stageSeen.has(l.id)) { ui.stageSeen.add(l.id); if (viewLog(room, l, ru.viewer, myPid())) playStage(room, l); }
   ui.chatAtBottom = null;
   if (ui.expectPick && (room.turn.pick || []).length && !$('dlg').open) { ui.expectPick = false; pickMenu(room, ru); }
   else if (ui.expectPick && room.turn.current) ui.expectPick = false;
@@ -3187,7 +3209,7 @@ function speakerOptions(room, v) {
     Object.values(room.chars).filter(c => c.side !== 'pc' || gmOwned(c)).forEach(c => opts.push([c.id, c.data.name]));
   } else if (isPcSeat(room, v)) {
     const d = room.chars[v].data;
-    opts.push([v, d.name]); opts.push(['', (ONLINE && me().name) || d.player || d.name]);
+    opts.push([v, d.name]); opts.push(['', `PL：${(ONLINE && me().name) || d.player || d.name}`]);
   } else opts.push(['', '観戦者']);
   return opts;
 }
@@ -3234,12 +3256,54 @@ function logHtml(room, l) {
   const swapPics = l.type === 'variation' && l.ptFrom && l.ptTo ? `<span class="swapPics"><img src="${esc(l.ptFrom)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">→<img src="${esc(l.ptTo)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()"></span>` : '';
   return `<div class="le ${l.type === 'sys' ? 'sys' : cls}${l.fx === 'ko' ? ' ko' : ''}">${showWho ? `<span class="who">${who}</span>` : ''}${esc(l.text)}${swapPics}<span class="t">${time}</span></div>`;
 }
+// ---------------- 台詞「」 ----------------
+// a line that opens with 「 is dialogue (running on to the line that closes it); any other line is action (ト書き),
+// so 「発言」 and 目線をAにやる can share one message
+function speechParts(text) {
+  const out = []; let cur = null;
+  for (const line of String(text || '').split('\n')) {
+    const t = line.trim();
+    if (cur && cur.say && cur.open) { cur.text += '\n' + t; if (t.includes('」')) cur.open = false; continue; }
+    if (t.startsWith('「')) { cur = { say: true, text: t, open: !t.slice(1).includes('」') }; out.push(cur); continue; }
+    if (!t) { cur = null; continue; }
+    if (cur && !cur.say) cur.text += '\n' + t; else { cur = { say: false, text: t }; out.push(cur); }
+  }
+  return out.some(p => p.say) ? out : null;
+}
+// while a PL types a 「」 line under the player name: say who it will go out as
+function updateSayAs() {
+  const room = curRoom(), el = $('sayAs'); if (!room || !el) return;
+  const ru = roomUI(room.id), pc = !room.chars[ru.as] && U.speechAs !== false && isPcSeat(room, ru.viewer) && speechParts($('sayText').value) ? room.chars[ru.viewer] : null;
+  el.hidden = !pc;
+  if (pc) { el.textContent = `→ ${pc.data.name}として発言`; el.style.setProperty('--sc', pc.color); }
+}
+const speechHtml = (parts, color) => `<div class="speech" style="--sc:${esc(color)}">${parts.map(p => `<div class="${p.say ? 'sline' : 'aline'}">${esc(p.text)}</div>`).join('')}</div>`;
+// the speaker's 立ち絵 over the board with the line in a bubble, for a few seconds (pointer events pass through)
+function playStage(room, l) {
+  if (U.stage === false || Date.now() - l.t > 15000) return;
+  const parts = speechParts(l.text); if (!parts) return;
+  const host = document.querySelector('#mapP .boardCol'); if (!host) return;
+  const r = host.getBoundingClientRect(); if (r.width < 160 || r.height < 160) return;
+  const c = l.as && room.chars[l.as];
+  const p = c && (c.data.portraits.find(x => x.label === l.portrait) || c.data.portraits.find(x => x.label === c.portrait) || c.data.portraits[0]);
+  const url = l.portraitUrl || (p && p.url);
+  let st = $('stage');
+  if (!st) { st = document.createElement('div'); st.id = 'stage'; st.setAttribute('aria-hidden', 'true'); document.body.appendChild(st); }
+  Object.assign(st.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
+  st.style.setProperty('--sc', l.color || (c && c.color) || '#B48CFF');
+  const said = parts.filter(x => x.say).map(x => x.text).join('\n');
+  st.innerHTML = `${url ? `<img class="stPt" src="${esc(url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}<div class="stBubble"><b>${esc(l.name || (c && c.data.name) || '')}</b><span>${esc(said)}</span></div>`;
+  st.className = 'show' + (url ? '' : ' noPt');
+  clearTimeout(st._t); st._t = setTimeout(() => { st.className = ''; }, Math.min(9000, 3200 + said.length * 90));
+}
 function diceHtml(l) {
   const d = l.dice;
   if (!d) {
     // command declarations (【特技】… + effect text) get a compact two-part layout
     const m = /^【[^】]+】/.test(l.text) ? l.text.match(/^([^\n]*)\n?([\s\S]*)$/) : null;
     if (m) return `<div class="cmdmsg"><div class="cmdhead">${esc(m[1])}</div>${m[2].trim() ? `<div class="cmdbody">${esc(m[2])}</div>` : ''}</div>`;
+    const sp = U.speech !== false && speechParts(l.text);
+    if (sp) return speechHtml(sp, l.color || '#B48CFF');
     return `<div class="mtext">${esc(l.text)}</div>`;
   }
   if (d.hidden) return `<div class="dice secret"><span class="dres">シークレットダイス</span></div>`;
@@ -3278,7 +3342,7 @@ function renderChat(room, ru) {
   // light re-render: keep the lines already on screen and only touch what changed at the end
   const sig = l => `${l.id}:${l.edited || ''}:${l.to ?? ''}:${l.type === 'say' ? (l.text || '').length : ''}`;
   const look = Object.values(room.chars).map(c => c.id + c.color + (c.portrait || '') + (c.dv || '')).join('|');
-  const key = `${ru.tab}|${v}|${look}`;
+  const key = `${ru.tab}|${v}|${look}|${U.speech !== false}`;
   const prev = box._sigs || [];
   const next = logs.map(sig);
   let k = 0, changed = true;
@@ -3307,8 +3371,9 @@ function renderChat(room, ru) {
   if (!opts.some(o => o[0] === ru.as)) ru.as = opts[0][0];
   setHtml($('asSel'), opts.map(([id, n]) => `<option value="${id}" ${id === ru.as ? 'selected' : ''}>${esc(n)}</option>`).join(''));
   $('asSel').value = ru.as;
+  updateSayAs();
   const c = room.chars[ru.as];
-  $('speakFace').innerHTML = c ? ptImg(c, c.portrait) : `<span class="pt none" style="background:var(--void-2)">${esc((ru.name || (v === 'gm' ? 'GM' : '?')).slice(0, 1))}</span>`;
+  $('speakFace').innerHTML = c ? ptImg(c, c.portrait) : `<span class="pt none" style="background:var(--void-2)">${esc((ru.name || (v === 'gm' ? 'GM' : (ONLINE && me().name) || '?')).slice(0, 1))}</span>`;
   $('colorBtn').style.background = c ? c.color : (ru.freeColor || '#B48CFF');
   $('ptSel').hidden = !c || !c.data.portraits.length;
   $('ptSel').innerHTML = c ? c.data.portraits.map(p => `<option ${p.label === c.portrait ? 'selected' : ''}>${esc(p.label)}</option>`).join('') : '';
@@ -3463,7 +3528,7 @@ function onNet(m) {
     NET.pending = []; NET.base = m.room;
     DB.rooms = { [m.room.id]: { ...m.room, logs: m.logs } };
     NET.olderLogs = m.olderLogs || 0;
-    (m.logs || []).forEach(l => { ui.fxSeen.add(l.id); ui.sfxSeen.add(sfxKey(l)); }); ui.fxInit = ui.sfxInit = true;
+    (m.logs || []).forEach(l => { ui.fxSeen.add(l.id); ui.sfxSeen.add(sfxKey(l)); ui.stageSeen.add(l.id); }); ui.fxInit = ui.sfxInit = ui.stageInit = true;
     NET.locked = new Set(m.locked || []);
     saveLastSeat(m.room.id, m.seat);
     const ru = roomUI(m.room.id);
@@ -4110,9 +4175,16 @@ function menuDialog(room) {
     <div class="field">演出を出すのは<select id="mnFxWho">
       <option value="all" ${U.fxWho !== 'mine' ? 'selected' : ''}>全員の換装・ドライブ</option>
       <option value="mine" ${U.fxWho === 'mine' ? 'selected' : ''}>自分のだけ</option></select></div>
+    <div class="field">台詞「」<div class="checks3">
+      <label class="row"><input type="checkbox" id="mnSpeech" ${U.speech !== false ? 'checked' : ''}> 台詞を吹き出しで表示（「」以外の行は行動として表示）</label>
+      <label class="row"><input type="checkbox" id="mnStage" ${U.stage !== false ? 'checked' : ''}> 台詞のとき、盤面に立ち絵を大きく出す</label>
+      <label class="row"><input type="checkbox" id="mnSpeechAs" ${U.speechAs !== false ? 'checked' : ''}> 発言者がPLのとき、「」の台詞は自動で自分のPCとして発言する</label></div></div>
     <div class="field">効果音（カード・ダイス・手番・演出）<div class="row"><label class="row"><input type="checkbox" id="mnSfx" ${U.sfx !== false ? 'checked' : ''}> 鳴らす</label><input type="range" id="mnSfxVol" min="0" max="1" step="0.05" value="${U.sfxVol ?? 0.5}" style="flex:1" aria-label="効果音の音量"><button class="btn small" id="mnSfxTest">試聴</button></div></div>
     <div class="row"><button class="btn small" data-theme-toggle></button><span style="flex:1"></span><button class="btn" data-close>閉じる</button></div>`, () => {
     applyTheme();
+    $('mnSpeech').onchange = e => { U.speech = e.target.checked; saveU(); renderRoom(); };
+    $('mnStage').onchange = e => { U.stage = e.target.checked; saveU(); if (!U.stage && $('stage')) $('stage').className = ''; };
+    $('mnSpeechAs').onchange = e => { U.speechAs = e.target.checked; saveU(); };
     $('mnSfx').onchange = e => { U.sfx = e.target.checked; saveU(); if (U.sfx) sfx(['ok']); };
     $('mnSfxVol').oninput = e => { U.sfxVol = +e.target.value; saveU(); };
     $('mnSfxVol').onchange = () => sfx(['card']);
@@ -4226,7 +4298,9 @@ function bindRoomStatic() {
     const room = curRoom(), ru = roomUI(room.id), text = $('sayText').value;
     if (!text.trim()) return;
     if (statCmd(room, ru, text)) return;
-    const c = room.chars[ru.as];
+    let c = room.chars[ru.as];
+    // speaking under the player name with a 「」 line: it is the character speaking
+    if (!c && U.speechAs !== false && isPcSeat(room, ru.viewer) && speechParts(text)) c = room.chars[ru.viewer];
     const cmd = ui.cmd && c && ui.cmd.cid === c.id ? ui.cmd : null;
     // a character without TP (enemies often have none) just declares it
     const spend = cmd && cmd.tp && Number.isFinite(c.cur.TP) ? cmd.tp : null;
@@ -4244,6 +4318,7 @@ function bindRoomStatic() {
   $('cmdClear').onclick = () => { ui.cmd = null; $('sayText').value = ''; renderRoom(); };
   $('replyClear').onclick = () => { ui.reply = null; renderRoom(); };
   $('sayText').addEventListener('input', typingInput);
+  $('sayText').addEventListener('input', updateSayAs);
   $('sayText').addEventListener('blur', () => typingOff());
   $('sayText').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
   $('copyLog').onclick = async () => {
