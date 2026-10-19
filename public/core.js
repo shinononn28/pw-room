@@ -254,8 +254,38 @@ function rangeProblems(d) {
 }
 const cleanAutoFx = list => Array.isArray(list) ? [...new Set(list.map(String))].slice(0, 60) : null;
 // end of a round: hand exchange, the round number goes up, the top of the order acts, round-long effects end
+// ----- round draws and the round-end exchange: each player does it, the room keeps track of who has -----
+const inCombat = room => !!(room.turn.current || (room.turn.pick || []).length || room.turn.ending || (room.turn.done || []).length);
+const pcSeats = room => Object.values(room.chars).filter(c => c.side === 'pc');
+// cards a seat draws at the start of this round: a PC its share (from round 2 unless set otherwise), the GM (enemies) per PC
+function roundDrawCount(room, seat) {
+  const st = room.settings;
+  if (seat === 'gm') return Object.values(room.chars).some(c => c.side === 'enemy' && !isDown(c)) ? (st.roundDrawEnemy ?? 2) * pcSeats(room).length : 0;
+  const c = room.chars[seat];
+  if (!c || c.side !== 'pc' || isDown(c)) return 0;
+  return room.turn.round === 1 && !st.roundDrawPcFirst ? 0 : (st.roundDrawPc ?? 2);
+}
+const drawPending = room => !inCombat(room) || room.turn.ending ? [] : ['gm', ...pcSeats(room).map(c => c.id)].filter(s => roundDrawCount(room, s) > 0 && !(room.turn.drew || []).includes(s));
+const tradePending = room => room.turn.ending && (room.settings.exchange ?? 1) > 0 ? pcSeats(room).filter(c => !isDown(c) && !(room.turn.traded || []).includes(c.id)).map(c => c.id) : [];
+// the last actor is done: with an exchange set, the round pauses for it (the GM then starts the next round)
+function endOfRound(room, by) {
+  if ((room.settings.exchange ?? 1) > 0 && !room.turn.ending && pcSeats(room).filter(c => !isDown(c)).length >= 2) {
+    room.turn.ending = true; room.turn.current = null; room.turn.pick = null; room.turn.traded = [];
+    log(room, { tab: opsTab(room), type: 'round', by, text: `第${room.turn.round}ラウンド終了：手札交換（PCは味方と${room.settings.exchange}枚ずつ）` });
+    return;
+  }
+  nextRound(room, by);
+}
+// HP loss from outside the value box (collisions): crossing 0 tells 戦闘不能 like setValue does
+function hurt(room, ch, n, by) {
+  if (!Number.isFinite(ch.cur.HP) || !n) return;
+  const wasDown = isDown(ch);
+  ch.cur.HP -= n;
+  if (isDown(ch) !== wasDown) log(room, { tab: opsTab(room), type: 'sys', by, cid: ch.id, fx: isDown(ch) ? 'ko' : undefined, text: isDown(ch) ? `${ch.data.name}は戦闘不能になりました` : `${ch.data.name}が戦闘不能から復帰しました` });
+}
 function nextRound(room, by) {
-  log(room, { tab: opsTab(room), type: 'round', by, text: `第${room.turn.round}ラウンド終了（手札交換のタイミングです）` });
+  if (!room.turn.ending) log(room, { tab: opsTab(room), type: 'round', by, text: `第${room.turn.round}ラウンド終了（手札交換のタイミングです）` });
+  room.turn.ending = false; room.turn.traded = []; room.turn.drew = [];
   room.turn.round += 1;
   room.turn.done = [];
   const next = seatNext(room);
@@ -341,7 +371,7 @@ function newRoom(name) {
   return {
     id: uid('r'), name: name || '新しい部屋', createdAt: Date.now(),
     players: {},
-    settings: { jokers: 2, decks: 1, opsTab: 'battle', digestTab: 'main', gmSeesSecret: true, logValues: true },
+    settings: { jokers: 2, decks: 1, opsTab: 'battle', digestTab: 'main', gmSeesSecret: true, logValues: true, roundDrawPc: 2, roundDrawPcFirst: false, roundDrawEnemy: 2, exchange: 1 },
     turn: { round: 1, current: null },
     chars: {},
     cards: { deck: newDeck(2), discard: [], hands: { gm: [] } },
@@ -561,7 +591,8 @@ function applyInner(room, a, by, pid) {
       need(turnOrder(room).length, 'キャラクターがいません');
       need(!(room.turn.pick || []).length, '同値のキャラから、次に動くキャラを選んでください');
       if (room.turn.current) room.turn.done = [...new Set([...(room.turn.done || []), room.turn.current])];
-      if (!nextActors(room).length) { nextRound(room, by); return; }       // everyone has acted: the round ends
+      if (room.turn.ending) { nextRound(room, by); return; }              // after the exchange: the next round
+      if (!nextActors(room).length) { endOfRound(room, by); return; }      // everyone has acted: the round ends
       const text = seatNext(room);
       log(room, { tab: opsTab(room), type: 'turn', by, cid: room.turn.current || undefined, text });
       expireEffects(room, by, false);
@@ -577,12 +608,12 @@ function applyInner(room, a, by, pid) {
     }
     case 'endRound': {
       need(by === 'gm', 'ラウンドを進められるのはGMだけです');
-      nextRound(room, by);
+      if (room.turn.ending) nextRound(room, by); else endOfRound(room, by);
       return;
     }
     case 'endCombat': {
       need(by === 'gm', '戦闘を終えられるのはGMだけです');
-      room.turn.current = null; room.turn.pick = null; room.turn.done = [];
+      room.turn.current = null; room.turn.pick = null; room.turn.done = []; room.turn.ending = false; room.turn.drew = []; room.turn.traded = [];
       room.turn.seq = (room.turn.seq || 0) + 1;
       for (const c of Object.values(room.chars)) c.effects = (c.effects || []).filter(e => e.dur === 'manual');
       log(room, { tab: opsTab(room), type: 'round', by, text: `戦闘終了（第${room.turn.round}ラウンド）` });
@@ -590,7 +621,7 @@ function applyInner(room, a, by, pid) {
     }
     case 'resetRound': {
       need(by === 'gm', 'ラウンドを戻せるのはGMだけです');
-      room.turn = { round: 1, current: null, seq: (room.turn.seq || 0), done: [], pick: null };
+      room.turn = { round: 1, current: null, seq: (room.turn.seq || 0), done: [], pick: null, drew: [], traded: [], ending: false };
       const first = seatNext(room);
       for (const c of Object.values(room.chars)) c.effects = (c.effects || []).filter(e => e.dur === 'manual');
       log(room, { tab: opsTab(room), type: 'round', by, start: 1, cid: room.turn.current || undefined, text: `戦闘開始：第1ラウンド${first ? `、${first}` : ''}` });
@@ -627,6 +658,45 @@ function applyInner(room, a, by, pid) {
       // a GM draw only shows how many; PC draws are open to the PC side
       // the count is 'count': 'n' is the server's log sequence number
       log(room, { tab: opsTab(room), type: 'draw', by, seat, count: n, cards: got, secretCards: seat === 'gm' });
+      return;
+    }
+    case 'roundDraw': { // this round's draw, once per seat
+      const seat = a.seat || by;
+      need(seat === by || by === 'gm', '他の人の手札は操作できません');
+      need(inCombat(room) && !room.turn.ending, '戦闘中のラウンドの始めに引きます');
+      const n = roundDrawCount(room, seat);
+      need(n > 0, 'このラウンドに引く枚数はありません');
+      need(!(room.turn.drew || []).includes(seat), 'このラウンドのドローは済んでいます');
+      need(room.cards.deck.length >= n, `山札が足りません（残り${room.cards.deck.length}枚）。捨て札を山札に戻してください`);
+      const got = room.cards.deck.splice(0, n);
+      (room.cards.hands[seat] = room.cards.hands[seat] || []).push(...got);
+      room.turn.drew = [...(room.turn.drew || []), seat];
+      log(room, { tab: opsTab(room), type: 'draw', by, seat, count: n, cards: got, secretCards: seat === 'gm', round: room.turn.round });
+      return;
+    }
+    case 'trade': { // the round-end exchange: cards to an ally, once per PC
+      const seat = a.seat || by;
+      need(seat === by || by === 'gm', '他の人の手札は渡せません');
+      need(room.turn.ending, '手札の交換はラウンドの終わりに行ないます');
+      need(room.chars[seat] && room.chars[seat].side === 'pc' && room.chars[a.to] && room.chars[a.to].side === 'pc' && seat !== a.to, '交換できるのは味方のPC同士です');
+      need(!(room.turn.traded || []).includes(seat), 'このラウンドの交換は済んでいます');
+      const k = room.settings.exchange ?? 1;
+      const hand = room.cards.hands[seat] || [];
+      need(Array.isArray(a.cards) && a.cards.length === k && a.cards.every(c => hand.includes(c)), `渡すカードを${k}枚選んでください`);
+      room.cards.hands[seat] = hand.filter(c => !a.cards.includes(c));
+      (room.cards.hands[a.to] = room.cards.hands[a.to] || []).push(...a.cards);
+      room.turn.traded = [...(room.turn.traded || []), seat];
+      log(room, { tab: opsTab(room), type: 'give', by, seat, to: a.to, toName: seatName(room, a.to), cards: a.cards, trade: true });
+      return;
+    }
+    case 'collide': { // 衝突: moving into an occupied square — the amounts are the player's to set (buffs, immunity)
+      need(ch && canControlChar(room, by, a.cid), 'このコマは動かせません');
+      const t = room.chars[a.target];
+      need(t && t.id !== ch.id && t.x != null && ch.x != null, '衝突する相手がいません');
+      const other = Math.max(0, Math.min(99, a.other | 0)), self = Math.max(0, Math.min(99, a.self | 0));
+      log(room, { tab: opsTab(room), type: 'collide', by, cid: ch.id, target: t.id, other, self,
+        text: `${ch.data.name}が${t.data.name}に衝突：${t.data.name} −${other}${Number.isFinite(t.cur.HP) ? `（HP ${t.cur.HP} → ${t.cur.HP - other}）` : ''}／${ch.data.name} −${self}${Number.isFinite(ch.cur.HP) ? `（HP ${ch.cur.HP} → ${ch.cur.HP - self}）` : ''}` });
+      hurt(room, t, other, by); hurt(room, ch, self, by);
       return;
     }
     case 'play': {
@@ -853,6 +923,7 @@ function migrateRoom(room) {
   room.players = room.players || {};
   room.settings.decks = room.settings.decks || 1;
   if (!('digestTab' in room.settings)) room.settings.digestTab = 'main';
+  for (const [k, v] of Object.entries({ roundDrawPc: 2, roundDrawPcFirst: false, roundDrawEnemy: 2, exchange: 1 })) if (!(k in room.settings)) room.settings[k] = v;
   for (const ch of Object.values(room.chars)) {
     if (!ch.data.stats || ch.data.skills.some(s => !('tp' in s))) { try { ch.data = normalizeChar({ ...ch.data, values: ch.data.stats ? Object.fromEntries(Object.entries(ch.data.stats)) : ch.data.values }); } catch (e) {} }
     if (ch.variation == null) ch.variation = -1;
@@ -962,5 +1033,5 @@ function viewRoom(room, seat, pid) {
   return r;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { rangeProblems, effectTarget, rangeIssue, nextActors, isDown, formWord, isJokerWeapon, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
+  module.exports = { rangeProblems, effectTarget, rangeIssue, nextActors, isDown, roundDrawCount, drawPending, tradePending, inCombat, formWord, isJokerWeapon, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
 }

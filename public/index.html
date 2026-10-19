@@ -132,6 +132,14 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pink)}
 .tok.down{filter:grayscale(.9);opacity:.55}
 /* a value changed with ± and about to be sent */
 .ostat b.draft{color:var(--gold)}
+/* round draw / exchange: a line in the tray for whoever still has to do it */
+.trayRow .btn.roundAct{background:var(--gold);border-color:var(--gold);color:#2A1C00;font-weight:800;white-space:nowrap;animation:turnTag 1.6s ease-in-out infinite}
+.trayRow .btn.roundAct.trade{background:#5DADEC;border-color:#5DADEC;color:#06223A}
+.roundAct:disabled{animation:none;opacity:.75}
+@media (prefers-reduced-motion:reduce){ .roundAct{animation:none} }
+.pendTag{align-self:flex-start;font-size:.6rem;font-weight:800;line-height:1.5;padding:0 6px;border-radius:4px;background:var(--gold);color:#2A1C00}
+.rbPend{display:block;font-size:.68rem;font-weight:700;color:#B26A00;margin-top:1px}
+.htab.need:not(.on){border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}
 /* 台詞「」: dialogue in a bubble of the speaker's colour, action lines (ト書き) quieter beneath */
 .speech{display:grid;gap:4px;margin-top:2px;justify-items:start}
 .speech .sline{font-size:1.05em;line-height:1.65;padding:5px 12px;border-radius:4px 14px 14px 14px;white-space:pre-wrap;word-break:break-word;max-width:100%;
@@ -1619,8 +1627,38 @@ function rangeProblems(d) {
 }
 const cleanAutoFx = list => Array.isArray(list) ? [...new Set(list.map(String))].slice(0, 60) : null;
 // end of a round: hand exchange, the round number goes up, the top of the order acts, round-long effects end
+// ----- round draws and the round-end exchange: each player does it, the room keeps track of who has -----
+const inCombat = room => !!(room.turn.current || (room.turn.pick || []).length || room.turn.ending || (room.turn.done || []).length);
+const pcSeats = room => Object.values(room.chars).filter(c => c.side === 'pc');
+// cards a seat draws at the start of this round: a PC its share (from round 2 unless set otherwise), the GM (enemies) per PC
+function roundDrawCount(room, seat) {
+  const st = room.settings;
+  if (seat === 'gm') return Object.values(room.chars).some(c => c.side === 'enemy' && !isDown(c)) ? (st.roundDrawEnemy ?? 2) * pcSeats(room).length : 0;
+  const c = room.chars[seat];
+  if (!c || c.side !== 'pc' || isDown(c)) return 0;
+  return room.turn.round === 1 && !st.roundDrawPcFirst ? 0 : (st.roundDrawPc ?? 2);
+}
+const drawPending = room => !inCombat(room) || room.turn.ending ? [] : ['gm', ...pcSeats(room).map(c => c.id)].filter(s => roundDrawCount(room, s) > 0 && !(room.turn.drew || []).includes(s));
+const tradePending = room => room.turn.ending && (room.settings.exchange ?? 1) > 0 ? pcSeats(room).filter(c => !isDown(c) && !(room.turn.traded || []).includes(c.id)).map(c => c.id) : [];
+// the last actor is done: with an exchange set, the round pauses for it (the GM then starts the next round)
+function endOfRound(room, by) {
+  if ((room.settings.exchange ?? 1) > 0 && !room.turn.ending && pcSeats(room).filter(c => !isDown(c)).length >= 2) {
+    room.turn.ending = true; room.turn.current = null; room.turn.pick = null; room.turn.traded = [];
+    log(room, { tab: opsTab(room), type: 'round', by, text: `第${room.turn.round}ラウンド終了：手札交換（PCは味方と${room.settings.exchange}枚ずつ）` });
+    return;
+  }
+  nextRound(room, by);
+}
+// HP loss from outside the value box (collisions): crossing 0 tells 戦闘不能 like setValue does
+function hurt(room, ch, n, by) {
+  if (!Number.isFinite(ch.cur.HP) || !n) return;
+  const wasDown = isDown(ch);
+  ch.cur.HP -= n;
+  if (isDown(ch) !== wasDown) log(room, { tab: opsTab(room), type: 'sys', by, cid: ch.id, fx: isDown(ch) ? 'ko' : undefined, text: isDown(ch) ? `${ch.data.name}は戦闘不能になりました` : `${ch.data.name}が戦闘不能から復帰しました` });
+}
 function nextRound(room, by) {
-  log(room, { tab: opsTab(room), type: 'round', by, text: `第${room.turn.round}ラウンド終了（手札交換のタイミングです）` });
+  if (!room.turn.ending) log(room, { tab: opsTab(room), type: 'round', by, text: `第${room.turn.round}ラウンド終了（手札交換のタイミングです）` });
+  room.turn.ending = false; room.turn.traded = []; room.turn.drew = [];
   room.turn.round += 1;
   room.turn.done = [];
   const next = seatNext(room);
@@ -1706,7 +1744,7 @@ function newRoom(name) {
   return {
     id: uid('r'), name: name || '新しい部屋', createdAt: Date.now(),
     players: {},
-    settings: { jokers: 2, decks: 1, opsTab: 'battle', digestTab: 'main', gmSeesSecret: true, logValues: true },
+    settings: { jokers: 2, decks: 1, opsTab: 'battle', digestTab: 'main', gmSeesSecret: true, logValues: true, roundDrawPc: 2, roundDrawPcFirst: false, roundDrawEnemy: 2, exchange: 1 },
     turn: { round: 1, current: null },
     chars: {},
     cards: { deck: newDeck(2), discard: [], hands: { gm: [] } },
@@ -1926,7 +1964,8 @@ function applyInner(room, a, by, pid) {
       need(turnOrder(room).length, 'キャラクターがいません');
       need(!(room.turn.pick || []).length, '同値のキャラから、次に動くキャラを選んでください');
       if (room.turn.current) room.turn.done = [...new Set([...(room.turn.done || []), room.turn.current])];
-      if (!nextActors(room).length) { nextRound(room, by); return; }       // everyone has acted: the round ends
+      if (room.turn.ending) { nextRound(room, by); return; }              // after the exchange: the next round
+      if (!nextActors(room).length) { endOfRound(room, by); return; }      // everyone has acted: the round ends
       const text = seatNext(room);
       log(room, { tab: opsTab(room), type: 'turn', by, cid: room.turn.current || undefined, text });
       expireEffects(room, by, false);
@@ -1942,12 +1981,12 @@ function applyInner(room, a, by, pid) {
     }
     case 'endRound': {
       need(by === 'gm', 'ラウンドを進められるのはGMだけです');
-      nextRound(room, by);
+      if (room.turn.ending) nextRound(room, by); else endOfRound(room, by);
       return;
     }
     case 'endCombat': {
       need(by === 'gm', '戦闘を終えられるのはGMだけです');
-      room.turn.current = null; room.turn.pick = null; room.turn.done = [];
+      room.turn.current = null; room.turn.pick = null; room.turn.done = []; room.turn.ending = false; room.turn.drew = []; room.turn.traded = [];
       room.turn.seq = (room.turn.seq || 0) + 1;
       for (const c of Object.values(room.chars)) c.effects = (c.effects || []).filter(e => e.dur === 'manual');
       log(room, { tab: opsTab(room), type: 'round', by, text: `戦闘終了（第${room.turn.round}ラウンド）` });
@@ -1955,7 +1994,7 @@ function applyInner(room, a, by, pid) {
     }
     case 'resetRound': {
       need(by === 'gm', 'ラウンドを戻せるのはGMだけです');
-      room.turn = { round: 1, current: null, seq: (room.turn.seq || 0), done: [], pick: null };
+      room.turn = { round: 1, current: null, seq: (room.turn.seq || 0), done: [], pick: null, drew: [], traded: [], ending: false };
       const first = seatNext(room);
       for (const c of Object.values(room.chars)) c.effects = (c.effects || []).filter(e => e.dur === 'manual');
       log(room, { tab: opsTab(room), type: 'round', by, start: 1, cid: room.turn.current || undefined, text: `戦闘開始：第1ラウンド${first ? `、${first}` : ''}` });
@@ -1992,6 +2031,45 @@ function applyInner(room, a, by, pid) {
       // a GM draw only shows how many; PC draws are open to the PC side
       // the count is 'count': 'n' is the server's log sequence number
       log(room, { tab: opsTab(room), type: 'draw', by, seat, count: n, cards: got, secretCards: seat === 'gm' });
+      return;
+    }
+    case 'roundDraw': { // this round's draw, once per seat
+      const seat = a.seat || by;
+      need(seat === by || by === 'gm', '他の人の手札は操作できません');
+      need(inCombat(room) && !room.turn.ending, '戦闘中のラウンドの始めに引きます');
+      const n = roundDrawCount(room, seat);
+      need(n > 0, 'このラウンドに引く枚数はありません');
+      need(!(room.turn.drew || []).includes(seat), 'このラウンドのドローは済んでいます');
+      need(room.cards.deck.length >= n, `山札が足りません（残り${room.cards.deck.length}枚）。捨て札を山札に戻してください`);
+      const got = room.cards.deck.splice(0, n);
+      (room.cards.hands[seat] = room.cards.hands[seat] || []).push(...got);
+      room.turn.drew = [...(room.turn.drew || []), seat];
+      log(room, { tab: opsTab(room), type: 'draw', by, seat, count: n, cards: got, secretCards: seat === 'gm', round: room.turn.round });
+      return;
+    }
+    case 'trade': { // the round-end exchange: cards to an ally, once per PC
+      const seat = a.seat || by;
+      need(seat === by || by === 'gm', '他の人の手札は渡せません');
+      need(room.turn.ending, '手札の交換はラウンドの終わりに行ないます');
+      need(room.chars[seat] && room.chars[seat].side === 'pc' && room.chars[a.to] && room.chars[a.to].side === 'pc' && seat !== a.to, '交換できるのは味方のPC同士です');
+      need(!(room.turn.traded || []).includes(seat), 'このラウンドの交換は済んでいます');
+      const k = room.settings.exchange ?? 1;
+      const hand = room.cards.hands[seat] || [];
+      need(Array.isArray(a.cards) && a.cards.length === k && a.cards.every(c => hand.includes(c)), `渡すカードを${k}枚選んでください`);
+      room.cards.hands[seat] = hand.filter(c => !a.cards.includes(c));
+      (room.cards.hands[a.to] = room.cards.hands[a.to] || []).push(...a.cards);
+      room.turn.traded = [...(room.turn.traded || []), seat];
+      log(room, { tab: opsTab(room), type: 'give', by, seat, to: a.to, toName: seatName(room, a.to), cards: a.cards, trade: true });
+      return;
+    }
+    case 'collide': { // 衝突: moving into an occupied square — the amounts are the player's to set (buffs, immunity)
+      need(ch && canControlChar(room, by, a.cid), 'このコマは動かせません');
+      const t = room.chars[a.target];
+      need(t && t.id !== ch.id && t.x != null && ch.x != null, '衝突する相手がいません');
+      const other = Math.max(0, Math.min(99, a.other | 0)), self = Math.max(0, Math.min(99, a.self | 0));
+      log(room, { tab: opsTab(room), type: 'collide', by, cid: ch.id, target: t.id, other, self,
+        text: `${ch.data.name}が${t.data.name}に衝突：${t.data.name} −${other}${Number.isFinite(t.cur.HP) ? `（HP ${t.cur.HP} → ${t.cur.HP - other}）` : ''}／${ch.data.name} −${self}${Number.isFinite(ch.cur.HP) ? `（HP ${ch.cur.HP} → ${ch.cur.HP - self}）` : ''}` });
+      hurt(room, t, other, by); hurt(room, ch, self, by);
       return;
     }
     case 'play': {
@@ -2218,6 +2296,7 @@ function migrateRoom(room) {
   room.players = room.players || {};
   room.settings.decks = room.settings.decks || 1;
   if (!('digestTab' in room.settings)) room.settings.digestTab = 'main';
+  for (const [k, v] of Object.entries({ roundDrawPc: 2, roundDrawPcFirst: false, roundDrawEnemy: 2, exchange: 1 })) if (!(k in room.settings)) room.settings[k] = v;
   for (const ch of Object.values(room.chars)) {
     if (!ch.data.stats || ch.data.skills.some(s => !('tp' in s))) { try { ch.data = normalizeChar({ ...ch.data, values: ch.data.stats ? Object.fromEntries(Object.entries(ch.data.stats)) : ch.data.values }); } catch (e) {} }
     if (ch.variation == null) ch.variation = -1;
@@ -2327,7 +2406,7 @@ function viewRoom(room, seat, pid) {
   return r;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { rangeProblems, effectTarget, rangeIssue, nextActors, isDown, formWord, isJokerWeapon, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
+  module.exports = { rangeProblems, effectTarget, rangeIssue, nextActors, isDown, roundDrawCount, drawPending, tradePending, inCombat, formWord, isJokerWeapon, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
 }
 // =====================================================================
 // local storage + UI
@@ -2527,6 +2606,7 @@ function logSounds(room, ru) {
     else if (l.type === 'turn' && l.cid) names.push(playsChar(room, room.chars[l.cid]) ? 'myturn' : 'turn');
     else if (l.type === 'play' || l.type === 'weapon' || l.type === 'give' || l.type === 'pick') names.push('card');
     else if (l.type === 'draw') names.push('draw');
+    else if (l.type === 'collide') names.push('damage');
     else if (l.type === 'value' && l.key === 'HP') {
       const prev = ui.sfxTo[l.id] ?? l.from; ui.sfxTo[l.id] = l.to;
       names.push(l.to < prev ? 'damage' : 'heal');
@@ -3005,7 +3085,7 @@ function renderMap(room, ru) {
     <div class="oitem ${c.id === cur ? 'now' : ''} ${ui.selTok === c.id ? 'sel' : ''} ${done.has(c.id) && c.id !== cur ? 'acted' : ''} ${pick.includes(c.id) ? 'tied' : ''} ${isDown(c) ? 'down' : ''} ${c.side}" data-charopen="${c.id}" role="button" tabindex="0" title="${esc(c.data.name)}の詳細を開く">
       ${canPick(c) ? `<button class="btn small primary pickGo" data-pickturn="${c.id}">動く</button>` : ''}
       <div class="ohead">${i != null ? `<span class="onum">${i + 1}</span>` : ''}${ptImg(c, null, 'pt')}${(c.effects || []).length ? `<span class="ofxN" title="効果${c.effects.length}件">${c.effects.length}</span>` : ''}
-        <div class="otext"><span class="oname" style="${nameCss(c.color)}">${esc(c.data.name)}</span>${isDown(c) ? '<span class="koTag">戦闘不能</span>' : ''}
+        <div class="otext"><span class="oname" style="${nameCss(c.color)}">${esc(c.data.name)}</span>${isDown(c) ? '<span class="koTag">戦闘不能</span>' : pendT.includes(c.id) ? '<span class="pendTag">未交換</span>' : pendD.includes(c.id) ? '<span class="pendTag">未ドロー</span>' : ''}
           ${v === 'gm' && c.side !== 'npc' ? `<button class="oset" data-setturn="${c.id}" title="${c.id === cur ? '手番を外す' : 'このキャラの手番にする'}" aria-label="${esc(c.data.name)}の手番にする">▶</button>` : ''}
           <span class="ometa">${'HP' in c.cur ? `<span class="phoneOnly ${c.data.stats.HP && c.data.stats.HP.max && c.cur.HP / c.data.stats.HP.max <= 0.5 ? 'hpLow' : ''}">HP${c.cur.HP}${'TP' in c.cur ? ` TP${c.cur.TP}` : ''}<br></span>` : ''}${c.data.stats['SS値'] ? `SS${c.cur['SS値']}` : ''}${c.data.stats['移動値'] ? `　移${c.cur['移動値']}` : ''}${c.x == null ? '　盤外' : `　${coordName(c.x, c.y)}`}</span></div>
 </div>
@@ -3015,7 +3095,9 @@ function renderMap(room, ru) {
   // the last one yet to act ends the round with the same button; a tie on SS値 asks who goes
   const lastUp = cur && !order.some(c => c.id !== cur && !done.has(c.id) && !isDown(c));
   const pickable = pick.length && (v === 'gm' || pick.includes(v));
-  const nextBtn = pickable ? '<button class="btn small primary" data-pickmenu title="SS値が同値のキャラから選ぶ">誰が動く？</button>'
+  const ending = !!room.turn.ending;
+  const nextBtn = ending ? (v === 'gm' ? `<button class="btn small primary" data-nextturn title="交換を終えて次のラウンドへ">次のラウンドへ ›</button>` : '<span class="btn small primary slot" aria-hidden="true">交換中</span>')
+    : pickable ? '<button class="btn small primary" data-pickmenu title="SS値が同値のキャラから選ぶ">誰が動く？</button>'
     : canNext ? `<button class="btn small primary" data-nextturn title="${lastUp ? 'ラウンドを終えて次のラウンドへ' : '次のキャラの手番へ'}">${lastUp ? 'ラウンド終了 ›' : '次の手番 ›'}</button>`
     : !cur && v === 'gm' && order.length ? '<button class="btn small primary" data-resetround title="第1ラウンド、SS値がいちばん大きいキャラから">戦闘開始</button>'
     : v === 'gm' || isPcSeat(room, v) ? '<span class="btn small primary slot" aria-hidden="true">次の手番 ›</span>' : '';
@@ -3023,8 +3105,10 @@ function renderMap(room, ru) {
   // round: a status line on wide screens, a chip in the phone tool row; the GM opens the round menu from it
   const curCh = cur && room.chars[cur];
   const roundAttrs = v === 'gm' ? 'data-roundmenu title="ラウンドの操作"' : 'tabindex="-1"';
-  const inCombat = cur || pick.length;
-  const roundBar = `<button class="roundBar ${inCombat ? 'on' : ''}" ${roundAttrs}>${inCombat ? `第<b>${room.turn.round}</b>ラウンド<span class="rbTurn">${curCh ? `・<i style="${nameCss(curCh.color)}">${esc(curCh.data.name)}</i>の手番` : pick.length ? `・SS値${ssOf(room.chars[pick[0]])}が同値：選択中` : ''}</span>` : '戦闘前'}${v === 'gm' ? '<span class="rbMenu">▾</span>' : ''}</button>`;
+  const inCombat = cur || pick.length || ending;
+  // who still has to draw / trade this round (the GM sees it on the round line)
+  const pendD = drawPending(room), pendT = tradePending(room);
+  const roundBar = `<button class="roundBar ${inCombat ? 'on' : ''}" ${roundAttrs}>${inCombat ? `第<b>${room.turn.round}</b>ラウンド<span class="rbTurn">${ending ? '終了・手札交換' : curCh ? `・<i style="${nameCss(curCh.color)}">${esc(curCh.data.name)}</i>の手番` : pick.length ? `・SS値${ssOf(room.chars[pick[0]])}が同値：選択中` : ''}</span>` : '戦闘前'}${v === 'gm' ? '<span class="rbMenu">▾</span>' : ''}</button>`;
   const roundChip = `<button class="roundChip ${inCombat ? 'on' : ''}" ${roundAttrs}>${inCombat ? `第<b>${room.turn.round}</b>R` : '戦闘前'}</button>`;
   const ranged = sel && canControlChar(room, v, sel.id) && sel.x != null ? weaponsNow(sel).filter(x => x.r) : [];
   const rk = sel && ui.rangeW && ui.rangeW.cid === sel.id ? ui.rangeW.k : '';
@@ -3086,9 +3170,15 @@ function renderCards(room, ru) {
   const jokerUp = unisonReady(mySeat === 'gm' ? Object.values(room.chars).filter(c => gmOwned(c) && c.side !== 'enemy') : [room.chars[mySeat]].filter(Boolean));
   const turnTag = !tc ? '' : mySeat === tc.id ? `<span class="myTurn">${v === 'gm' ? '' : '<span class="hlong">あなたの</span>'}手番</span>`
     : mySeat === 'gm' && tc.side === 'enemy' ? `<span class="myTurn">${esc(tc.data.name)}の手番</span>` : '';
+  const dn = roundDrawCount(room, mySeat), needDraw = dn > 0 && drawPending(room).includes(mySeat);
+  const tk = room.settings.exchange ?? 1, needTrade = tradePending(room).includes(mySeat);
+  // the round's draw / exchange takes the place of the plain draw control, so the tray never changes height
+  const roundAct = needDraw ? `<button class="btn roundAct" data-rounddraw title="第${room.turn.round}ラウンドのドロー">ラウンドのドロー：${dn}枚</button>`
+    : needTrade ? `<button class="btn roundAct trade" data-trade ${n === tk ? '' : 'disabled'} title="ラウンド終了：味方と${tk}枚交換">${n === tk ? '交換：選んだカードを渡す' : `交換：${tk}枚選んでください`}</button>` : '';
+  const seatNeeds = s => (roundDrawCount(room, s) > 0 && drawPending(room).includes(s)) || tradePending(room).includes(s);
   // GM with held characters: one tab per hand (name + count)
   const turnSeat = tc ? (tc.side === 'enemy' ? 'gm' : tc.id) : null;
-  const seatTabs = gmSeats.length > 1 ? `<span class="handTabs" role="tablist" aria-label="操作する手札">${gmSeats.map(s => `<button role="tab" class="htab ${s === mySeat ? 'on' : ''} ${s === turnSeat ? 'turn' : ''}" data-handseat="${s}" aria-selected="${s === mySeat}" ${s === turnSeat ? 'title="手番"' : ''}>${esc(s === 'gm' ? 'GM' : room.chars[s].data.name)}<b>${(room.cards.hands[s] || []).length}</b></button>`).join('')}</span>` : '';
+  const seatTabs = gmSeats.length > 1 ? `<span class="handTabs" role="tablist" aria-label="操作する手札">${gmSeats.map(s => ` <button role="tab" class="htab ${s === mySeat ? 'on' : ''} ${s === turnSeat ? 'turn' : ''} ${seatNeeds(s) ? 'need' : ''}" data-handseat="${s}" aria-selected="${s === mySeat}" ${s === turnSeat ? 'title="手番"' : ''}>${esc(s === 'gm' ? 'GM' : room.chars[s].data.name)}<b>${(room.cards.hands[s] || []).length}</b></button>`).join('')}</span>` : '';
   setHtml($('cardsP'), `
     <div class="trayRow handHead">
       ${seatTabs || `<b class="handName">${esc(seatName(room, mySeat))}<span class="hlong">の手札</span></b><span class="count">${myHand.length}<small>枚</small></span>${turnTag}`}
@@ -3102,9 +3192,8 @@ function renderCards(room, ru) {
       <button class="btn primary" data-weapon>武装を使う</button>
       <button class="btn" data-play="evade" ${n ? '' : 'disabled'}>回避で出す</button>
       <button class="btn" data-play="other" ${n ? '' : 'disabled'}>その他で出す</button>
-      ${isPcSeat(room, mySeat) && allies.length ? `<button class="btn" data-give ${n ? '' : 'disabled'}>渡す</button>` : ''}
       <input type="text" class="memo" id="memo" placeholder="メモ（例：脚へ）" value="${esc(ui.memo)}">
-      <span class="drawBox"><button class="step" data-drawstep="-1" aria-label="減らす">−</button><b>${ui.drawN}</b><button class="step" data-drawstep="1" aria-label="増やす">＋</button><button class="btn small" data-draw>枚ドロー</button></span>
+      ${roundAct || `<span class="drawBox"><button class="step" data-drawstep="-1" aria-label="減らす">−</button><b>${ui.drawN}</b><button class="step" data-drawstep="1" aria-label="増やす">＋</button><button class="btn small" data-draw>枚ドロー</button></span>`}
     </div>`);
 }
 // other people's hands (modal)
@@ -3189,7 +3278,7 @@ function renderChars(room, ru) {
           ${v === 'gm' || v === c.id ? `<button class="btn small danger" data-delchar="${c.id}" aria-label="${esc(c.data.name)}を外す">×</button>` : ''}</div>
         <div class="vals">${keys.map(k => {
           const st = c.data.stats[k] || {}, gauge = st.max != null;
-          if (!gauge) return `<span class="val">${esc(k)} ${can && v === 'gm' ? `<input type="number" value="${c.cur[k]}" data-vset data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(k)}">` : `<b>${c.cur[k]}</b>`}</span>`;
+          if (!gauge) return `<span class="val">${esc(k)} ${can ? `<input type="number" value="${c.cur[k]}" data-vset data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(k)}">` : `<b>${c.cur[k]}</b>`}${Number.isFinite(statStart(st)) && statStart(st) !== c.cur[k] ? `<span class="max">（基本${statStart(st)}）</span>` : ''}</span>`;
           return `<span class="val">${esc(k)}
             ${can ? `<button class="btn small" data-vstep="-1" data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(k)}を1減らす">−</button><input type="number" value="${c.cur[k]}" data-vset data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(k)}"><button class="btn small" data-vstep="1" data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(k)}を1増やす">＋</button>` : `<b>${c.cur[k]}</b>`}
             <span class="max">/ ${st.max}</span></span>`;
@@ -3247,10 +3336,10 @@ function logHtml(room, l) {
     </div></div>`;
   }
   if (l.type === 'pick') return `<div class="le ${cls}"><span class="who">${seatWho}</span>捨て札から ${l.cards.map(chipHtml).join(' ')} を拾った${l.memo ? '　' + esc(l.memo) : ''}<span class="t">${time}</span></div>`;
-  if (l.type === 'give') return `<div class="le ${cls}"><span class="who">${seatWho}</span>${l.cards.map(chipHtml).join(' ')} を${esc(l.toName)}に渡した<span class="t">${time}</span></div>`;
+  if (l.type === 'give') return `<div class="le ${cls}"><span class="who">${seatWho}</span>${l.trade ? '<span class="kind">交換</span>' : ''}${l.cards.map(chipHtml).join(' ')} を${esc(l.toName)}に渡した<span class="t">${time}</span></div>`;
   if (l.type === 'round') return `<div class="le round">${esc(l.text)}</div>`;
   if (l.type === 'turn') return `<div class="le turn">${esc(l.text)}<span class="t">${time}</span></div>`;
-  if (l.type === 'draw') return `<div class="le ${cls}"><span class="who">${seatWho}</span>${l.count ?? l.n}枚ドロー ${l.cards ? l.cards.map(chipHtml).join(' ') : ''}<span class="t">${time}</span></div>`;
+  if (l.type === 'draw') return `<div class="le ${cls}"><span class="who">${seatWho}</span>${l.round ? '<span class="kind">ラウンド</span>' : ''}${l.count ?? l.n}枚ドロー ${l.cards ? l.cards.map(chipHtml).join(' ') : ''}<span class="t">${time}</span></div>`;
   const showWho = l.type !== 'sys' && !(l.byName && l.text && l.text.startsWith(l.byName));
   // 換装 that changed the 立ち絵: small before → after pictures
   const swapPics = l.type === 'variation' && l.ptFrom && l.ptTo ? `<span class="swapPics"><img src="${esc(l.ptFrom)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">→<img src="${esc(l.ptTo)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()"></span>` : '';
@@ -3321,10 +3410,10 @@ function logPlain(room, l) {
   if (l.type === 'weapon') return `${l.charName}：` + l.weapons.map(w => { const at = Object.entries(w.attrs || {}).map(([k, x]) => `${k}:${x}`).join(' '); return `【武装】${w.suit ? SUIT[w.suit] + ' ' : ''}${w.name}${at ? `（${at}）` : ''}${w.text ? '\n' + w.text : ''}`; }).join('\n')
     + `\n使用した手札：${l.cards.length ? l.cards.map(cardText).join(' → ') : 'なし'}${l.targets.length ? `　対象：${l.targets.join('、')}` : ''}${l.memo ? `　${l.memo}` : ''}`;
   if (l.type === 'pick') return `［${sn}］捨て札から ${l.cards.map(cardText).join(' ')} を拾った`;
-  if (l.type === 'give') return `［${sn}］${l.cards.map(cardText).join(' ')} を${l.toName}に渡した`;
+  if (l.type === 'give') return `［${sn}］${l.trade ? '（交換）' : ''}${l.cards.map(cardText).join(' ')} を${l.toName}に渡した`;
   if (l.type === 'round') return `―― ${l.text} ――`;
   if (l.type === 'turn') return `▶ ${l.text}`;
-  if (l.type === 'draw') return `［${sn}］${l.count ?? l.n}枚ドロー${l.cards ? ' ' + l.cards.map(cardText).join(' ') : ''}`;
+  if (l.type === 'draw') return `［${sn}］${l.round ? 'ラウンドの' : ''}${l.count ?? l.n}枚ドロー${l.cards ? ' ' + l.cards.map(cardText).join(' ') : ''}`;
   return `［${l.type === 'sys' ? 'システム' : (l.byName || seatName(room, l.by))}］${l.text}`;
 }
 const CHAT_MAX = 300;   // lines kept on screen per tab (the rest stays in the log)
@@ -3806,7 +3895,7 @@ function charModalHtml(room, ru, cid) {
         : `<button class="btn small" data-formchange="${c.id}" data-idx="${i}">${esc(i === -1 ? '基本' : c.data.variations[i].name)}${formWord(c) === 'メタモルフォーゼ' ? 'へ' : 'に換装'}</button>`).join('')}${v === 'gm' && c.side !== 'pc' ? `<select data-formstyle="${c.id}" aria-label="形態変化の呼び方" title="形態変化の呼び方"><option value="swap" ${formWord(c) === '換装' ? 'selected' : ''}>換装と呼ぶ</option><option value="morph" ${formWord(c) === 'メタモルフォーゼ' ? 'selected' : ''}>メタモルフォーゼと呼ぶ</option></select>` : ''}</div>` : ''}
     <div class="vals">${keys.map(k => {
       const st = c.data.stats[k] || {};
-      if (st.max == null) return `<span class="val">${esc(k)} ${can && v === 'gm' ? `<input type="number" value="${c.cur[k]}" data-vset data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(k)}">` : `<b>${c.cur[k]}</b>`}</span>`;
+      if (st.max == null) return `<span class="val">${esc(k)} ${can ? `<input type="number" value="${c.cur[k]}" data-vset data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(k)}">` : `<b>${c.cur[k]}</b>`}${Number.isFinite(statStart(st)) && statStart(st) !== c.cur[k] ? `<span class="max">（基本${statStart(st)}）</span>` : ''}</span>`;
       return `<span class="val">${esc(k)}${can ? `<button class="btn small" data-vstep="-1" data-cid="${c.id}" data-key="${esc(k)}">−</button><input type="number" value="${c.cur[k]}" data-vset data-cid="${c.id}" data-key="${esc(k)}" aria-label="${esc(k)}"><button class="btn small" data-vstep="1" data-cid="${c.id}" data-key="${esc(k)}">＋</button>` : `<b>${c.cur[k]}</b>`}<span class="max">/ ${st.max}</span></span>`;
     }).join('')}</div>
     ${charSheetHtml(c, can)}
@@ -4220,14 +4309,35 @@ function bgmDialog(room, ru) {
     if ($('bgStop')) $('bgStop').onclick = () => { bgmStop(); closeDlg(); };
   });
 }
-function giveDialog(room, ru) {
-  const from = handSeat(room, ru);
-  const allies = Object.values(room.chars).filter(c => c.side === 'pc' && c.id !== from);
-  const cards = [...ui.sel];
-  openDlg(`<h1>味方に渡す</h1><p>${cards.map(chipHtml).join(' ')} を渡します。</p>
-    <div class="field">渡す相手<select id="gvTo">${allies.map(c => `<option value="${c.id}">${esc(c.data.name)}</option>`).join('')}</select></div>
-    <div class="row"><span style="flex:1"></span><button class="btn" data-close>やめる</button><button class="btn primary" id="gvOk">渡す</button></div>`, () => {
-    $('gvOk').onclick = () => { if (act({ type: 'give', cards, to: $('gvTo').value, seat: from }) !== FAIL) { ui.sel = []; closeDlg(); renderRoom(); } };
+// 衝突: the picked-up piece into another one. Both take 3 unless changed (buffs, 「衝突によるダメージを受けない」)
+const coverAt = (room, cell) => { const [x, y] = cell.split(',').map(Number); const c = Object.values(room.chars).find(o => o.x != null && cellsOf(o).some(([a, b]) => a === x && b === y)); return c ? c.id : null; };
+function collideDialog(room, ru, cid, tid) {
+  const a = room.chars[cid], b = room.chars[tid];
+  const key = `${room.turn.round}:${room.turn.current}:${cid}`;
+  ui.collide = ui.collide && ui.collide.key === key ? ui.collide : { key, n: 0 };
+  const mv = Number(a.cur['移動値']), nth = ui.collide.n + 1;
+  openDlg(`<h1>衝突</h1><p><b>${esc(a.data.name)}</b>を<b>${esc(b.data.name)}</b>にぶつけます。${Number.isFinite(mv) ? `<br><span class="muted">移動値${mv}・この手番${nth}回目${nth > mv ? '（移動値を超えています）' : ''}</span>` : ''}</p>
+    <div class="row" style="gap:14px;flex-wrap:wrap;margin:10px 0">
+      <label class="field" style="margin:0">${esc(b.data.name)}へのダメージ<input type="number" id="clOther" value="3" min="0" style="width:6em"></label>
+      <label class="field" style="margin:0">${esc(a.data.name)}へのダメージ<input type="number" id="clSelf" value="3" min="0" style="width:6em"></label></div>
+    <p class="muted" style="font-size:.85rem">衝突のダメージが増える効果や、受けない効果があるときは数字を変えてください。</p>
+    <div class="row" style="margin-top:12px"><button class="btn small ghost" id="clPick">${esc(b.data.name)}を選ぶ</button><span style="flex:1"></span><button class="btn" data-close>やめる</button><button class="btn primary" id="clOk">衝突する</button></div>`, () => {
+    $('clPick').onclick = () => { ui.selTok = tid; closeDlg(); renderRoom(); };
+    $('clOk').onclick = () => {
+      if (act({ type: 'collide', cid, target: tid, other: +$('clOther').value || 0, self: +$('clSelf').value || 0 }) === FAIL) return;
+      ui.collide.n++; closeDlg(); renderRoom();          // the piece stays picked up for another collision
+    };
+    $('clOk').focus();
+  });
+}
+// the round-end exchange: the chosen card(s) to one ally
+function tradeDialog(room, ru) {
+  const from = handSeat(room, ru), cards = [...ui.sel];
+  const allies = Object.values(room.chars).filter(c => c.side === 'pc' && c.id !== from && !isDown(c));
+  openDlg(`<h1>手札の交換</h1><p>${cards.map(chipHtml).join(' ')} を渡します。相手も1枚渡して交換になります。</p>
+    <div class="field">渡す相手<select id="trTo">${allies.map(c => `<option value="${c.id}">${esc(c.data.name)}</option>`).join('')}</select></div>
+    <div class="row"><span style="flex:1"></span><button class="btn" data-close>やめる</button><button class="btn primary" id="trOk">渡す</button></div>`, () => {
+    $('trOk').onclick = () => { if (act({ type: 'trade', cards, to: $('trTo').value, seat: from }) !== FAIL) { ui.sel = []; closeDlg(); renderRoom(); } };
   });
 }
 function fixCardDialog(room, card, from) {
@@ -4246,13 +4356,18 @@ function settingsDialog(room) {
     <div class="field">ジョーカーの枚数（山札を作り直したときに反映）<select id="stJk">${[0, 1, 2].map(n => `<option ${s.jokers === n ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
     <div class="field">操作の記録をすべて流すタブ<select id="stOps">${room.tabs.map(t => `<option value="${t.id}" ${s.opsTab === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div>
     <div class="field">要点（HP・TPの増減、出したカード、バリエーション変更）も表示するタブ<select id="stDigest"><option value="">表示しない</option>${room.tabs.map(t => `<option value="${t.id}" ${s.digestTab === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div>
+    <div class="field">ラウンド開始のドロー（各自がボタンで引きます）<div class="row" style="flex-wrap:wrap;gap:8px">
+      PC <input type="number" id="stDrawPc" min="0" max="10" value="${s.roundDrawPc ?? 2}" style="width:4.5em">枚
+      <label class="row"><input type="checkbox" id="stDrawFirst" ${s.roundDrawPcFirst ? 'checked' : ''}> 第1ラウンドも引く</label>
+      エネミー PC数× <input type="number" id="stDrawEn" min="0" max="10" value="${s.roundDrawEnemy ?? 2}" style="width:4.5em">枚</div></div>
+    <div class="field">ラウンド終了の手札交換（PC同士・0で交換しない）<select id="stTrade">${[0, 1, 2, 3].map(n => `<option value="${n}" ${(s.exchange ?? 1) === n ? 'selected' : ''}>${n}枚</option>`).join('')}</select></div>
     <label class="row" style="margin-bottom:6px"><input type="checkbox" id="stGmSecret" ${s.gmSeesSecret ? 'checked' : ''}> GMはすべての秘匿タブを見られる</label>
     <label class="row" style="margin-bottom:10px"><input type="checkbox" id="stLogVals" ${s.logValues !== false ? 'checked' : ''}> HPなどの数値の変更をログに残す（続けて増減した分は1行にまとめます）</label>
     ${ONLINE ? `<div class="field">GM用リンク（別の端末でGMとして入るとき用。PLには送らないでください）<div class="row"><input type="text" readonly value="${esc(gmLink(room.id))}" style="flex:1" id="stGmLink"><button class="btn small" id="stCopyGm">コピー</button></div></div>` : ''}
     <div class="row"><span style="flex:1"></span><button class="btn" data-close>やめる</button><button class="btn primary" id="stOk">保存</button></div>`, () => {
     if ($('stCopyGm')) $('stCopyGm').onclick = async () => { try { await navigator.clipboard.writeText($('stGmLink').value); toast('GM用リンクをコピーしました'); } catch (err) { $('stGmLink').select(); } };
     $('stOk').onclick = () => {
-      act({ type: 'settings', name: $('stName').value.trim() || room.name, patch: { digestTab: $('stDigest').value || null, decks: +$('stDecks').value, jokers: +$('stJk').value, opsTab: $('stOps').value, gmSeesSecret: $('stGmSecret').checked, logValues: $('stLogVals').checked } });
+      act({ type: 'settings', name: $('stName').value.trim() || room.name, patch: { roundDrawPc: Math.max(0, +$('stDrawPc').value || 0), roundDrawPcFirst: $('stDrawFirst').checked, roundDrawEnemy: Math.max(0, +$('stDrawEn').value || 0), exchange: +$('stTrade').value, digestTab: $('stDigest').value || null, decks: +$('stDecks').value, jokers: +$('stJk').value, opsTab: $('stOps').value, gmSeesSecret: $('stGmSecret').checked, logValues: $('stLogVals').checked } });
       closeDlg();
     };
   });
@@ -4342,12 +4457,13 @@ function commonClick(t, room, ru) {
   }
   if ((el = q('[data-drawstep]'))) { ui.drawN = Math.max(1, Math.min(20, ui.drawN + +el.dataset.drawstep)); renderCards(room, ru); return true; }
   if (q('[data-draw]')) { act({ type: 'draw', n: ui.drawN, seat: handSeat(room, ru) }); return true; }
+  if (q('[data-rounddraw]')) { act({ type: 'roundDraw', seat: handSeat(room, ru) }); return true; }
+  if (q('[data-trade]')) { tradeDialog(room, ru); return true; }
   if ((el = q('[data-handseat]'))) { ru.handSeat = el.dataset.handseat; renderCards(room, ru); return true; }
   if (q('[data-shuffleback]')) { act({ type: 'shuffleBack' }); return true; }
   if (q('[data-adddeck]')) { ask('トランプをもう1組、今の山札に混ぜてシャッフルします。', 'トランプを追加', () => act({ type: 'addDeck' })); return true; }
   if (q('[data-resetdeck]')) { ask(`全員の手札と捨て札を回収し、${room.settings.decks || 1}組で山札を作り直します。`, '山札を作り直す', () => act({ type: 'resetDeck' }), true); return true; }
   if (q('[data-discards]')) { discardDialog(room, ru); return true; }
-  if (q('[data-give]')) { giveDialog(room, ru); return true; }
   if ((el = q('[data-fixcard]'))) { fixCardDialog(room, el.dataset.fixcard, el.dataset.from); return true; }
 
   // characters
@@ -4452,6 +4568,10 @@ function mapClick(t, room, ru) {
   if (q('[data-endround]')) { act({ type: 'endRound' }); return true; }
   if (q('[data-resetround]')) { ask('ラウンド数を1に戻し、SS値がいちばん大きいキャラの手番から始めます。', '戦闘を開始', () => act({ type: 'resetRound' })); return true; }
   // a selected token + a tap on an empty square = move there (a square holds one piece; tapping a piece selects it)
+  if (ui.selTok && room.chars[ui.selTok] && canControlChar(room, ru.viewer, ui.selTok) && room.chars[ui.selTok].x != null) {
+    const hit = (el = q('[data-tok]')) ? el.dataset.tok : (el = q('.cell.covered')) ? coverAt(room, el.dataset.cell) : null;
+    if (hit && hit !== ui.selTok && room.chars[hit]) { collideDialog(room, ru, ui.selTok, hit); return true; }
+  }
   if ((el = q('[data-cell]')) && ui.selTok && !q('[data-tok]')) {
     let [x, y] = el.dataset.cell.split(',').map(Number);
     // a giant goes with its top-left square on the tapped one, pulled back from the right / bottom edge
