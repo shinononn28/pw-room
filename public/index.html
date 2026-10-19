@@ -140,6 +140,11 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pink)}
 .pendTag{align-self:flex-start;font-size:.6rem;font-weight:800;line-height:1.5;padding:0 6px;border-radius:4px;background:var(--gold);color:#2A1C00}
 .rbPend{display:block;font-size:.68rem;font-weight:700;color:#B26A00;margin-top:1px}
 .htab.need:not(.on){border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}
+/* 手札の上限を超えている */
+.count.over,.htab b.over,.handOthers b.over{color:var(--red) !important}
+.btn.overBtn{border-color:var(--red);color:var(--red);font-weight:800}
+.btn.overBtn:not([disabled]){background:var(--red);color:#fff}
+.btn.overBtn[disabled]{opacity:1;background:color-mix(in srgb,var(--red) 12%,transparent)}
 /* 台詞「」: dialogue in a bubble of the speaker's colour, action lines (ト書き) quieter beneath */
 .speech{display:grid;gap:4px;margin-top:2px;justify-items:start}
 .speech .sline{position:relative;font-size:1.05em;line-height:1.7;padding:7px 15px 8px;margin-left:7px;border-radius:12px;white-space:pre-wrap;word-break:break-word;max-width:calc(100% - 7px);
@@ -183,6 +188,9 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pink)}
 /* 巨大キャラクター: one big piece over 2×2 squares */
 .giantBox{position:relative;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2;min-width:0;min-height:0}
 .giantBox .tok{pointer-events:auto;cursor:pointer}
+/* where a giant would land: its 2×2 footprint follows the pointer (tap once to see it on a phone, again to move) */
+.moveGhost{position:relative;z-index:3;pointer-events:none;border-radius:10px;border:3px dashed #18B4FF;background:rgba(24,180,255,.16);box-shadow:inset 0 0 0 2px rgba(255,255,255,.5)}
+.moveGhost.bad{border-color:#FF4D6A;background:rgba(255,77,106,.16)}
 .tok.giant{width:min(90%,180px) !important;border-radius:22%;border-width:4px;font-size:clamp(.9rem,3.4vw,1.5rem) !important}
 .cell.covered{background-image:linear-gradient(color-mix(in srgb,#FF5C5C 12%,transparent),color-mix(in srgb,#FF5C5C 12%,transparent))}
 .giantBox .cfx{position:absolute;top:4px;right:4px;min-width:17px;height:17px;border-radius:9px;background:#7C5CFF;color:#fff;font-size:.62rem;font-weight:800;line-height:17px;text-align:center;padding:0 4px;box-shadow:0 0 0 2px #fff;z-index:3;pointer-events:none}
@@ -1481,7 +1489,7 @@ function normalizeChar(raw) {
   if (!raw || typeof raw !== 'object') throw new Error('JSONの形になっていません');
   if (raw.format && raw.format !== 'pw-character') throw new Error(`形式が違います（${raw.format}）`);
   if (!raw.name || typeof raw.name !== 'string') throw new Error('name（キャラクター名）がありません');
-  const item = x => ({ name: String(x?.name || ''), attrs: x?.attrs && typeof x.attrs === 'object' ? x.attrs : {}, text: String(x?.text || '') });
+  const item = x => ({ name: String(x?.name || ''), attrs: x?.attrs && typeof x.attrs === 'object' ? x.attrs : {}, text: String(x?.text || ''), ...(normFx(x?.fx) ? { fx: normFx(x.fx) } : {}) });
   // values: {HP:{max:20}} / {SS値:{value:3}} / {HP:20} (shorthand = max for HP/TP, value otherwise)
   const stats = {};
   for (const [k, v] of Object.entries(raw.values || {})) {
@@ -1583,21 +1591,49 @@ function refit(room, ch) {
 // Read from the effect text by how long it lasts, which the rules always write the same way:
 //   phase   このアクションフェイズの間 / アクションフェイズが終わるまで → until the turn passes
 //   nextOwn 次の自分のアクションフェイズまで                      → until this character's next turn
-//   round   1ターンの間 / このラウンドの間                           → until the round ends
+//   turn    1ターンの間 / このターンの間                             → until this SS値 is done (a ターン is one SS値's turn)
+//   round   このラウンドの間 / ラウンド終了まで                       → until the round ends
 //   manual  added by hand                                           → until removed
 // ===== reading rules shared with the character sheet tool (princess-wing-sheet.html): keep both copies the same =====
-const EFFECT_DUR = { phase: 'この手番の間', nextOwn: '次の自分の手番まで', round: 'ラウンド終了まで', manual: '外すまで' };
-const DUR_RE = { nextOwn: /次の自分のアクションフェイズ(?:を迎える)?まで/, phase: /このアクションフェイズ(の間|中(?!に)|が終わるまで)|アクションフェイズが終わるまで/, round: /1ターンの間|このターンの間|このラウンド(の間|中)|ラウンド(が)?終了(する)?まで/ };
+const EFFECT_DUR = { phase: 'この手番の間', turn: 'このSS値の間（1ターン）', nextOwn: '次の自分の手番まで', round: 'ラウンド終了まで', manual: '外すまで' };
+const DUR_RE = { nextOwn: /次の自分のアクションフェイズ(?:を迎える)?まで/, phase: /このアクションフェイズ(の間|中(?!に)|が終わるまで)|アクションフェイズが終わるまで/, turn: /1ターンの間|このターンの間/, round: /このラウンド(の間|中)|ラウンド(が)?終了(する)?まで/ };
 function effectDuration(text) {
   const t = String(text || '').normalize('NFKC');
-  return ['nextOwn', 'phase', 'round'].find(k => DUR_RE[k].test(t)) || null;
+  return ['nextOwn', 'phase', 'turn', 'round'].find(k => DUR_RE[k].test(t)) || null;
+}
+// 期限タグ: an item may say for itself how its effect lasts ({ dur, note?, target? }; dur 'none' = not an effect),
+// for wording the reader does not know; otherwise the text is read
+function normFx(f) {
+  if (!f || typeof f !== 'object' || !(f.dur === 'none' || EFFECT_DUR[f.dur])) return null;
+  const o = { dur: f.dur };
+  if (typeof f.note === 'string' && f.note.trim()) o.note = f.note.trim().slice(0, 30);
+  if (FX_TARGET[f.target]) o.target = f.target;
+  return o;
+}
+function fxOf(it) {
+  if (!it) return null;
+  const o = normFx(it.fx);
+  if (o && o.dur === 'none') return null;
+  const dur = o ? o.dur : effectDuration(it.text);
+  if (!dur) return null;
+  return { dur, note: o && o.note ? o.note : effectNote(it.text), target: (o && o.target) || effectTarget(it.text) || 'self' };
 }
 // who the lasting effect is on: 'target' when its sentence is about 対象 (e.g. 対象は、1ターンの間…), otherwise the user
 function effectTarget(text) {
   const t = String(text || '').normalize('NFKC');
   const d = effectDuration(t); if (!d) return null;
   const sentence = t.split(/[。\n]/).find(x => DUR_RE[d].test(x)) || '';
+  if (/敵全員/.test(sentence)) return 'foes';
+  if (/味方全員/.test(sentence)) return 'allies';
   return /対象(は|の|が)/.test(sentence) && !/自分は/.test(sentence) ? 'target' : 'self';
+}
+// who an effect lands on: self / the chosen targets / every foe / every ally (the user included), on the board and standing
+const FX_TARGET = { self: '自分に付く', target: '対象に付く', foes: '敵全員に付く', allies: '味方全員に付く' };
+function fxHolders(room, ch, target, targets) {
+  if (target === 'target') return (targets || []).map(id => room.chars[id]).filter(Boolean);
+  const foe = c => ch.side === 'enemy' ? c.side !== 'enemy' : c.side === 'enemy';
+  if (target === 'foes' || target === 'allies') return Object.values(room.chars).filter(c => c.x != null && !isDown(c) && (target === 'foes' ? foe(c) : !foe(c) && c.side !== 'npc' || c.id === ch.id));
+  return [ch];
 }
 // 射程: "2" / "1～2" are read; "－", "効果参照" and empty mean no range; anything else cannot be shown on the board
 const RANGE_NONE = /^(|[-－―—ー]|効果参照|なし|自身)$/;
@@ -1627,7 +1663,8 @@ function addEffect(room, ch, { name, note, dur, text, by }) {
   if (!ch) return;
   ch.effects = (ch.effects || []).filter(e => e.name !== name);        // using it again refreshes it
   ch.effects.push({ id: uid('e'), name: String(name).slice(0, 30), note: String(note || '').slice(0, 30), dur: EFFECT_DUR[dur] ? dur : 'manual',
-    text: String(text || '').slice(0, 300), turn: room.turn.current || null, seq: room.turn.seq || 0 });
+    text: String(text || '').slice(0, 300), turn: room.turn.current || null, seq: room.turn.seq || 0,
+    ss: room.turn.current && room.chars[room.turn.current] ? ssOf(room.chars[room.turn.current]) : null });
 }
 // after the turn moves (次の手番, 手番の指定, ラウンド): drop what has run out, with a log line each
 function expireEffects(room, by, roundEnded) {
@@ -1637,6 +1674,8 @@ function expireEffects(room, by, roundEnded) {
     ch.effects = (ch.effects || []).filter(e => {
       const out = e.dur === 'phase' ? (roundEnded || room.turn.current !== e.turn)
         : e.dur === 'nextOwn' ? room.turn.current === ch.id && room.turn.seq > e.seq
+        // 1ターン: ends when the turn passes to a character of another SS値 (or the round ends)
+        : e.dur === 'turn' ? roundEnded || (!!room.turn.current && !!room.chars[room.turn.current] && ssOf(room.chars[room.turn.current]) !== e.ss)
         : e.dur === 'round' ? roundEnded : false;
       if (out) gone.push(e.name);
       return !out;
@@ -1647,16 +1686,18 @@ function expireEffects(room, by, roundEnded) {
 // a declaration (コマンド or 武装を使う) whose text has a duration starts a lasting effect on the declarer,
 // but only for the items the player confirmed when importing (ch.autoFx: names; reading the text can be wrong)
 function effectsFromText(room, ch, name, text, by, targets) {
-  const dur = effectDuration(text);
-  if (!ch || !dur || !(ch.autoFx || []).includes(name)) return;
-  // on the 対象: the targets chosen in 武装を使う (nothing to attach to without them)
-  const on = effectTarget(text) === 'target' ? (targets || []).map(id => room.chars[id]).filter(Boolean) : [ch];
-  on.forEach(c => addEffect(room, c, { name, note: effectNote(text), dur, text, by }));
+  if (!ch || !(ch.autoFx || []).includes(name)) return;
+  // the sheet's own item (its 期限タグ, if any), else just the text
+  const d = ch.data, own = [...(d.skills || []), ...(d.core?.functions || []), d.wingDrive, ...(d.darkDrives || []), ...(d.weapons?.common || []), ...(d.weapons?.slots || []), ...(d.variations || []).flatMap(v => v.slots || [])].find(x => x && x.name === name);
+  const f = fxOf(own ? { ...own, text: own.text || text } : { name, text });
+  if (!f) return;
+  // on the 対象: the targets chosen in 武装を使う (nothing to attach to without them); 敵全員 / 味方全員: everyone on that side
+  fxHolders(room, ch, f.target, targets).forEach(c => addEffect(room, c, { name, note: f.note, dur: f.dur, text, by }));
 }
 // every item of a sheet whose text has a duration: what the import asks about
 function detectEffects(d) {
   const out = [], seen = new Set();
-  const add = (grp, it) => { if (!it || !it.name || seen.has(it.name)) return; const dur = effectDuration(it.text); if (dur) { seen.add(it.name); out.push({ grp, name: it.name, note: effectNote(it.text), dur, target: effectTarget(it.text) }); } };
+  const add = (grp, it) => { if (!it || !it.name || seen.has(it.name)) return; const f = fxOf(it); if (f) { seen.add(it.name); out.push({ grp, name: it.name, ...f, tagged: !!normFx(it.fx) }); } };
   (d.skills || []).forEach(it => add('特技', it));
   (d.core?.functions || []).forEach(it => add('特殊機能', it));
   add('ウイングドライブ', d.wingDrive);
@@ -1687,6 +1728,9 @@ function roundDrawCount(room, seat) {
   if (!c || c.side !== 'pc' || isDown(c)) return 0;
   return room.turn.round === 1 && !st.roundDrawPcFirst ? 0 : (st.roundDrawPc ?? 2);
 }
+// 手札の上限 (PL 10 / GM 15 by default; 0 = none): the room shows the excess, the player discards it
+const handLimit = (room, seat) => { const n = seat === 'gm' ? room.settings.handMaxGm : room.settings.handMaxPc; return Number.isFinite(n) && n > 0 ? n : Infinity; };
+const handOver = (room, seat) => Math.max(0, (room.cards.hands[seat] || []).length - handLimit(room, seat));
 const drawPending = room => !inCombat(room) || room.turn.ending ? [] : ['gm', ...pcSeats(room).map(c => c.id)].filter(s => roundDrawCount(room, s) > 0 && !(room.turn.drew || []).includes(s));
 const tradePending = room => room.turn.ending && (room.settings.exchange ?? 1) > 0 ? pcSeats(room).filter(c => !isDown(c) && !(room.turn.traded || []).includes(c.id)).map(c => c.id) : [];
 // the last actor is done: with an exchange set, the round pauses for it (the GM then starts the next round)
@@ -1793,7 +1837,7 @@ function newRoom(name) {
   return {
     id: uid('r'), name: name || '新しい部屋', createdAt: Date.now(),
     players: {},
-    settings: { jokers: 2, decks: 1, opsTab: 'battle', digestTab: 'main', gmSeesSecret: true, logValues: true, roundDrawPc: 2, roundDrawPcFirst: false, roundDrawEnemy: 2, exchange: 1 },
+    settings: { jokers: 2, decks: 1, opsTab: 'battle', digestTab: 'main', gmSeesSecret: true, logValues: true, roundDrawPc: 2, roundDrawPcFirst: false, roundDrawEnemy: 2, exchange: 1, handMaxPc: 10, handMaxGm: 15 },
     turn: { round: 1, current: null },
     chars: {},
     cards: { deck: newDeck(2), discard: [], hands: { gm: [] } },
@@ -2345,7 +2389,7 @@ function migrateRoom(room) {
   room.players = room.players || {};
   room.settings.decks = room.settings.decks || 1;
   if (!('digestTab' in room.settings)) room.settings.digestTab = 'main';
-  for (const [k, v] of Object.entries({ roundDrawPc: 2, roundDrawPcFirst: false, roundDrawEnemy: 2, exchange: 1 })) if (!(k in room.settings)) room.settings[k] = v;
+  for (const [k, v] of Object.entries({ roundDrawPc: 2, roundDrawPcFirst: false, roundDrawEnemy: 2, exchange: 1, handMaxPc: 10, handMaxGm: 15 })) if (!(k in room.settings)) room.settings[k] = v;
   for (const ch of Object.values(room.chars)) {
     if (!ch.data.stats || ch.data.skills.some(s => !('tp' in s))) { try { ch.data = normalizeChar({ ...ch.data, values: ch.data.stats ? Object.fromEntries(Object.entries(ch.data.stats)) : ch.data.values }); } catch (e) {} }
     if (ch.variation == null) ch.variation = -1;
@@ -2455,7 +2499,7 @@ function viewRoom(room, seat, pid) {
   return r;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { rangeProblems, effectTarget, rangeIssue, nextActors, isDown, roundDrawCount, drawPending, tradePending, inCombat, formWord, isJokerWeapon, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
+  module.exports = { handLimit, handOver, rangeProblems, effectTarget, rangeIssue, nextActors, isDown, roundDrawCount, drawPending, tradePending, inCombat, formWord, isJokerWeapon, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
 }
 // =====================================================================
 // local storage + UI
@@ -3099,6 +3143,10 @@ function boardCells(room) {
         ${list.map(c => tokHtml(c, sel && c.id === sel.id, foeIds && foeIds.has(c.id))).join('')}${(n => n ? `<span class="cfx" title="効果${n}件">${n}</span>` : '')(list.reduce((a, c) => a + (c.effects || []).length, 0))}${d != null && d > 0 ? `<span class="dist">${d}</span>` : ''}</div>`;
     }
   }
+  if (selBig && canControlChar(room, roomUI(room.id).viewer, sel.id)) {
+    const pm = ui.pendingMove && ui.pendingMove.cid === sel.id ? ui.pendingMove : null;
+    cells += `<div class="moveGhost ${pm && pm.bad ? 'bad' : ''}" id="moveGhost" ${pm ? `style="grid-row:${pm.y + 1}/span 2;grid-column:${pm.x + 2}/span 2"` : 'hidden'}></div>`;
+  }
   chars.filter(c => c.x != null && sizeOf(c) > 1).forEach(c => {
     const n = (c.effects || []).length;
     cells += `<div class="giantBox" style="grid-row:${c.y + 1}/span 2;grid-column:${c.x + 2}/span 2">${tokHtml(c, sel && c.id === sel.id, foeIds && foeIds.has(c.id))}${n ? `<span class="cfx" title="効果${n}件">${n}</span>` : ''}</div>`;
@@ -3208,7 +3256,7 @@ function renderCards(room, ru) {
   const allies = Object.values(room.chars).filter(c => isPcSeat(room, c.id) && c.id !== mySeat);
   const gmCount = (room.cards.hands.gm || []).length;
   // everyone else's count at a glance (tap: their cards); deck and discard with the card on top
-  const othersRow = `<button class="handOthers" data-handsall title="みんなの手札を見る">${allies.map(c => `<span class="ho"><i style="background:${c.color}"></i><span class="hn">${esc(c.data.name)}</span><b>${(room.cards.hands[c.id] || []).length}</b></span>`).join('')}${mySeat !== 'gm' ? `<span class="ho"><i class="gm"></i>GM<b>${gmCount}</b></span>` : ''}<span class="hoMore">みんなの手札 ›</span></button>`;
+  const othersRow = `<button class="handOthers" data-handsall title="みんなの手札を見る">${allies.map(c => `<span class="ho"><i style="background:${c.color}"></i><span class="hn">${esc(c.data.name)}</span><b class="${handOver(room, c.id) ? 'over' : ''}">${(room.cards.hands[c.id] || []).length}</b></span>`).join('')}${mySeat !== 'gm' ? `<span class="ho"><i class="gm"></i>GM<b class="${handOver(room, 'gm') ? 'over' : ''}">${gmCount}</b></span>` : ''}<span class="hoMore">みんなの手札 ›</span></button>`;
   const top = room.cards.discard[room.cards.discard.length - 1];
   const piles = `<button class="btn small piles" data-deckmenu title="山札と捨て札">山札<b>${room.cards.deck.length}</b>捨て札<b>${room.cards.discard.length}</b>${top ? chipHtml(top) : ''}</button>`;
   if (!mySeat) {
@@ -3226,12 +3274,15 @@ function renderCards(room, ru) {
   const roundAct = needDraw ? `<button class="btn roundAct" data-rounddraw title="第${room.turn.round}ラウンドのドロー">ラウンドのドロー：${dn}枚</button>`
     : needTrade ? `<button class="btn roundAct trade" data-trade ${n === tk ? '' : 'disabled'} title="ラウンド終了：味方と${tk}枚交換">${n === tk ? '交換：選んだカードを渡す' : `交換：${tk}枚選んでください`}</button>` : '';
   const seatNeeds = s => (roundDrawCount(room, s) > 0 && drawPending(room).includes(s)) || tradePending(room).includes(s);
+  // 手札の上限: the count shows the limit; over it, pick the excess and discard it
+  const lim = handLimit(room, mySeat), over = handOver(room, mySeat);
+  const overBtn = over ? `<button class="btn small overBtn" data-overdiscard ${n === over ? '' : 'disabled'} title="手札の上限は${lim}枚">${n === over ? `選んだ${over}枚を捨てる` : `上限超過：${over}枚選んで捨てる`}</button>` : '';
   // GM with held characters: one tab per hand (name + count)
   const turnSeat = tc ? (tc.side === 'enemy' ? 'gm' : tc.id) : null;
-  const seatTabs = gmSeats.length > 1 ? `<span class="handTabs" role="tablist" aria-label="操作する手札">${gmSeats.map(s => ` <button role="tab" class="htab ${s === mySeat ? 'on' : ''} ${s === turnSeat ? 'turn' : ''} ${seatNeeds(s) ? 'need' : ''}" data-handseat="${s}" aria-selected="${s === mySeat}" ${s === turnSeat ? 'title="手番"' : ''}>${esc(s === 'gm' ? 'GM' : room.chars[s].data.name)}<b>${(room.cards.hands[s] || []).length}</b></button>`).join('')}</span>` : '';
+  const seatTabs = gmSeats.length > 1 ? `<span class="handTabs" role="tablist" aria-label="操作する手札">${gmSeats.map(s => ` <button role="tab" class="htab ${s === mySeat ? 'on' : ''} ${s === turnSeat ? 'turn' : ''} ${seatNeeds(s) ? 'need' : ''}" data-handseat="${s}" aria-selected="${s === mySeat}" ${s === turnSeat ? 'title="手番"' : ''}>${esc(s === 'gm' ? 'GM' : room.chars[s].data.name)}<b class="${handOver(room, s) ? 'over' : ''}">${(room.cards.hands[s] || []).length}</b></button>`).join('')}</span>` : '';
   setHtml($('cardsP'), `
     <div class="trayRow handHead">
-      ${seatTabs || `<b class="handName">${esc(seatName(room, mySeat))}<span class="hlong">の手札</span></b><span class="count">${myHand.length}<small>枚</small></span>${turnTag}`}
+      ${seatTabs || `<b class="handName">${esc(seatName(room, mySeat))}<span class="hlong">の手札</span></b><span class="count ${over ? 'over' : ''}">${myHand.length}<small>${Number.isFinite(lim) ? `/${lim}` : ''}枚</small></span>${turnTag}`}${overBtn}
       <button class="btn small ghost" data-sort>${ru.sort === 'rank' ? '数字順' : 'スート順'}</button>
       <span class="grow"></span>
       ${piles}
@@ -3807,7 +3858,7 @@ function bgmLoop(on) { if (ONLINE) netSend({ t: 'bgmLoop', loop: on }); else if 
 // =====================================================================
 const SAMPLE = {"format": "pw-character", "version": 2, "name": "紺碧のシンデレラ", "player": "", "core": {"name": "サンドリヨン", "text": "", "functions": [{"name": "時限換装", "attrs": {"参照": "P81"}, "text": "キャラクター作成時、バリエーションをひとつ作成する。自分は戦闘中の好きなタイミングでこの特殊機能の使用を宣言することで、1ターンの間、好きなバリエーションに武装を変更する。このとき、そのバリエーションのすべての武装の回避コストに＋1する。この特殊機能は1シナリオに1回まで使用可能である。"}]}, "values": {"HP": {"max": 50}, "TP": {"max": 15}, "SS値": {"value": 5}, "移動値": {"value": 2}}, "skills": [{"name": "クイックリロード", "tp": 2, "attrs": {"参照": "P90"}, "text": "自分は山札から1枚引いて手札に加える。"}, {"name": "オーバークロック", "tp": 3, "attrs": {"参照": "P89"}, "text": "自分は山札から2枚引いて手札に加える。この特技は1シナリオに1回まで使用可能である。"}, {"name": "エンハンスウェポン", "tp": 3, "attrs": {"参照": "P89"}, "text": "このアクションフェイズの間、自分が使用するすべての武装の威力に＋3する。この特技は1シナリオに1回まで使用可能である。"}], "weapons": {"common": [{"name": "タックル", "attrs": {"部位": "自動取得", "種別": "A", "威力": "5", "射程": "1", "回避": "1", "参照": "P93"}, "text": "自身の手札1枚を捨てることで使用できる。自分は、対象決定直前に【移動値】を1として移動を行なうことができる。"}, {"name": "クロスユニゾン", "attrs": {"部位": "自動取得", "種別": "A", "威力": "効果参照", "射程": "効果参照", "回避": "効果参照", "参照": "P93"}, "text": "ジョーカー1枚を提出することで使用できる。味方全員は、自身が装備している種別Aの好きな武装（〈クロスユニゾン〉以外）をひとつ選び、手札を提出せずに武装攻撃を行なえる。順番は相談して自由に決めること。この武装の効果による攻撃後、味方全員はカードを1枚引く。この武装は、ほかの武装と組み合わせて使用できない。1シナリオに1回まで使用可能。"}], "slots": [{"suit": "S", "name": "ストライクソード", "attrs": {"部位": "ライト", "種別": "A", "威力": "7", "射程": "1～2", "回避": "2", "参照": "P94"}, "text": "自分は、対象決定直前に【移動値】を1として移動を行なうことができる。この武装の効果で移動を行なう際、自分は衝突によるダメージを受けない。"}, {"suit": "C", "name": "コスモスブレイド", "attrs": {"部位": "レフト", "種別": "A", "威力": "5", "射程": "1～2", "回避": "2", "参照": "P94"}, "text": "自分はこの武装による武装攻撃の終了後、山札から2枚まで引いて手札に加えることができる。そうした場合、自分の手札を1枚選び捨てる。"}, {"suit": "H", "name": "ソードウイング", "attrs": {"部位": "トップス", "種別": "A", "威力": "6", "射程": "1～2", "回避": "2", "参照": "P98"}, "text": "この武装攻撃の終了時からアクションフェイズが終わるまでの間、自分は射程に1を含む武装による武装攻撃で敵にダメージを与えるたび、山札から1枚引いて手札に加える。"}, {"suit": "D", "name": "アサルトレッグ", "attrs": {"部位": "ボトムス", "種別": "A", "威力": "8", "射程": "1", "回避": "2", "参照": "P100"}, "text": "自分は、対象決定直前に【移動値】を2として移動を行なうことができる。この武装の効果で移動を行なう際、自分は衝突によるダメージを受けない。"}]}, "variations": [{"name": "バリエーション①", "slots": [{"suit": "S", "name": "ディバイドセイバー", "attrs": {"部位": "ライト", "種別": "A", "威力": "15", "射程": "1", "回避": "3", "参照": "P95"}, "text": "使用時、好きなスートをひとつ選び、そのスートのカードを好きな枚数手札から捨てることができる。対象決定直前に捨てた枚数を【移動値】として移動できる。自分は次の自分のアクションフェイズまで、緊急回避に必要な回避コストがすべて＋1。"}, {"suit": "C", "name": "ブラスティアフィンガー", "attrs": {"部位": "レフト", "種別": "A", "威力": "20", "射程": "1", "回避": "1", "参照": "P95"}, "text": "使用時、好きなスートをひとつ選び、そのスートのカードを好きな枚数手札から捨てることができる。この武装の回避コストは捨てた枚数と同じだけ上昇する。自分は次の自分のアクションフェイズまで、緊急回避に必要な回避コストがすべて＋1。"}, {"suit": "H", "name": "ソードウイング", "attrs": {"部位": "トップス", "種別": "A", "威力": "6", "射程": "1～2", "回避": "2", "参照": "P98"}, "text": "この武装攻撃の終了時からアクションフェイズが終わるまでの間、自分は射程に1を含む武装による武装攻撃で敵にダメージを与えるたび、山札から1枚引いて手札に加える。"}, {"suit": "D", "name": "ハイヒールドロップ", "attrs": {"部位": "ボトムス", "種別": "A", "威力": "10", "射程": "1", "回避": "2", "参照": "P101"}, "text": "このアクションフェイズで、自分がすでにほかの武装を使用していた場合、この武装の回避コストを＋2する。"}]}], "wingDrive": {"name": "ブルーウイング", "attrs": {"タイミング": "アクションフェイズ", "参照": "P103"}, "text": "自分は即座に山札からカードを2枚引き、手札に加える。さらに、自分はこのアクションフェイズの間、カードの数字に関係なく、追加で3回まで武装を使用することができる。ただし、この効果で同じ武装を2回以上使用することはできない。"}, "portraits": [], "memo": ""};
 // enemy samples (from the scenario): a giant boss with a メタモルフォーゼ form and dark drives, and a plain minion
-const SAMPLE_ENEMIES = {"偽装の神獣": {"format": "pw-character", "version": 2, "kind": "enemy", "name": "偽装の神獣", "player": "ボスエネミー／ディスガイズ・ヴォイド", "size": 2, "formStyle": "morph", "values": {"HP": {"max": 80}, "TP": {"max": 20}, "SS値": {"value": 5}, "移動値": {"value": 2}}, "skills": [{"name": "セカンダリーオブザダフトプリズン", "tp": 3, "attrs": {}, "text": "好きな数字をひとつ選ぶ。自分は、捨て札置き場にあるその数字のカードをすべて手札に加える。この特技は1シナリオに1回まで使用可能である。"}, {"name": "アルカディアスマグナ", "tp": 3, "attrs": {}, "text": "敵全員はカードを1枚引く。1ターンの間、味方全員が使用する武装の威力すべてに＋3する。"}, {"name": "ヴァイオレンスロア", "tp": 3, "attrs": {}, "text": "敵全員は次の緊急回避に必要なコストがすべて＋1される。"}], "darkDrives": [{"name": "インペリアルレイド", "tp": null, "attrs": {"タイミング": "アクションフェイズ"}, "text": "このアクションフェイズで武装攻撃を行なう代わりに、山札から3枚を表にし、そのスートに合う武装を順番に使用する。また、この効果でジョーカーが表向きになった場合、自分は〈カオティックムーン〉を使用する。"}, {"name": "エンドオブノクターン", "tp": null, "attrs": {"タイミング": "戦闘不能時"}, "text": "自分は戦闘不能になったとき、その戦闘不能を解除し、【HP】を20点回復して復活する。（PC3人の場合追加）"}], "weapons": {"common": [{"name": "タックル", "attrs": {"部位": "自動取得", "種別": "A", "威力": "5", "射程": "1", "回避": "1"}, "text": "この武装は、自身の手札1枚を捨てて使用できる。自分は、対象決定直前に【移動値】を1として移動を行なうことができる。"}, {"name": "カオティックムーン", "attrs": {"部位": "自動取得", "種別": "A", "威力": "10", "射程": "1～∞", "回避": "回避不能"}, "text": "ジョーカー1枚を提出して使用する。この武装による武装攻撃は、射程範囲内に存在するキャラクターのうち、好きな数を対象として選択する。この武装による武装攻撃において、敵はダメージを軽減できない。この武装はほかの武装と組み合わせて使用できない。1シナリオに1回まで使用可能である。"}], "slots": [{"name": "バニシングクロー", "attrs": {"部位": "ライト", "種別": "A", "威力": "10", "射程": "1～2", "回避": "2"}, "text": "この武装による武装攻撃に対して、緊急回避を行った対象は、緊急回避の直後に5点のダメージを受ける。", "suit": "S"}, {"name": "エクスキュートブレイド", "attrs": {"部位": "レフト", "種別": "A", "威力": "12", "射程": "1～3", "回避": "2"}, "text": "この武装による武装攻撃でダメージを受けた対象は、1ターンの間、緊急回避に必要な回避コストがすべて＋1される。", "suit": "C"}, {"name": "メタモルフォーゼ", "attrs": {"部位": "トップス", "種別": "A", "威力": "－", "射程": "－", "回避": "－"}, "text": "この武装を使用したとき、自分はカードを2枚引く。その後、自分はバリエーション①へと武装を変更する。ただし、自分の現在の武装がバリエーション①の場合、自分は元の武装に戻る。この武装は1アクションフェイズに1回まで使用可能である。", "suit": "H"}, {"name": "サマーソルトテイル", "attrs": {"部位": "ボトムス", "種別": "A", "威力": "7", "射程": "1～2", "回避": "2"}, "text": "この武装による武装攻撃で対象がダメージを受けた場合、この武装攻撃の終了後、自分は好きな手札を1枚提出し、そのスートにあった武装を使用して武装攻撃を行なうことができる。その武装攻撃の後、もし追加で武装攻撃を行なう場合は、この武装を使用した数字と同じ数字を提出すること。", "suit": "D"}]}, "variations": [{"name": "ブラストフォルム", "slots": [{"name": "ハイパーガトリング", "attrs": {"部位": "ライト", "種別": "A", "威力": "15", "射程": "4～5", "回避": "3"}, "text": "この武装による武装攻撃のダメージ計算時、この武装攻撃の対象は好きな枚数の手札を捨てることができる。そうした場合、［対象がこの武装の効果で捨てた枚数×5］点だけ対象が受けるダメージを減らす。", "suit": "S"}, {"name": "ジャッジメントシューター", "attrs": {"部位": "レフト", "種別": "A", "威力": "9", "射程": "3～5", "回避": "2"}, "text": "自分はこの武装による武装攻撃の終了時、この武装をもう一度だけ使用して武装攻撃を行なう。この効果は1ラウンドに2回まで発動させることができる。", "suit": "C"}, {"name": "メタモルフォーゼ", "attrs": {"部位": "トップス", "種別": "A", "威力": "－", "射程": "－", "回避": "－"}, "text": "この武装を使用したとき、自分はカードを2枚引く。その後、自分はバリエーション①へと武装を変更する。ただし、自分の現在の武装がバリエーション①の場合、自分は元の武装に戻る。この武装は1アクションフェイズに1回まで使用可能である。", "suit": "H"}, {"name": "ギガウォールビット", "attrs": {"部位": "ボトムス", "種別": "A", "威力": "6", "射程": "4～5", "回避": "2"}, "text": "この武装攻撃の終了後から、次の自分のアクションフェイズを迎えるまで、自分が受ける武装攻撃によるダメージをすべて3点軽減する。", "suit": "D"}]}], "portraits": [], "memo": "タイプ：ビースト／ボスエネミー\n※HP・TPはPC2人のときの値。PC3人のときはHP120・TP30（エンドオブノクターンもPC3人のときのみ）。\n※このエネミーは巨大キャラクターである。\n基本＝アクティベイトフォルム、バリエーション①＝ブラストフォルム。\n全身黒色の狼型巨大ヴォイド。全長10mほどで、四足歩行で移動する。さまざまな武装を内蔵しており、瞬時に換装を行ないながら変幻自在なスタイルで戦闘することができる。\n（ブラストフォルム）ディスガイズ・ヴォイドの遠距離戦闘スタイル。内蔵されたガトリングガンやビーム兵器を身体表面に露出させるように変形した姿。"}, "アサルトルプス": {"format": "pw-character", "version": 2, "kind": "enemy", "name": "アサルトルプス", "player": "モブエネミー／ビースト", "values": {"HP": {"max": 15}, "SS値": {"value": 5}, "移動値": {"value": 3}}, "skills": [], "weapons": {"common": [{"name": "タックル", "attrs": {"部位": "自動取得", "種別": "A", "威力": "5", "射程": "1", "回避": "1"}, "text": "この武装は、自身の手札1枚を捨てて使用できる。自分は、対象決定直前に【移動値】を1として移動を行なうことができる。"}], "slots": [{"name": "ビームクロー", "attrs": {"部位": "ライト", "種別": "A", "威力": "8", "射程": "1", "回避": "2"}, "text": "自分は、対象決定直前に【移動値】を1として移動を行なうことができる。", "suit": "S"}, {"name": "ビームクロー", "attrs": {"部位": "レフト", "種別": "A", "威力": "8", "射程": "1", "回避": "2"}, "text": "自分は、対象決定直前に【移動値】を1として移動を行なうことができる。", "suit": "C"}, {"name": "ブーストリンカー", "attrs": {"部位": "トップス", "種別": "A", "威力": "－", "射程": "－", "回避": "－"}, "text": "自分は、山札から2枚手札に加える。", "suit": "H"}, {"name": "エネルギーリンカー", "attrs": {"部位": "ボトムス", "種別": "A", "威力": "－", "射程": "－", "回避": "－"}, "text": "味方ひとりの【HP】を7点回復する。", "suit": "D"}]}, "portraits": [], "memo": "タイプ：ビースト／モブエネミー（TP：0）\n※このエネミーは緊急回避できない。\n全身白色の狼型中型ヴォイド。全長3mほどで、四足歩行で移動する。光刃を展開する鉤爪で、積極的に攻撃を仕掛けてくる。"}};
+const SAMPLE_ENEMIES = {"偽装の神獣": {"format": "pw-character", "version": 2, "kind": "enemy", "name": "偽装の神獣", "player": "ボスエネミー／ディスガイズ・ヴォイド", "size": 2, "formStyle": "morph", "values": {"HP": {"max": 80}, "TP": {"max": 20}, "SS値": {"value": 5}, "移動値": {"value": 2}}, "skills": [{"name": "セカンダリーオブザダフトプリズン", "tp": 3, "attrs": {}, "text": "好きな数字をひとつ選ぶ。自分は、捨て札置き場にあるその数字のカードをすべて手札に加える。この特技は1シナリオに1回まで使用可能である。"}, {"name": "アルカディアスマグナ", "tp": 3, "attrs": {}, "text": "敵全員はカードを1枚引く。1ターンの間、味方全員が使用する武装の威力すべてに＋3する。", "fx": {"dur": "turn", "note": "威力+3", "target": "allies"}}, {"name": "ヴァイオレンスロア", "tp": 3, "attrs": {}, "text": "敵全員は次の緊急回避に必要なコストがすべて＋1される。", "fx": {"dur": "manual", "note": "次の回避+1", "target": "foes"}}], "darkDrives": [{"name": "インペリアルレイド", "tp": null, "attrs": {"タイミング": "アクションフェイズ"}, "text": "このアクションフェイズで武装攻撃を行なう代わりに、山札から3枚を表にし、そのスートに合う武装を順番に使用する。また、この効果でジョーカーが表向きになった場合、自分は〈カオティックムーン〉を使用する。"}, {"name": "エンドオブノクターン", "tp": null, "attrs": {"タイミング": "戦闘不能時"}, "text": "自分は戦闘不能になったとき、その戦闘不能を解除し、【HP】を20点回復して復活する。（PC3人の場合追加）"}], "weapons": {"common": [{"name": "タックル", "attrs": {"部位": "自動取得", "種別": "A", "威力": "5", "射程": "1", "回避": "1"}, "text": "この武装は、自身の手札1枚を捨てて使用できる。自分は、対象決定直前に【移動値】を1として移動を行なうことができる。"}, {"name": "カオティックムーン", "attrs": {"部位": "自動取得", "種別": "A", "威力": "10", "射程": "1～∞", "回避": "回避不能"}, "text": "ジョーカー1枚を提出して使用する。この武装による武装攻撃は、射程範囲内に存在するキャラクターのうち、好きな数を対象として選択する。この武装による武装攻撃において、敵はダメージを軽減できない。この武装はほかの武装と組み合わせて使用できない。1シナリオに1回まで使用可能である。"}], "slots": [{"name": "バニシングクロー", "attrs": {"部位": "ライト", "種別": "A", "威力": "10", "射程": "1～2", "回避": "2"}, "text": "この武装による武装攻撃に対して、緊急回避を行った対象は、緊急回避の直後に5点のダメージを受ける。", "suit": "S"}, {"name": "エクスキュートブレイド", "attrs": {"部位": "レフト", "種別": "A", "威力": "12", "射程": "1～3", "回避": "2"}, "text": "この武装による武装攻撃でダメージを受けた対象は、1ターンの間、緊急回避に必要な回避コストがすべて＋1される。", "suit": "C", "fx": {"dur": "turn", "note": "回避+1", "target": "target"}}, {"name": "メタモルフォーゼ", "attrs": {"部位": "トップス", "種別": "A", "威力": "－", "射程": "－", "回避": "－"}, "text": "この武装を使用したとき、自分はカードを2枚引く。その後、自分はバリエーション①へと武装を変更する。ただし、自分の現在の武装がバリエーション①の場合、自分は元の武装に戻る。この武装は1アクションフェイズに1回まで使用可能である。", "suit": "H"}, {"name": "サマーソルトテイル", "attrs": {"部位": "ボトムス", "種別": "A", "威力": "7", "射程": "1～2", "回避": "2"}, "text": "この武装による武装攻撃で対象がダメージを受けた場合、この武装攻撃の終了後、自分は好きな手札を1枚提出し、そのスートにあった武装を使用して武装攻撃を行なうことができる。その武装攻撃の後、もし追加で武装攻撃を行なう場合は、この武装を使用した数字と同じ数字を提出すること。", "suit": "D"}]}, "variations": [{"name": "ブラストフォルム", "slots": [{"name": "ハイパーガトリング", "attrs": {"部位": "ライト", "種別": "A", "威力": "15", "射程": "4～5", "回避": "3"}, "text": "この武装による武装攻撃のダメージ計算時、この武装攻撃の対象は好きな枚数の手札を捨てることができる。そうした場合、［対象がこの武装の効果で捨てた枚数×5］点だけ対象が受けるダメージを減らす。", "suit": "S"}, {"name": "ジャッジメントシューター", "attrs": {"部位": "レフト", "種別": "A", "威力": "9", "射程": "3～5", "回避": "2"}, "text": "自分はこの武装による武装攻撃の終了時、この武装をもう一度だけ使用して武装攻撃を行なう。この効果は1ラウンドに2回まで発動させることができる。", "suit": "C"}, {"name": "メタモルフォーゼ", "attrs": {"部位": "トップス", "種別": "A", "威力": "－", "射程": "－", "回避": "－"}, "text": "この武装を使用したとき、自分はカードを2枚引く。その後、自分はバリエーション①へと武装を変更する。ただし、自分の現在の武装がバリエーション①の場合、自分は元の武装に戻る。この武装は1アクションフェイズに1回まで使用可能である。", "suit": "H"}, {"name": "ギガウォールビット", "attrs": {"部位": "ボトムス", "種別": "A", "威力": "6", "射程": "4～5", "回避": "2"}, "text": "この武装攻撃の終了後から、次の自分のアクションフェイズを迎えるまで、自分が受ける武装攻撃によるダメージをすべて3点軽減する。", "suit": "D", "fx": {"dur": "nextOwn", "note": "軽減3", "target": "self"}}]}], "portraits": [], "memo": "タイプ：ビースト／ボスエネミー\n※HP・TPはPC2人のときの値。PC3人のときはHP120・TP30（エンドオブノクターンもPC3人のときのみ）。\n※このエネミーは巨大キャラクターである。\n基本＝アクティベイトフォルム、バリエーション①＝ブラストフォルム。\n全身黒色の狼型巨大ヴォイド。全長10mほどで、四足歩行で移動する。さまざまな武装を内蔵しており、瞬時に換装を行ないながら変幻自在なスタイルで戦闘することができる。\n（ブラストフォルム）ディスガイズ・ヴォイドの遠距離戦闘スタイル。内蔵されたガトリングガンやビーム兵器を身体表面に露出させるように変形した姿。"}, "アサルトルプス": {"format": "pw-character", "version": 2, "kind": "enemy", "name": "アサルトルプス", "player": "モブエネミー／ビースト", "values": {"HP": {"max": 15}, "SS値": {"value": 5}, "移動値": {"value": 3}}, "skills": [], "weapons": {"common": [{"name": "タックル", "attrs": {"部位": "自動取得", "種別": "A", "威力": "5", "射程": "1", "回避": "1"}, "text": "この武装は、自身の手札1枚を捨てて使用できる。自分は、対象決定直前に【移動値】を1として移動を行なうことができる。"}], "slots": [{"name": "ビームクロー", "attrs": {"部位": "ライト", "種別": "A", "威力": "8", "射程": "1", "回避": "2"}, "text": "自分は、対象決定直前に【移動値】を1として移動を行なうことができる。", "suit": "S"}, {"name": "ビームクロー", "attrs": {"部位": "レフト", "種別": "A", "威力": "8", "射程": "1", "回避": "2"}, "text": "自分は、対象決定直前に【移動値】を1として移動を行なうことができる。", "suit": "C"}, {"name": "ブーストリンカー", "attrs": {"部位": "トップス", "種別": "A", "威力": "－", "射程": "－", "回避": "－"}, "text": "自分は、山札から2枚手札に加える。", "suit": "H"}, {"name": "エネルギーリンカー", "attrs": {"部位": "ボトムス", "種別": "A", "威力": "－", "射程": "－", "回避": "－"}, "text": "味方ひとりの【HP】を7点回復する。", "suit": "D"}]}, "portraits": [], "memo": "タイプ：ビースト／モブエネミー（TP：0）\n※このエネミーは緊急回避できない。\n全身白色の狼型中型ヴォイド。全長3mほどで、四足歩行で移動する。光刃を展開する鉤爪で、積極的に攻撃を仕掛けてくる。"}};
 // in-app confirmation (window.confirm is blocked in some viewers and silently returns false)
 function ask(message, okLabel, onOk, danger) {
   openDlg(`<h1>${esc(okLabel)}</h1><p>${esc(message)}</p>
@@ -3866,7 +3917,7 @@ function autoFxDialog(name, found, current, done, ranges = []) {
   openDlg(`<h1>${ranges.length ? '取り込み前の確認' : '効果の自動付与'}</h1>
     ${found.length ? `<p class="muted">${esc(name)}の効果文から、期限のある効果が見つかりました。チェックしたものは、コマンドや「武装を使う」で使ったときに自動で付き、期限が来ると自動で消えます。「対象に付く」ものは、「武装を使う」で選んだ対象に付きます。<br>読み取りが違うもの（要約や期限がおかしいもの）はチェックを外してください。あとからキャラ画面の「効果」欄で変えられます。</p>
     <div class="afxList">${found.map((f, i) => `<label class="afxRow"><input type="checkbox" data-afx="${i}" ${on(f.name) ? 'checked' : ''}>
-      <span class="afxName">${esc(f.name)}<span class="attr">${esc(f.grp)}</span>${f.target === 'target' ? '<span class="attr afxTgt">対象に付く</span>' : ''}</span>
+      <span class="afxName">${esc(f.name)}<span class="attr">${esc(f.grp)}</span>${f.target !== 'self' ? `<span class="attr afxTgt">${FX_TARGET[f.target]}</span>` : ''}${f.tagged ? '<span class="attr" title="キャラシの期限タグで指定">タグ</span>' : ''}</span>
       <span class="afxNote">${f.note ? esc(f.note) : '<span class="muted">要約なし</span>'}</span><span class="afxDur">${esc(EFFECT_DUR[f.dur])}</span></label>`).join('')}</div>` : ''}
     ${ranges.length ? `<div class="rangeWarn"><b>射程が読み取れない武装</b><span class="muted">盤面の射程表示に使えません。「1」「1～2」のように書くと表示されます（「－」「効果参照」はそのままで大丈夫です）。</span>
       <ul>${ranges.map(r => `<li>${esc(r.name)}：射程「${esc(r.range)}」</li>`).join('')}</ul></div>` : ''}
@@ -4367,6 +4418,19 @@ function bgmDialog(room, ru) {
   });
 }
 // 衝突: the picked-up piece into another one. Both take 3 unless changed (buffs, 「衝突によるダメージを受けない」)
+// the board square under the last pointer position (through any piece drawn over it)
+const cellUnder = () => { if (!ui.lastPt) return null; const el = document.elementsFromPoint(ui.lastPt.x, ui.lastPt.y).find(e => e.matches && e.matches('#board [data-cell]')); return el ? el.dataset.cell.split(',').map(Number) : null; };
+document.addEventListener('pointerdown', e => { ui.lastPt = { x: e.clientX, y: e.clientY, touch: e.pointerType === 'touch' }; }, true);
+// a selected giant's landing footprint follows the mouse
+document.addEventListener('pointermove', e => {
+  const g = document.getElementById('moveGhost'); if (!g || e.pointerType === 'touch') return;
+  const room = curRoom(); const c = room && ui.selTok && room.chars[ui.selTok]; if (!c) return;
+  const el = document.elementsFromPoint(e.clientX, e.clientY).find(x => x.matches && x.matches('#board [data-cell]'));
+  if (!el) { g.hidden = true; return; }
+  let [x, y] = el.dataset.cell.split(',').map(Number); const n = sizeOf(c); x = Math.min(x, 8 - n); y = Math.min(y, 8 - n);
+  if (x === c.x && y === c.y) { g.hidden = true; return; }
+  g.hidden = false; g.style.gridRow = `${y + 1}/span 2`; g.style.gridColumn = `${x + 2}/span 2`; g.classList.toggle('bad', !!blockerAt(room, c, x, y));
+}, { passive: true });
 const coverAt = (room, cell) => { const [x, y] = cell.split(',').map(Number); const c = Object.values(room.chars).find(o => o.x != null && cellsOf(o).some(([a, b]) => a === x && b === y)); return c ? c.id : null; };
 function collideDialog(room, ru, cid, tid) {
   const a = room.chars[cid], b = room.chars[tid];
@@ -4417,6 +4481,9 @@ function settingsDialog(room) {
       PC <input type="number" id="stDrawPc" min="0" max="10" value="${s.roundDrawPc ?? 2}" style="width:4.5em">枚
       <label class="row"><input type="checkbox" id="stDrawFirst" ${s.roundDrawPcFirst ? 'checked' : ''}> 第1ラウンドも引く</label>
       エネミー PC数× <input type="number" id="stDrawEn" min="0" max="10" value="${s.roundDrawEnemy ?? 2}" style="width:4.5em">枚</div></div>
+    <div class="field">手札の上限（超えたら本人が捨てます・0で上限なし）<div class="row" style="flex-wrap:wrap;gap:8px">
+      PL <input type="number" id="stMaxPc" min="0" max="54" value="${s.handMaxPc ?? 10}" style="width:4.5em">枚
+      GM <input type="number" id="stMaxGm" min="0" max="54" value="${s.handMaxGm ?? 15}" style="width:4.5em">枚</div></div>
     <div class="field">ラウンド終了の手札交換（PC同士・0で交換しない）<select id="stTrade">${[0, 1, 2, 3].map(n => `<option value="${n}" ${(s.exchange ?? 1) === n ? 'selected' : ''}>${n}枚</option>`).join('')}</select></div>
     <label class="row" style="margin-bottom:6px"><input type="checkbox" id="stGmSecret" ${s.gmSeesSecret ? 'checked' : ''}> GMはすべての秘匿タブを見られる</label>
     <label class="row" style="margin-bottom:10px"><input type="checkbox" id="stLogVals" ${s.logValues !== false ? 'checked' : ''}> HPなどの数値の変更をログに残す（続けて増減した分は1行にまとめます）</label>
@@ -4424,7 +4491,7 @@ function settingsDialog(room) {
     <div class="row"><span style="flex:1"></span><button class="btn" data-close>やめる</button><button class="btn primary" id="stOk">保存</button></div>`, () => {
     if ($('stCopyGm')) $('stCopyGm').onclick = async () => { try { await navigator.clipboard.writeText($('stGmLink').value); toast('GM用リンクをコピーしました'); } catch (err) { $('stGmLink').select(); } };
     $('stOk').onclick = () => {
-      act({ type: 'settings', name: $('stName').value.trim() || room.name, patch: { roundDrawPc: Math.max(0, +$('stDrawPc').value || 0), roundDrawPcFirst: $('stDrawFirst').checked, roundDrawEnemy: Math.max(0, +$('stDrawEn').value || 0), exchange: +$('stTrade').value, digestTab: $('stDigest').value || null, decks: +$('stDecks').value, jokers: +$('stJk').value, opsTab: $('stOps').value, gmSeesSecret: $('stGmSecret').checked, logValues: $('stLogVals').checked } });
+      act({ type: 'settings', name: $('stName').value.trim() || room.name, patch: { handMaxPc: Math.max(0, +$('stMaxPc').value || 0), handMaxGm: Math.max(0, +$('stMaxGm').value || 0), roundDrawPc: Math.max(0, +$('stDrawPc').value || 0), roundDrawPcFirst: $('stDrawFirst').checked, roundDrawEnemy: Math.max(0, +$('stDrawEn').value || 0), exchange: +$('stTrade').value, digestTab: $('stDigest').value || null, decks: +$('stDecks').value, jokers: +$('stJk').value, opsTab: $('stOps').value, gmSeesSecret: $('stGmSecret').checked, logValues: $('stLogVals').checked } });
       closeDlg();
     };
   });
@@ -4507,6 +4574,10 @@ function commonClick(t, room, ru) {
   // cards
   if ((el = q('[data-pick]'))) { const c = el.dataset.pick; ui.sel = ui.sel.includes(c) ? ui.sel.filter(x => x !== c) : [...ui.sel, c]; renderCards(room, ru); return true; }
   if (q('[data-sort]')) { ru.sort = ru.sort === 'rank' ? 'suit' : 'rank'; saveU(); renderCards(room, ru); return true; }
+  if (q('[data-overdiscard]')) {
+    if (act({ type: 'play', cards: [...ui.sel], kind: 'other', memo: '手札の上限', seat: handSeat(room, ru) }, { silent: true }) !== FAIL) ui.sel = [];
+    renderRoom(); return true;
+  }
   if ((el = q('[data-play]'))) {
     const cards = [...ui.sel], memo = ui.memo;
     if (act({ type: 'play', cards, kind: el.dataset.play, memo, seat: handSeat(room, ru) }, { silent: true }) !== FAIL) { ui.sel = []; ui.memo = ''; }
@@ -4625,18 +4696,33 @@ function mapClick(t, room, ru) {
   if (q('[data-endround]')) { act({ type: 'endRound' }); return true; }
   if (q('[data-resetround]')) { ask('ラウンド数を1に戻し、SS値がいちばん大きいキャラの手番から始めます。', '戦闘を開始', () => act({ type: 'resetRound' })); return true; }
   // a selected token + a tap on an empty square = move there (a square holds one piece; tapping a piece selects it)
+  let target = null;   // the square to move to
   if (ui.selTok && room.chars[ui.selTok] && canControlChar(room, ru.viewer, ui.selTok) && room.chars[ui.selTok].x != null) {
-    const hit = (el = q('[data-tok]')) ? el.dataset.tok : (el = q('.cell.covered')) ? coverAt(room, el.dataset.cell) : null;
-    if (hit && hit !== ui.selTok && room.chars[hit]) { collideDialog(room, ru, ui.selTok, hit); return true; }
+    const selC = room.chars[ui.selTok];
+    // a giant covers its own squares: a tap on its body means the square under the finger (its top-left = deselect)
+    if (sizeOf(selC) > 1 && (q(`[data-tok="${ui.selTok}"]`) || ((el = q('.cell.covered')) && coverAt(room, el.dataset.cell) === ui.selTok))) {
+      const sq = cellUnder();
+      if (sq && (sq[0] !== selC.x || sq[1] !== selC.y)) target = sq;
+    }
+    if (!target) {
+      const hit = (el = q('[data-tok]')) ? el.dataset.tok : (el = q('.cell.covered')) ? coverAt(room, el.dataset.cell) : null;
+      if (hit && hit !== ui.selTok && room.chars[hit]) { collideDialog(room, ru, ui.selTok, hit); return true; }
+    }
   }
-  if ((el = q('[data-cell]')) && ui.selTok && !q('[data-tok]')) {
-    let [x, y] = el.dataset.cell.split(',').map(Number);
+  if (!target && (el = q('[data-cell]')) && ui.selTok && !q('[data-tok]')) target = el.dataset.cell.split(',').map(Number);
+  if (target) {
+    let [x, y] = target;
     // a giant goes with its top-left square on the tapped one, pulled back from the right / bottom edge
-    const n = sizeOf(room.chars[ui.selTok]); x = Math.min(x, 8 - n); y = Math.min(y, 8 - n);
+    const c = room.chars[ui.selTok], n = sizeOf(c); x = Math.min(x, 8 - n); y = Math.min(y, 8 - n);
+    // a giant on a touch screen: the first tap shows where it lands, a second tap on the same place moves it
+    if (n > 1 && ui.lastPt && ui.lastPt.touch && !(ui.pendingMove && ui.pendingMove.cid === c.id && ui.pendingMove.x === x && ui.pendingMove.y === y)) {
+      ui.pendingMove = { cid: c.id, x, y, bad: !!blockerAt(room, c, x, y) }; renderRoom(); return true;
+    }
+    ui.pendingMove = null;
     if (act({ type: 'move', cid: ui.selTok, x, y }, { silent: true }) !== FAIL) ui.selTok = null;
     renderRoom(); return true;
   }
-  if ((el = q('[data-tok]'))) { const id = el.dataset.tok; ui.selTok = ui.selTok === id ? null : id; renderRoom(); return true; }
+  if ((el = q('[data-tok]'))) { const id = el.dataset.tok; ui.selTok = ui.selTok === id ? null : id; ui.pendingMove = null; renderRoom(); return true; }
   if (q('[data-offboard]')) { if (act({ type: 'move', cid: ui.selTok, x: null, y: null }, { silent: true }) !== FAIL) ui.selTok = null; renderRoom(); return true; }
   if (q('[data-unsel]')) { ui.selTok = null; renderRoom(); return true; }
   return false;

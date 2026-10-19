@@ -59,7 +59,7 @@ function normalizeChar(raw) {
   if (!raw || typeof raw !== 'object') throw new Error('JSONの形になっていません');
   if (raw.format && raw.format !== 'pw-character') throw new Error(`形式が違います（${raw.format}）`);
   if (!raw.name || typeof raw.name !== 'string') throw new Error('name（キャラクター名）がありません');
-  const item = x => ({ name: String(x?.name || ''), attrs: x?.attrs && typeof x.attrs === 'object' ? x.attrs : {}, text: String(x?.text || '') });
+  const item = x => ({ name: String(x?.name || ''), attrs: x?.attrs && typeof x.attrs === 'object' ? x.attrs : {}, text: String(x?.text || ''), ...(normFx(x?.fx) ? { fx: normFx(x.fx) } : {}) });
   // values: {HP:{max:20}} / {SS値:{value:3}} / {HP:20} (shorthand = max for HP/TP, value otherwise)
   const stats = {};
   for (const [k, v] of Object.entries(raw.values || {})) {
@@ -161,21 +161,49 @@ function refit(room, ch) {
 // Read from the effect text by how long it lasts, which the rules always write the same way:
 //   phase   このアクションフェイズの間 / アクションフェイズが終わるまで → until the turn passes
 //   nextOwn 次の自分のアクションフェイズまで                      → until this character's next turn
-//   round   1ターンの間 / このラウンドの間                           → until the round ends
+//   turn    1ターンの間 / このターンの間                             → until this SS値 is done (a ターン is one SS値's turn)
+//   round   このラウンドの間 / ラウンド終了まで                       → until the round ends
 //   manual  added by hand                                           → until removed
 // ===== reading rules shared with the character sheet tool (princess-wing-sheet.html): keep both copies the same =====
-const EFFECT_DUR = { phase: 'この手番の間', nextOwn: '次の自分の手番まで', round: 'ラウンド終了まで', manual: '外すまで' };
-const DUR_RE = { nextOwn: /次の自分のアクションフェイズ(?:を迎える)?まで/, phase: /このアクションフェイズ(の間|中(?!に)|が終わるまで)|アクションフェイズが終わるまで/, round: /1ターンの間|このターンの間|このラウンド(の間|中)|ラウンド(が)?終了(する)?まで/ };
+const EFFECT_DUR = { phase: 'この手番の間', turn: 'このSS値の間（1ターン）', nextOwn: '次の自分の手番まで', round: 'ラウンド終了まで', manual: '外すまで' };
+const DUR_RE = { nextOwn: /次の自分のアクションフェイズ(?:を迎える)?まで/, phase: /このアクションフェイズ(の間|中(?!に)|が終わるまで)|アクションフェイズが終わるまで/, turn: /1ターンの間|このターンの間/, round: /このラウンド(の間|中)|ラウンド(が)?終了(する)?まで/ };
 function effectDuration(text) {
   const t = String(text || '').normalize('NFKC');
-  return ['nextOwn', 'phase', 'round'].find(k => DUR_RE[k].test(t)) || null;
+  return ['nextOwn', 'phase', 'turn', 'round'].find(k => DUR_RE[k].test(t)) || null;
+}
+// 期限タグ: an item may say for itself how its effect lasts ({ dur, note?, target? }; dur 'none' = not an effect),
+// for wording the reader does not know; otherwise the text is read
+function normFx(f) {
+  if (!f || typeof f !== 'object' || !(f.dur === 'none' || EFFECT_DUR[f.dur])) return null;
+  const o = { dur: f.dur };
+  if (typeof f.note === 'string' && f.note.trim()) o.note = f.note.trim().slice(0, 30);
+  if (FX_TARGET[f.target]) o.target = f.target;
+  return o;
+}
+function fxOf(it) {
+  if (!it) return null;
+  const o = normFx(it.fx);
+  if (o && o.dur === 'none') return null;
+  const dur = o ? o.dur : effectDuration(it.text);
+  if (!dur) return null;
+  return { dur, note: o && o.note ? o.note : effectNote(it.text), target: (o && o.target) || effectTarget(it.text) || 'self' };
 }
 // who the lasting effect is on: 'target' when its sentence is about 対象 (e.g. 対象は、1ターンの間…), otherwise the user
 function effectTarget(text) {
   const t = String(text || '').normalize('NFKC');
   const d = effectDuration(t); if (!d) return null;
   const sentence = t.split(/[。\n]/).find(x => DUR_RE[d].test(x)) || '';
+  if (/敵全員/.test(sentence)) return 'foes';
+  if (/味方全員/.test(sentence)) return 'allies';
   return /対象(は|の|が)/.test(sentence) && !/自分は/.test(sentence) ? 'target' : 'self';
+}
+// who an effect lands on: self / the chosen targets / every foe / every ally (the user included), on the board and standing
+const FX_TARGET = { self: '自分に付く', target: '対象に付く', foes: '敵全員に付く', allies: '味方全員に付く' };
+function fxHolders(room, ch, target, targets) {
+  if (target === 'target') return (targets || []).map(id => room.chars[id]).filter(Boolean);
+  const foe = c => ch.side === 'enemy' ? c.side !== 'enemy' : c.side === 'enemy';
+  if (target === 'foes' || target === 'allies') return Object.values(room.chars).filter(c => c.x != null && !isDown(c) && (target === 'foes' ? foe(c) : !foe(c) && c.side !== 'npc' || c.id === ch.id));
+  return [ch];
 }
 // 射程: "2" / "1～2" are read; "－", "効果参照" and empty mean no range; anything else cannot be shown on the board
 const RANGE_NONE = /^(|[-－―—ー]|効果参照|なし|自身)$/;
@@ -205,7 +233,8 @@ function addEffect(room, ch, { name, note, dur, text, by }) {
   if (!ch) return;
   ch.effects = (ch.effects || []).filter(e => e.name !== name);        // using it again refreshes it
   ch.effects.push({ id: uid('e'), name: String(name).slice(0, 30), note: String(note || '').slice(0, 30), dur: EFFECT_DUR[dur] ? dur : 'manual',
-    text: String(text || '').slice(0, 300), turn: room.turn.current || null, seq: room.turn.seq || 0 });
+    text: String(text || '').slice(0, 300), turn: room.turn.current || null, seq: room.turn.seq || 0,
+    ss: room.turn.current && room.chars[room.turn.current] ? ssOf(room.chars[room.turn.current]) : null });
 }
 // after the turn moves (次の手番, 手番の指定, ラウンド): drop what has run out, with a log line each
 function expireEffects(room, by, roundEnded) {
@@ -215,6 +244,8 @@ function expireEffects(room, by, roundEnded) {
     ch.effects = (ch.effects || []).filter(e => {
       const out = e.dur === 'phase' ? (roundEnded || room.turn.current !== e.turn)
         : e.dur === 'nextOwn' ? room.turn.current === ch.id && room.turn.seq > e.seq
+        // 1ターン: ends when the turn passes to a character of another SS値 (or the round ends)
+        : e.dur === 'turn' ? roundEnded || (!!room.turn.current && !!room.chars[room.turn.current] && ssOf(room.chars[room.turn.current]) !== e.ss)
         : e.dur === 'round' ? roundEnded : false;
       if (out) gone.push(e.name);
       return !out;
@@ -225,16 +256,18 @@ function expireEffects(room, by, roundEnded) {
 // a declaration (コマンド or 武装を使う) whose text has a duration starts a lasting effect on the declarer,
 // but only for the items the player confirmed when importing (ch.autoFx: names; reading the text can be wrong)
 function effectsFromText(room, ch, name, text, by, targets) {
-  const dur = effectDuration(text);
-  if (!ch || !dur || !(ch.autoFx || []).includes(name)) return;
-  // on the 対象: the targets chosen in 武装を使う (nothing to attach to without them)
-  const on = effectTarget(text) === 'target' ? (targets || []).map(id => room.chars[id]).filter(Boolean) : [ch];
-  on.forEach(c => addEffect(room, c, { name, note: effectNote(text), dur, text, by }));
+  if (!ch || !(ch.autoFx || []).includes(name)) return;
+  // the sheet's own item (its 期限タグ, if any), else just the text
+  const d = ch.data, own = [...(d.skills || []), ...(d.core?.functions || []), d.wingDrive, ...(d.darkDrives || []), ...(d.weapons?.common || []), ...(d.weapons?.slots || []), ...(d.variations || []).flatMap(v => v.slots || [])].find(x => x && x.name === name);
+  const f = fxOf(own ? { ...own, text: own.text || text } : { name, text });
+  if (!f) return;
+  // on the 対象: the targets chosen in 武装を使う (nothing to attach to without them); 敵全員 / 味方全員: everyone on that side
+  fxHolders(room, ch, f.target, targets).forEach(c => addEffect(room, c, { name, note: f.note, dur: f.dur, text, by }));
 }
 // every item of a sheet whose text has a duration: what the import asks about
 function detectEffects(d) {
   const out = [], seen = new Set();
-  const add = (grp, it) => { if (!it || !it.name || seen.has(it.name)) return; const dur = effectDuration(it.text); if (dur) { seen.add(it.name); out.push({ grp, name: it.name, note: effectNote(it.text), dur, target: effectTarget(it.text) }); } };
+  const add = (grp, it) => { if (!it || !it.name || seen.has(it.name)) return; const f = fxOf(it); if (f) { seen.add(it.name); out.push({ grp, name: it.name, ...f, tagged: !!normFx(it.fx) }); } };
   (d.skills || []).forEach(it => add('特技', it));
   (d.core?.functions || []).forEach(it => add('特殊機能', it));
   add('ウイングドライブ', d.wingDrive);
@@ -265,6 +298,9 @@ function roundDrawCount(room, seat) {
   if (!c || c.side !== 'pc' || isDown(c)) return 0;
   return room.turn.round === 1 && !st.roundDrawPcFirst ? 0 : (st.roundDrawPc ?? 2);
 }
+// 手札の上限 (PL 10 / GM 15 by default; 0 = none): the room shows the excess, the player discards it
+const handLimit = (room, seat) => { const n = seat === 'gm' ? room.settings.handMaxGm : room.settings.handMaxPc; return Number.isFinite(n) && n > 0 ? n : Infinity; };
+const handOver = (room, seat) => Math.max(0, (room.cards.hands[seat] || []).length - handLimit(room, seat));
 const drawPending = room => !inCombat(room) || room.turn.ending ? [] : ['gm', ...pcSeats(room).map(c => c.id)].filter(s => roundDrawCount(room, s) > 0 && !(room.turn.drew || []).includes(s));
 const tradePending = room => room.turn.ending && (room.settings.exchange ?? 1) > 0 ? pcSeats(room).filter(c => !isDown(c) && !(room.turn.traded || []).includes(c.id)).map(c => c.id) : [];
 // the last actor is done: with an exchange set, the round pauses for it (the GM then starts the next round)
@@ -371,7 +407,7 @@ function newRoom(name) {
   return {
     id: uid('r'), name: name || '新しい部屋', createdAt: Date.now(),
     players: {},
-    settings: { jokers: 2, decks: 1, opsTab: 'battle', digestTab: 'main', gmSeesSecret: true, logValues: true, roundDrawPc: 2, roundDrawPcFirst: false, roundDrawEnemy: 2, exchange: 1 },
+    settings: { jokers: 2, decks: 1, opsTab: 'battle', digestTab: 'main', gmSeesSecret: true, logValues: true, roundDrawPc: 2, roundDrawPcFirst: false, roundDrawEnemy: 2, exchange: 1, handMaxPc: 10, handMaxGm: 15 },
     turn: { round: 1, current: null },
     chars: {},
     cards: { deck: newDeck(2), discard: [], hands: { gm: [] } },
@@ -923,7 +959,7 @@ function migrateRoom(room) {
   room.players = room.players || {};
   room.settings.decks = room.settings.decks || 1;
   if (!('digestTab' in room.settings)) room.settings.digestTab = 'main';
-  for (const [k, v] of Object.entries({ roundDrawPc: 2, roundDrawPcFirst: false, roundDrawEnemy: 2, exchange: 1 })) if (!(k in room.settings)) room.settings[k] = v;
+  for (const [k, v] of Object.entries({ roundDrawPc: 2, roundDrawPcFirst: false, roundDrawEnemy: 2, exchange: 1, handMaxPc: 10, handMaxGm: 15 })) if (!(k in room.settings)) room.settings[k] = v;
   for (const ch of Object.values(room.chars)) {
     if (!ch.data.stats || ch.data.skills.some(s => !('tp' in s))) { try { ch.data = normalizeChar({ ...ch.data, values: ch.data.stats ? Object.fromEntries(Object.entries(ch.data.stats)) : ch.data.values }); } catch (e) {} }
     if (ch.variation == null) ch.variation = -1;
@@ -1033,5 +1069,5 @@ function viewRoom(room, seat, pid) {
   return r;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { rangeProblems, effectTarget, rangeIssue, nextActors, isDown, roundDrawCount, drawPending, tradePending, inCombat, formWord, isJokerWeapon, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
+  module.exports = { handLimit, handOver, rangeProblems, effectTarget, rangeIssue, nextActors, isDown, roundDrawCount, drawPending, tradePending, inCombat, formWord, isJokerWeapon, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
 }
