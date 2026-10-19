@@ -151,7 +151,7 @@ function refit(room, ch) {
 //   manual  added by hand                                           → until removed
 // ===== reading rules shared with the character sheet tool (princess-wing-sheet.html): keep both copies the same =====
 const EFFECT_DUR = { phase: 'この手番の間', nextOwn: '次の自分の手番まで', round: 'ラウンド終了まで', manual: '外すまで' };
-const DUR_RE = { nextOwn: /次の自分のアクションフェイズまで/, phase: /このアクションフェイズ(の間|中(?!に)|が終わるまで)|アクションフェイズが終わるまで/, round: /1ターンの間|このターンの間|このラウンド(の間|中)|ラウンド(が)?終了(する)?まで/ };
+const DUR_RE = { nextOwn: /次の自分のアクションフェイズ(?:を迎える)?まで/, phase: /このアクションフェイズ(の間|中(?!に)|が終わるまで)|アクションフェイズが終わるまで/, round: /1ターンの間|このターンの間|このラウンド(の間|中)|ラウンド(が)?終了(する)?まで/ };
 function effectDuration(text) {
   const t = String(text || '').normalize('NFKC');
   return ['nextOwn', 'phase', 'round'].find(k => DUR_RE[k].test(t)) || null;
@@ -167,8 +167,9 @@ function effectTarget(text) {
 const RANGE_NONE = /^(|[-－―—ー]|効果参照|なし|自身)$/;
 function parseRangeText(r) {
   const t = String(r ?? '').normalize('NFKC').trim();
-  let m = t.match(/^(\d+)\s*[~〜～\-－―]\s*(\d+)$/);
-  if (m) return { min: Math.min(+m[1], +m[2]), max: Math.max(+m[1], +m[2]) };
+  let m = t.match(/^(\d+)\s*[~〜～\-－―]\s*(\d+|∞)$/);
+  // 1～∞: no upper limit (anywhere on the board)
+  if (m) { const b = m[2] === '∞' ? Infinity : +m[2]; return { min: Math.min(+m[1], b), max: Math.max(+m[1], b) }; }
   m = t.match(/^(\d+)$/);
   return m ? { min: +m[1], max: +m[1] } : null;
 }
@@ -179,10 +180,11 @@ function effectNote(text) {
   const t = String(text || '').normalize('NFKC');
   const out = [];
   let m;
-  if ((m = t.match(/威力に?(?:すべて)?\s*\+\s*(\d+)/))) out.push(`威力+${m[1]}`);
+  if ((m = t.match(/威力(?:すべて)?に?(?:すべて)?\s*\+\s*(\d+)/))) out.push(`威力+${m[1]}`);
   if ((m = t.match(/回避コスト[^。]*?\+\s*(\d+)/))) out.push(`回避+${m[1]}`);
   if ((m = t.match(/移動値[^。]*?\+\s*(\d+)/))) out.push(`移動+${m[1]}`);
   if ((m = t.match(/追加で(\d+)回/))) out.push(`武装+${m[1]}回`);
+  if ((m = t.match(/ダメージ[^。]*?(\d+)点軽減/))) out.push(`軽減${m[1]}`);
   return out.join(' ');
 }
 function addEffect(room, ch, { name, note, dur, text, by }) {
