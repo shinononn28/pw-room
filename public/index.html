@@ -191,6 +191,9 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pink)}
 /* where a giant would land: its 2×2 footprint follows the pointer (tap once to see it on a phone, again to move) */
 .moveGhost{position:relative;z-index:3;pointer-events:none;border-radius:10px;border:3px dashed #18B4FF;background:rgba(24,180,255,.16);box-shadow:inset 0 0 0 2px rgba(255,255,255,.5)}
 .moveGhost.bad{border-color:#FF4D6A;background:rgba(255,77,106,.16)}
+.moveGhost.far{border-color:#8A93B8;background:rgba(138,147,184,.18)}
+.moveGhost.far::after{content:"通れない";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-weight:900;font-size:.8rem;color:#fff;background:#6C7598;border-radius:999px;padding:2px 10px}
+.moveGhost.bad::after{content:"衝突";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-weight:900;font-size:.85rem;color:#fff;background:#FF4D6A;border-radius:999px;padding:2px 10px}
 .tok.giant{width:min(90%,180px) !important;border-radius:22%;border-width:4px;font-size:clamp(.9rem,3.4vw,1.5rem) !important}
 .cell.covered{background-image:linear-gradient(color-mix(in srgb,#FF5C5C 12%,transparent),color-mix(in srgb,#FF5C5C 12%,transparent))}
 .giantBox .cfx{position:absolute;top:4px;right:4px;min-width:17px;height:17px;border-radius:9px;background:#7C5CFF;color:#fff;font-size:.62rem;font-weight:800;line-height:17px;text-align:center;padding:0 4px;box-shadow:0 0 0 2px #fff;z-index:3;pointer-events:none}
@@ -1578,6 +1581,24 @@ function gap(a, b) {
 }
 // whoever already stands on the squares ch would cover at (x, y)
 const blockerAt = (room, ch, x, y) => { const mine = cellsOf(ch, x, y); return Object.values(room.chars).find(o => o.id !== ch.id && o.x != null && cellsOf(o).some(([ox, oy]) => mine.some(([mx, my]) => mx === ox && my === oy))); };
+// a giant walks with its whole footprint: steps to every top-left square it can reach, never overlapping a piece on the way
+function giantReach(room, ch, limit = 64) {
+  const n = sizeOf(ch), out = new Map(), key = (x, y) => x * 8 + y;
+  if (ch.x == null) return out;
+  out.set(key(ch.x, ch.y), 0);
+  let frontier = [[ch.x, ch.y]];
+  for (let d = 1; frontier.length && d <= limit; d++) {
+    const next = [];
+    for (const [x, y] of frontier) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx > 8 - n || ny > 8 - n || out.has(key(nx, ny)) || blockerAt(room, ch, nx, ny)) continue;
+      out.set(key(nx, ny), d); next.push([nx, ny]);
+    }
+    frontier = next;
+  }
+  return out;
+}
+const giantSteps = (room, ch, x, y) => { const d = giantReach(room, ch).get(x * 8 + y); return d == null ? Infinity : d; };
 // after a change of size: keep the piece on the board if it still fits (pulled in from the edge), otherwise take it off
 function refit(room, ch) {
   if (ch.x == null) return '';
@@ -1720,16 +1741,20 @@ const cleanAutoFx = list => Array.isArray(list) ? [...new Set(list.map(String))]
 // ----- round draws and the round-end exchange: each player does it, the room keeps track of who has -----
 const inCombat = room => !!(room.turn.current || (room.turn.pick || []).length || room.turn.ending || (room.turn.done || []).length);
 const pcSeats = room => Object.values(room.chars).filter(c => c.side === 'pc');
-// cards a seat draws at the start of this round: a PC its share (from round 2 unless set otherwise), the GM (enemies) per PC
+// cards a seat draws at the start of this round: a PC its share, the GM (enemies) per PC — both from round 2 unless set
+// otherwise, since the opening hands stand for round 1
 function roundDrawCount(room, seat) {
   const st = room.settings;
-  if (seat === 'gm') return Object.values(room.chars).some(c => c.side === 'enemy' && !isDown(c)) ? (st.roundDrawEnemy ?? 2) * pcSeats(room).length : 0;
+  if (seat === 'gm') return Object.values(room.chars).some(c => c.side === 'enemy' && !isDown(c)) && !(room.turn.round === 1 && !st.roundDrawEnemyFirst) ? (st.roundDrawEnemy ?? 2) * pcSeats(room).length : 0;
   const c = room.chars[seat];
   if (!c || c.side !== 'pc' || isDown(c)) return 0;
   return room.turn.round === 1 && !st.roundDrawPcFirst ? 0 : (st.roundDrawPc ?? 2);
 }
-// 手札の上限 (PL 10 / GM 15 by default; 0 = none): the room shows the excess, the player discards it
-const handLimit = (room, seat) => { const n = seat === 'gm' ? room.settings.handMaxGm : room.settings.handMaxPc; return Number.isFinite(n) && n > 0 ? n : Infinity; };
+// 手札の上限 (PL 10 / GM 15 by default; 0 = none; none with two or more decks): a hand at its limit draws no more
+const handLimit = (room, seat) => { if ((room.settings.decks || 1) >= 2) return Infinity; const n = seat === 'gm' ? room.settings.handMaxGm : room.settings.handMaxPc; return Number.isFinite(n) && n > 0 ? n : Infinity; };
+const handRoom = (room, seat) => handLimit(room, seat) - (room.cards.hands[seat] || []).length;
+// 初期手札: the GM first (3 + PL数×3, never a joker), then every PC (7)
+const dealCounts = room => { const st = room.settings, pcs = pcSeats(room).length; return { gm: (st.dealGmBase ?? 3) + pcs * (st.dealGmPerPc ?? 3), pc: st.dealPc ?? 7 }; };
 const handOver = (room, seat) => Math.max(0, (room.cards.hands[seat] || []).length - handLimit(room, seat));
 const drawPending = room => !inCombat(room) || room.turn.ending ? [] : ['gm', ...pcSeats(room).map(c => c.id)].filter(s => roundDrawCount(room, s) > 0 && !(room.turn.drew || []).includes(s));
 const tradePending = room => room.turn.ending && (room.settings.exchange ?? 1) > 0 ? pcSeats(room).filter(c => !isDown(c) && !(room.turn.traded || []).includes(c.id)).map(c => c.id) : [];
@@ -1837,7 +1862,7 @@ function newRoom(name) {
   return {
     id: uid('r'), name: name || '新しい部屋', createdAt: Date.now(),
     players: {},
-    settings: { jokers: 2, decks: 1, opsTab: 'battle', digestTab: 'main', gmSeesSecret: true, logValues: true, roundDrawPc: 2, roundDrawPcFirst: false, roundDrawEnemy: 2, exchange: 1, handMaxPc: 10, handMaxGm: 15 },
+    settings: { jokers: 2, decks: 1, opsTab: 'battle', digestTab: 'main', gmSeesSecret: true, logValues: true, roundDrawPc: 2, roundDrawPcFirst: false, roundDrawEnemy: 2, roundDrawEnemyFirst: false, exchange: 1, handMaxPc: 10, handMaxGm: 15, dealPc: 7, dealGmBase: 3, dealGmPerPc: 3 },
     turn: { round: 1, current: null },
     chars: {},
     cards: { deck: newDeck(2), discard: [], hands: { gm: [] } },
@@ -2105,6 +2130,12 @@ function applyInner(room, a, by, pid) {
         // one piece per square (a giant needs all four of its squares free)
         const occ = blockerAt(room, ch, a.x, a.y);
         if (occ) throw new ActionError(n > 1 ? `${occ.data.name}と重なります` : `${coordName(a.x, a.y)}にはすでに${occ.data.name}がいます`);
+        // a giant may not pass over other pieces on the way: within its 移動値 it must get there around them
+        if (n > 1 && ch.x != null) {
+          const steps = giantSteps(room, ch, a.x, a.y), mv = Number(ch.cur['移動値']), straight = Math.abs(a.x - ch.x) + Math.abs(a.y - ch.y);
+          need(steps !== Infinity, '途中で他のコマと重なるため、そこへは移動できません');
+          need(!(Number.isFinite(mv) && straight <= mv && steps > mv), `途中で他のコマと重なるため、移動値${mv}では届きません（回り込むと${steps}マス）`);
+        }
         ch.x = a.x; ch.y = a.y;
       }
       const to = ch.x == null ? '盤外' : coordName(ch.x, ch.y);
@@ -2117,13 +2148,32 @@ function applyInner(room, a, by, pid) {
       const seat = a.seat || by;
       need(seat === by || by === 'gm', '他の人の手札は操作できません');
       need(seat === 'gm' || isPcSeat(room, seat), 'この席は手札を持てません');
-      const n = Math.max(1, Math.min(20, a.n | 0));
+      const want = Math.max(1, Math.min(20, a.n | 0)), left = handRoom(room, seat);
+      need(left > 0, `手札が上限（${handLimit(room, seat)}枚）なので引けません`);
+      const n = Math.min(want, left);
       need(room.cards.deck.length >= n, `山札が足りません（残り${room.cards.deck.length}枚）`);
       const got = room.cards.deck.splice(0, n);
       (room.cards.hands[seat] = room.cards.hands[seat] || []).push(...got);
       // a GM draw only shows how many; PC draws are open to the PC side
       // the count is 'count': 'n' is the server's log sequence number
-      log(room, { tab: opsTab(room), type: 'draw', by, seat, count: n, cards: got, secretCards: seat === 'gm' });
+      log(room, { tab: opsTab(room), type: 'draw', by, seat, count: n, cards: got, secretCards: seat === 'gm', capped: n < want ? want : undefined });
+      return;
+    }
+    case 'deal': { // ゲーム開始 / 初期手札: the GM's hand first, jokers left in the deck, then every PC
+      need(by === 'gm', '初期手札を配るのはGMだけです');
+      const seats = ['gm', ...pcSeats(room).map(c => c.id)];
+      need(seats.length > 1, 'PCがいません。PCを追加してから配ってください');
+      // fresh: every card back into a newly shuffled deck first (ゲーム開始)
+      if (a.fresh) { room.cards.deck = newDeck(room.settings.jokers, room.settings.decks || 1); room.cards.discard = []; for (const k of Object.keys(room.cards.hands)) room.cards.hands[k] = []; }
+      need(seats.every(s => !(room.cards.hands[s] || []).length), '手札が残っています。「山札を作り直す」で集めてから配ってください');
+      const c = dealCounts(room), gmN = Math.min(c.gm, handLimit(room, 'gm'));
+      const deck = room.cards.deck, isJoker = k => k[0] === 'X';
+      need(deck.filter(k => !isJoker(k)).length >= gmN && deck.length - gmN >= c.pc * (seats.length - 1), `山札が足りません（残り${deck.length}枚）`);
+      const gmCards = [];
+      for (let i = 0; i < deck.length && gmCards.length < gmN; ) { if (isJoker(deck[i])) i++; else gmCards.push(deck.splice(i, 1)[0]); }
+      room.cards.hands.gm = gmCards;
+      for (const s of seats.slice(1)) room.cards.hands[s] = deck.splice(0, Math.min(c.pc, handLimit(room, s)));
+      log(room, { tab: opsTab(room), type: 'sys', by, text: `${a.fresh ? 'ゲーム開始：山札をシャッフルして' : ''}初期手札を配りました：GM ${gmN}枚（ジョーカーなし）、PC ${c.pc}枚ずつ（${seats.length - 1}人）` });
       return;
     }
     case 'roundDraw': { // this round's draw, once per seat
@@ -2133,11 +2183,12 @@ function applyInner(room, a, by, pid) {
       const n = roundDrawCount(room, seat);
       need(n > 0, 'このラウンドに引く枚数はありません');
       need(!(room.turn.drew || []).includes(seat), 'このラウンドのドローは済んでいます');
-      need(room.cards.deck.length >= n, `山札が足りません（残り${room.cards.deck.length}枚）。捨て札を山札に戻してください`);
-      const got = room.cards.deck.splice(0, n);
+      const k = Math.max(0, Math.min(n, handRoom(room, seat)));   // up to the hand limit (a full hand draws nothing)
+      need(room.cards.deck.length >= k, `山札が足りません（残り${room.cards.deck.length}枚）。捨て札を山札に戻してください`);
+      const got = room.cards.deck.splice(0, k);
       (room.cards.hands[seat] = room.cards.hands[seat] || []).push(...got);
       room.turn.drew = [...(room.turn.drew || []), seat];
-      log(room, { tab: opsTab(room), type: 'draw', by, seat, count: n, cards: got, secretCards: seat === 'gm', round: room.turn.round });
+      log(room, { tab: opsTab(room), type: 'draw', by, seat, count: k, cards: got, secretCards: seat === 'gm', round: room.turn.round, capped: k < n ? n : undefined });
       return;
     }
     case 'trade': { // the round-end exchange: cards to an ally, once per PC
@@ -2182,6 +2233,7 @@ function applyInner(room, a, by, pid) {
       need(seat === 'gm' || isPcSeat(room, seat), 'この席は手札を持てません');
       const i = room.cards.discard.lastIndexOf(a.card);
       need(i >= 0, 'そのカードは捨て札にありません');
+      need(handRoom(room, seat) > 0, `手札が上限（${handLimit(room, seat)}枚）なので手札に加えられません`);
       room.cards.discard.splice(i, 1);
       (room.cards.hands[seat] = room.cards.hands[seat] || []).push(a.card);
       log(room, { tab: opsTab(room), type: 'pick', by, seat, cards: [a.card], memo: (a.memo || '').trim() });
@@ -2389,7 +2441,7 @@ function migrateRoom(room) {
   room.players = room.players || {};
   room.settings.decks = room.settings.decks || 1;
   if (!('digestTab' in room.settings)) room.settings.digestTab = 'main';
-  for (const [k, v] of Object.entries({ roundDrawPc: 2, roundDrawPcFirst: false, roundDrawEnemy: 2, exchange: 1, handMaxPc: 10, handMaxGm: 15 })) if (!(k in room.settings)) room.settings[k] = v;
+  for (const [k, v] of Object.entries({ roundDrawPc: 2, roundDrawPcFirst: false, roundDrawEnemy: 2, roundDrawEnemyFirst: false, exchange: 1, handMaxPc: 10, handMaxGm: 15, dealPc: 7, dealGmBase: 3, dealGmPerPc: 3 })) if (!(k in room.settings)) room.settings[k] = v;
   for (const ch of Object.values(room.chars)) {
     if (!ch.data.stats || ch.data.skills.some(s => !('tp' in s))) { try { ch.data = normalizeChar({ ...ch.data, values: ch.data.stats ? Object.fromEntries(Object.entries(ch.data.stats)) : ch.data.values }); } catch (e) {} }
     if (ch.variation == null) ch.variation = -1;
@@ -2508,7 +2560,7 @@ function viewRoom(room, seat, pid) {
   return r;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { handLimit, handOver, rangeProblems, effectTarget, rangeIssue, nextActors, isDown, roundDrawCount, drawPending, tradePending, inCombat, formWord, isJokerWeapon, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
+  module.exports = { giantReach, giantSteps, handLimit, handOver, handRoom, dealCounts, rangeProblems, effectTarget, rangeIssue, nextActors, isDown, roundDrawCount, drawPending, tradePending, inCombat, formWord, isJokerWeapon, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
 }
 // =====================================================================
 // local storage + UI
@@ -3134,6 +3186,8 @@ function boardCells(room) {
   const at = {}, cover = {};
   chars.forEach(c => { if (c.x == null) return; if (sizeOf(c) > 1) cellsOf(c).forEach(([x, y]) => { cover[x + ',' + y] = c; }); else (at[c.x + ',' + c.y] = at[c.x + ',' + c.y] || []).push(c); });
   const selBig = sel && sizeOf(sel) > 1;
+  // a giant's reach goes around other pieces (its four squares may not cross them on the way)
+  const gReach = selBig && sel.x != null ? giantReach(room, sel, Number.isFinite(mv) ? mv : 0) : null;
   let cells = '';
   // squares are placed explicitly, so the giants can lie over them in the same grid
   const pos = (x, y) => `grid-row:${y + 1};grid-column:${x + 2}`;
@@ -3146,7 +3200,8 @@ function boardCells(room) {
       // squares within 移動値 are highlighted; moving further is still allowed (a giant: where its top-left square can go)
       const step = sel && sel.x != null ? Math.abs(sel.x - x) + Math.abs(sel.y - y) : null;
       const fits = !selBig || (x <= 6 && y <= 6);
-      const reach = step != null && step > 0 && Number.isFinite(mv) && step <= mv && !taken && fits && !(selBig && blockerAt(room, sel, x, y));
+      const gd = gReach && gReach.get(x * 8 + y);
+      const reach = selBig ? gd != null && gd > 0 && gd <= mv : step != null && step > 0 && Number.isFinite(mv) && step <= mv && !taken;
       const inR = rng && d != null && d >= rng.min && d <= rng.max;
       cells += `<div class="cell ${(x + y) % 2 ? 'alt' : ''} ${list.length > 1 ? 'multi' : ''} ${big ? 'covered' : ''} ${sel && !taken ? 'target' : ''} ${reach ? 'reach' : ''} ${inR ? 'rng' : ''}" style="${pos(x, y)}" data-cell="${x},${y}" aria-label="${coordName(x, y)}${big ? `（${esc(big.data.name)}）` : ''}${reach ? '（移動値の範囲内）' : ''}${inR ? '（射程内）' : ''}">
         ${list.map(c => tokHtml(c, sel && c.id === sel.id, foeIds && foeIds.has(c.id))).join('')}${(n => n ? `<span class="cfx" title="効果${n}件">${n}</span>` : '')(list.reduce((a, c) => a + (c.effects || []).length, 0))}${d != null && d > 0 ? `<span class="dist">${d}</span>` : ''}</div>`;
@@ -3206,6 +3261,7 @@ function renderMap(room, ru) {
   const nextBtn = ending ? (v === 'gm' ? `<button class="btn small primary" data-nextturn title="交換を終えて次のラウンドへ">次のラウンドへ ›</button>` : '<span class="btn small primary slot" aria-hidden="true">交換中</span>')
     : pickable ? '<button class="btn small primary" data-pickmenu title="SS値が同値のキャラから選ぶ">誰が動く？</button>'
     : canNext ? `<button class="btn small primary" data-nextturn title="${lastUp ? 'ラウンドを終えて次のラウンドへ' : '次のキャラの手番へ'}">${lastUp ? 'ラウンド終了 ›' : '次の手番 ›'}</button>`
+    : !cur && v === 'gm' && order.length && handsEmpty(room) && order.some(c => c.side === 'pc') ? '<button class="btn small primary" data-startgame title="山札をシャッフルして、GMとPC全員にカードを配る">ゲーム開始</button>'
     : !cur && v === 'gm' && order.length ? '<button class="btn small primary" data-resetround title="第1ラウンド、SS値がいちばん大きいキャラから">戦闘開始</button>'
     : v === 'gm' || isPcSeat(room, v) ? '<span class="btn small primary slot" aria-hidden="true">次の手番 ›</span>' : '';
   const tools = `<button class="btn small" data-import>＋ キャラ</button>${nextBtn}${v === 'gm' ? `<button class="btn small ghost mobileOnly" data-opensettings>設定</button>` : ''}`;
@@ -3280,7 +3336,8 @@ function renderCards(room, ru) {
   const dn = roundDrawCount(room, mySeat), needDraw = dn > 0 && drawPending(room).includes(mySeat);
   const tk = room.settings.exchange ?? 1, needTrade = tradePending(room).includes(mySeat);
   // the round's draw / exchange takes the place of the plain draw control, so the tray never changes height
-  const roundAct = needDraw ? `<button class="btn roundAct" data-rounddraw title="第${room.turn.round}ラウンドのドロー">ラウンドのドロー：${dn}枚</button>`
+  const dk = Math.max(0, Math.min(dn, handRoom(room, mySeat)));
+  const roundAct = needDraw ? `<button class="btn roundAct" data-rounddraw title="第${room.turn.round}ラウンドのドロー">ラウンドのドロー：${dk}枚${dk < dn ? '（上限まで）' : ''}</button>`
     : needTrade ? `<button class="btn roundAct trade" data-trade ${n === tk ? '' : 'disabled'} title="ラウンド終了：味方と${tk}枚交換">${n === tk ? '交換：選んだカードを渡す' : `交換：${tk}枚選んでください`}</button>` : '';
   const seatNeeds = s => (roundDrawCount(room, s) > 0 && drawPending(room).includes(s)) || tradePending(room).includes(s);
   // 手札の上限: the count shows the limit; over it, pick the excess and discard it
@@ -3449,7 +3506,7 @@ function logHtml(room, l) {
   if (l.type === 'give') return `<div class="le ${cls}"><span class="who">${seatWho}</span>${l.trade ? '<span class="kind">交換</span>' : ''}${l.cards.map(chipHtml).join(' ')} を${esc(l.toName)}に渡した<span class="t">${time}</span></div>`;
   if (l.type === 'round') return `<div class="le round">${esc(l.text)}</div>`;
   if (l.type === 'turn') return `<div class="le turn">${esc(l.text)}<span class="t">${time}</span></div>`;
-  if (l.type === 'draw') return `<div class="le ${cls}"><span class="who">${seatWho}</span>${l.round ? '<span class="kind">ラウンド</span>' : ''}${l.count ?? l.n}枚ドロー ${l.cards ? l.cards.map(chipHtml).join(' ') : ''}<span class="t">${time}</span></div>`;
+  if (l.type === 'draw') return `<div class="le ${cls}"><span class="who">${seatWho}</span>${l.round ? '<span class="kind">ラウンド</span>' : ''}${l.count ?? l.n}枚ドロー${l.capped ? `<span class="muted">（${l.capped}枚のうち、手札の上限まで）</span>` : ''} ${l.cards ? l.cards.map(chipHtml).join(' ') : ''}<span class="t">${time}</span></div>`;
   const showWho = l.type !== 'sys' && !(l.byName && l.text && l.text.startsWith(l.byName));
   // 換装 that changed the 立ち絵: small before → after pictures
   const swapPics = l.type === 'variation' && l.ptFrom && l.ptTo ? `<span class="swapPics"><img src="${esc(l.ptFrom)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">→<img src="${esc(l.ptTo)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()"></span>` : '';
@@ -3525,7 +3582,7 @@ function logPlain(room, l) {
   if (l.type === 'give') return `［${sn}］${l.trade ? '（交換）' : ''}${l.cards.map(cardText).join(' ')} を${l.toName}に渡した`;
   if (l.type === 'round') return `―― ${l.text} ――`;
   if (l.type === 'turn') return `▶ ${l.text}`;
-  if (l.type === 'draw') return `［${sn}］${l.round ? 'ラウンドの' : ''}${l.count ?? l.n}枚ドロー${l.cards ? ' ' + l.cards.map(cardText).join(' ') : ''}`;
+  if (l.type === 'draw') return `［${sn}］${l.round ? 'ラウンドの' : ''}${l.count ?? l.n}枚ドロー${l.capped ? `（${l.capped}枚のうち、手札の上限まで）` : ''}${l.cards ? ' ' + l.cards.map(cardText).join(' ') : ''}`;
   return `［${l.type === 'sys' ? 'システム' : (l.byName || seatName(room, l.by))}］${l.text}`;
 }
 const CHAT_MAX = 300;   // lines kept on screen per tab (the rest stays in the log)
@@ -3955,14 +4012,16 @@ function roundMenu(room) {
     <p class="muted">${cur ? `第${room.turn.round}ラウンド・${esc(cur.data.name)}の手番です。` : '戦闘前です。'}最後のキャラが「ラウンド終了」を押すと、次のラウンドに進みます。</p>
     <div class="roundMenu">
       ${cur ? `<button class="btn" data-endround>ラウンドを終える<small>第${room.turn.round + 1}ラウンドへ（手札交換のタイミング）</small></button>` : ''}
-      <button class="btn ${cur ? '' : 'primary'}" data-resetround>${cur ? '戦闘を最初から' : '戦闘開始'}<small>第1ラウンド、SS値がいちばん大きいキャラから</small></button>
+      ${cur ? '' : `<button class="btn ${handsEmpty(room) ? 'primary' : ''}" data-startgame>ゲーム開始<small>山札をシャッフルして配る（GM ${dealCounts(room).gm}枚・ジョーカーなし → PC ${dealCounts(room).pc}枚ずつ）</small></button>`}
+      <button class="btn ${cur || handsEmpty(room) ? '' : 'primary'}" data-resetround>${cur ? '戦闘を最初から' : '戦闘開始'}<small>第1ラウンド、SS値がいちばん大きいキャラから</small></button>
       ${cur ? '<button class="btn danger" data-endcombat>戦闘を終える<small>手番をなくし、期限のある効果を外す</small></button>' : ''}
     </div>
     <div class="row" style="margin-top:12px"><span style="flex:1"></span><button class="btn" data-close>閉じる</button></div>`, () => {
     // a plain dialog does not go through the page's click handler: wire the buttons here
     const on = (sel, f) => { const b = document.querySelector(`#dlgBody ${sel}`); if (b) b.onclick = f; };
     on('[data-endround]', () => { closeDlg(); act({ type: 'endRound' }); });
-    on('[data-resetround]', () => { closeDlg(); ask('ラウンド数を1に戻し、SS値がいちばん大きいキャラの手番から始めます。', '戦闘を開始', () => act({ type: 'resetRound' })); });
+    on('[data-resetround]', () => { closeDlg(); startCombat(room); });
+    on('[data-startgame]', () => { closeDlg(); startGame(room); });
     on('[data-endcombat]', () => { closeDlg(); ask('手番をなくし、期限のある効果（手動で付けたもの以外）を外します。ラウンド数はそのまま残ります。', '戦闘を終える', () => act({ type: 'endCombat' })); });
   });
 }
@@ -4103,7 +4162,7 @@ function deckHtml(room, ru) {
     <div class="row" style="margin-top:14px">
       <button class="btn" data-discards>捨て札を見る・拾う</button>
       <button class="btn" data-shuffleback ${room.cards.discard.length ? '' : 'disabled'}>捨て札を山札に戻してシャッフル</button>
-      ${gm ? `<button class="btn" data-adddeck>トランプを1組追加</button><button class="btn danger" data-resetdeck>山札を作り直す</button>` : ''}
+      ${gm ? `<button class="btn ${handsEmpty(room) ? 'primary' : ''}" data-startgame>ゲーム開始：配る（GM ${dealCounts(room).gm}枚・PC ${dealCounts(room).pc}枚ずつ）</button><button class="btn" data-adddeck>トランプを1組追加</button><button class="btn danger" data-resetdeck>山札を作り直す</button>` : ''}
     </div>`;
 }
 function openModal(kind, arg) {
@@ -4438,9 +4497,23 @@ document.addEventListener('pointermove', e => {
   if (!el) { g.hidden = true; return; }
   let [x, y] = el.dataset.cell.split(',').map(Number); const n = sizeOf(c); x = Math.min(x, 8 - n); y = Math.min(y, 8 - n);
   if (x === c.x && y === c.y) { g.hidden = true; return; }
-  g.hidden = false; g.style.gridRow = `${y + 1}/span 2`; g.style.gridColumn = `${x + 2}/span 2`; g.classList.toggle('bad', !!blockerAt(room, c, x, y));
+  const mv = Number(c.cur['移動値']), hit = !!blockerAt(room, c, x, y);
+  const blocked = !hit && Number.isFinite(mv) && Math.abs(x - c.x) + Math.abs(y - c.y) <= mv && giantSteps(room, c, x, y) > mv;
+  g.hidden = false; g.style.gridRow = `${y + 1}/span 2`; g.style.gridColumn = `${x + 2}/span 2`; g.classList.toggle('bad', hit); g.classList.toggle('far', blocked);
 }, { passive: true });
 const coverAt = (room, cell) => { const [x, y] = cell.split(',').map(Number); const c = Object.values(room.chars).find(o => o.x != null && cellsOf(o).some(([a, b]) => a === x && b === y)); return c ? c.id : null; };
+// ゲーム開始: before the fight, every card back into a shuffled deck, then the GM (3 + PL数×3, no joker) and each PC (7) get theirs
+const handsEmpty = room => ['gm', ...Object.values(room.chars).filter(c => c.side === 'pc').map(c => c.id)].every(s => !(room.cards.hands[s] || []).length);
+function startGame(room) {
+  if (!Object.values(room.chars).some(c => c.side === 'pc')) { toast('PCを追加してから配ってください'); return; }
+  const d = dealCounts(room), run = () => { if (act({ type: 'deal', fresh: true }) !== FAIL) toast('カードを配りました'); };
+  if (handsEmpty(room) && !room.cards.discard.length) { run(); return; }
+  ask(`全員の手札と捨て札を山札に戻してシャッフルし、配り直します（GM ${d.gm}枚・ジョーカーなし → PC ${d.pc}枚ずつ）。`, 'ゲーム開始', run);
+}
+function startCombat(room) {
+  const empty = handsEmpty(room) && Object.values(room.chars).some(c => c.side === 'pc');
+  ask(`ラウンド数を1に戻し、SS値がいちばん大きいキャラの手番から始めます。${empty ? 'まだカードを配っていません（「ゲーム開始」で配れます）。' : ''}`, '戦闘を開始', () => act({ type: 'resetRound' }));
+}
 function collideDialog(room, ru, cid, tid) {
   const a = room.chars[cid], b = room.chars[tid];
   const key = `${room.turn.round}:${room.turn.current}:${cid}`;
@@ -4451,11 +4524,15 @@ function collideDialog(room, ru, cid, tid) {
       <label class="field" style="margin:0">${esc(b.data.name)}へのダメージ<input type="number" id="clOther" value="3" min="0" style="width:6em"></label>
       <label class="field" style="margin:0">${esc(a.data.name)}へのダメージ<input type="number" id="clSelf" value="3" min="0" style="width:6em"></label></div>
     <p class="muted" style="font-size:.85rem">衝突のダメージが増える効果や、受けない効果があるときは数字を変えてください。</p>
-    <div class="row" style="margin-top:12px"><button class="btn small ghost" id="clPick">${esc(b.data.name)}を選ぶ</button><span style="flex:1"></span><button class="btn" data-close>やめる</button><button class="btn primary" id="clOk">衝突する</button></div>`, () => {
+    ${ui.collide.n ? `<p class="muted" style="font-size:.85rem;margin:6px 0 0">この手番の衝突：${ui.collide.n}回　${esc(b.data.name)} HP${b.cur.HP ?? '—'}／${esc(a.data.name)} HP${a.cur.HP ?? '—'}</p>` : ''}
+    <div class="row" style="margin-top:12px"><button class="btn small ghost" id="clPick">${esc(b.data.name)}を選ぶ</button><span style="flex:1"></span><button class="btn" data-close>${ui.collide.n ? '閉じる' : 'やめる'}</button><button class="btn primary" id="clOk">${ui.collide.n ? 'もう一度衝突する' : '衝突する'}</button></div>`, () => {
     $('clPick').onclick = () => { ui.selTok = tid; closeDlg(); renderRoom(); };
     $('clOk').onclick = () => {
-      if (act({ type: 'collide', cid, target: tid, other: +$('clOther').value || 0, self: +$('clSelf').value || 0 }) === FAIL) return;
-      ui.collide.n++; closeDlg(); renderRoom();          // the piece stays picked up for another collision
+      const other = +$('clOther').value || 0, self = +$('clSelf').value || 0;
+      if (act({ type: 'collide', cid, target: tid, other, self }) === FAIL) return;
+      // stays open for the next one (same amounts), showing the new count and HP; the piece stays picked up
+      ui.collide.n++; renderRoom();
+      const r2 = curRoom(); if (r2 && r2.chars[cid] && r2.chars[tid]) { collideDialog(r2, ru, cid, tid); $('clOther').value = other; $('clSelf').value = self; }
     };
     $('clOk').focus();
   });
@@ -4489,8 +4566,12 @@ function settingsDialog(room) {
     <div class="field">ラウンド開始のドロー（各自がボタンで引きます）<div class="row" style="flex-wrap:wrap;gap:8px">
       PC <input type="number" id="stDrawPc" min="0" max="10" value="${s.roundDrawPc ?? 2}" style="width:4.5em">枚
       <label class="row"><input type="checkbox" id="stDrawFirst" ${s.roundDrawPcFirst ? 'checked' : ''}> 第1ラウンドも引く</label>
-      エネミー PC数× <input type="number" id="stDrawEn" min="0" max="10" value="${s.roundDrawEnemy ?? 2}" style="width:4.5em">枚</div></div>
-    <div class="field">手札の上限（超えたら本人が捨てます・0で上限なし）<div class="row" style="flex-wrap:wrap;gap:8px">
+      エネミー PC数× <input type="number" id="stDrawEn" min="0" max="10" value="${s.roundDrawEnemy ?? 2}" style="width:4.5em">枚
+      <label class="row"><input type="checkbox" id="stDrawEnFirst" ${s.roundDrawEnemyFirst ? 'checked' : ''}> 第1ラウンドも引く</label></div></div>
+    <div class="field">初期手札（「ゲーム開始」で配ります）<div class="row" style="flex-wrap:wrap;gap:8px">
+      GM <input type="number" id="stDealGmBase" min="0" max="30" value="${s.dealGmBase ?? 3}" style="width:4.5em">＋PL数× <input type="number" id="stDealGmPer" min="0" max="10" value="${s.dealGmPerPc ?? 3}" style="width:4.5em">枚（ジョーカーなし）
+      PC <input type="number" id="stDealPc" min="0" max="20" value="${s.dealPc ?? 7}" style="width:4.5em">枚</div></div>
+    <div class="field">手札の上限（上限に達したら引けません・0で上限なし・トランプ2組以上なら上限なし）<div class="row" style="flex-wrap:wrap;gap:8px">
       PL <input type="number" id="stMaxPc" min="0" max="54" value="${s.handMaxPc ?? 10}" style="width:4.5em">枚
       GM <input type="number" id="stMaxGm" min="0" max="54" value="${s.handMaxGm ?? 15}" style="width:4.5em">枚</div></div>
     <div class="field">ラウンド終了の手札交換（PC同士・0で交換しない）<select id="stTrade">${[0, 1, 2, 3].map(n => `<option value="${n}" ${(s.exchange ?? 1) === n ? 'selected' : ''}>${n}枚</option>`).join('')}</select></div>
@@ -4500,7 +4581,7 @@ function settingsDialog(room) {
     <div class="row"><span style="flex:1"></span><button class="btn" data-close>やめる</button><button class="btn primary" id="stOk">保存</button></div>`, () => {
     if ($('stCopyGm')) $('stCopyGm').onclick = async () => { try { await navigator.clipboard.writeText($('stGmLink').value); toast('GM用リンクをコピーしました'); } catch (err) { $('stGmLink').select(); } };
     $('stOk').onclick = () => {
-      act({ type: 'settings', name: $('stName').value.trim() || room.name, patch: { handMaxPc: Math.max(0, +$('stMaxPc').value || 0), handMaxGm: Math.max(0, +$('stMaxGm').value || 0), roundDrawPc: Math.max(0, +$('stDrawPc').value || 0), roundDrawPcFirst: $('stDrawFirst').checked, roundDrawEnemy: Math.max(0, +$('stDrawEn').value || 0), exchange: +$('stTrade').value, digestTab: $('stDigest').value || null, decks: +$('stDecks').value, jokers: +$('stJk').value, opsTab: $('stOps').value, gmSeesSecret: $('stGmSecret').checked, logValues: $('stLogVals').checked } });
+      act({ type: 'settings', name: $('stName').value.trim() || room.name, patch: { dealGmBase: Math.max(0, +$('stDealGmBase').value || 0), dealGmPerPc: Math.max(0, +$('stDealGmPer').value || 0), dealPc: Math.max(0, +$('stDealPc').value || 0), handMaxPc: Math.max(0, +$('stMaxPc').value || 0), handMaxGm: Math.max(0, +$('stMaxGm').value || 0), roundDrawPc: Math.max(0, +$('stDrawPc').value || 0), roundDrawPcFirst: $('stDrawFirst').checked, roundDrawEnemy: Math.max(0, +$('stDrawEn').value || 0), roundDrawEnemyFirst: $('stDrawEnFirst').checked, exchange: +$('stTrade').value, digestTab: $('stDigest').value || null, decks: +$('stDecks').value, jokers: +$('stJk').value, opsTab: $('stOps').value, gmSeesSecret: $('stGmSecret').checked, logValues: $('stLogVals').checked } });
       closeDlg();
     };
   });
@@ -4703,7 +4784,8 @@ function mapClick(t, room, ru) {
   if (q('[data-roundmenu]')) { roundMenu(room); return true; }
   if (q('[data-pickmenu]')) { pickMenu(room, ru); return true; }
   if (q('[data-endround]')) { act({ type: 'endRound' }); return true; }
-  if (q('[data-resetround]')) { ask('ラウンド数を1に戻し、SS値がいちばん大きいキャラの手番から始めます。', '戦闘を開始', () => act({ type: 'resetRound' })); return true; }
+  if (q('[data-resetround]')) { startCombat(room); return true; }
+  if (q('[data-startgame]')) { closeDlg(); startGame(room); return true; }
   // a selected token + a tap on an empty square = move there (a square holds one piece; tapping a piece selects it)
   let target = null;   // the square to move to
   if (ui.selTok && room.chars[ui.selTok] && canControlChar(room, ru.viewer, ui.selTok) && room.chars[ui.selTok].x != null) {
@@ -4728,6 +4810,9 @@ function mapClick(t, room, ru) {
       ui.pendingMove = { cid: c.id, x, y, bad: !!blockerAt(room, c, x, y) }; renderRoom(); return true;
     }
     ui.pendingMove = null;
+    // a giant whose footprint there would cover another piece: that is a collision with it
+    const hitBy = n > 1 && blockerAt(room, c, x, y);
+    if (hitBy) { collideDialog(room, ru, c.id, hitBy.id); return true; }
     if (act({ type: 'move', cid: ui.selTok, x, y }, { silent: true }) !== FAIL) ui.selTok = null;
     renderRoom(); return true;
   }

@@ -148,6 +148,24 @@ function gap(a, b) {
 }
 // whoever already stands on the squares ch would cover at (x, y)
 const blockerAt = (room, ch, x, y) => { const mine = cellsOf(ch, x, y); return Object.values(room.chars).find(o => o.id !== ch.id && o.x != null && cellsOf(o).some(([ox, oy]) => mine.some(([mx, my]) => mx === ox && my === oy))); };
+// a giant walks with its whole footprint: steps to every top-left square it can reach, never overlapping a piece on the way
+function giantReach(room, ch, limit = 64) {
+  const n = sizeOf(ch), out = new Map(), key = (x, y) => x * 8 + y;
+  if (ch.x == null) return out;
+  out.set(key(ch.x, ch.y), 0);
+  let frontier = [[ch.x, ch.y]];
+  for (let d = 1; frontier.length && d <= limit; d++) {
+    const next = [];
+    for (const [x, y] of frontier) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx > 8 - n || ny > 8 - n || out.has(key(nx, ny)) || blockerAt(room, ch, nx, ny)) continue;
+      out.set(key(nx, ny), d); next.push([nx, ny]);
+    }
+    frontier = next;
+  }
+  return out;
+}
+const giantSteps = (room, ch, x, y) => { const d = giantReach(room, ch).get(x * 8 + y); return d == null ? Infinity : d; };
 // after a change of size: keep the piece on the board if it still fits (pulled in from the edge), otherwise take it off
 function refit(room, ch) {
   if (ch.x == null) return '';
@@ -290,16 +308,20 @@ const cleanAutoFx = list => Array.isArray(list) ? [...new Set(list.map(String))]
 // ----- round draws and the round-end exchange: each player does it, the room keeps track of who has -----
 const inCombat = room => !!(room.turn.current || (room.turn.pick || []).length || room.turn.ending || (room.turn.done || []).length);
 const pcSeats = room => Object.values(room.chars).filter(c => c.side === 'pc');
-// cards a seat draws at the start of this round: a PC its share (from round 2 unless set otherwise), the GM (enemies) per PC
+// cards a seat draws at the start of this round: a PC its share, the GM (enemies) per PC — both from round 2 unless set
+// otherwise, since the opening hands stand for round 1
 function roundDrawCount(room, seat) {
   const st = room.settings;
-  if (seat === 'gm') return Object.values(room.chars).some(c => c.side === 'enemy' && !isDown(c)) ? (st.roundDrawEnemy ?? 2) * pcSeats(room).length : 0;
+  if (seat === 'gm') return Object.values(room.chars).some(c => c.side === 'enemy' && !isDown(c)) && !(room.turn.round === 1 && !st.roundDrawEnemyFirst) ? (st.roundDrawEnemy ?? 2) * pcSeats(room).length : 0;
   const c = room.chars[seat];
   if (!c || c.side !== 'pc' || isDown(c)) return 0;
   return room.turn.round === 1 && !st.roundDrawPcFirst ? 0 : (st.roundDrawPc ?? 2);
 }
-// 手札の上限 (PL 10 / GM 15 by default; 0 = none): the room shows the excess, the player discards it
-const handLimit = (room, seat) => { const n = seat === 'gm' ? room.settings.handMaxGm : room.settings.handMaxPc; return Number.isFinite(n) && n > 0 ? n : Infinity; };
+// 手札の上限 (PL 10 / GM 15 by default; 0 = none; none with two or more decks): a hand at its limit draws no more
+const handLimit = (room, seat) => { if ((room.settings.decks || 1) >= 2) return Infinity; const n = seat === 'gm' ? room.settings.handMaxGm : room.settings.handMaxPc; return Number.isFinite(n) && n > 0 ? n : Infinity; };
+const handRoom = (room, seat) => handLimit(room, seat) - (room.cards.hands[seat] || []).length;
+// 初期手札: the GM first (3 + PL数×3, never a joker), then every PC (7)
+const dealCounts = room => { const st = room.settings, pcs = pcSeats(room).length; return { gm: (st.dealGmBase ?? 3) + pcs * (st.dealGmPerPc ?? 3), pc: st.dealPc ?? 7 }; };
 const handOver = (room, seat) => Math.max(0, (room.cards.hands[seat] || []).length - handLimit(room, seat));
 const drawPending = room => !inCombat(room) || room.turn.ending ? [] : ['gm', ...pcSeats(room).map(c => c.id)].filter(s => roundDrawCount(room, s) > 0 && !(room.turn.drew || []).includes(s));
 const tradePending = room => room.turn.ending && (room.settings.exchange ?? 1) > 0 ? pcSeats(room).filter(c => !isDown(c) && !(room.turn.traded || []).includes(c.id)).map(c => c.id) : [];
@@ -407,7 +429,7 @@ function newRoom(name) {
   return {
     id: uid('r'), name: name || '新しい部屋', createdAt: Date.now(),
     players: {},
-    settings: { jokers: 2, decks: 1, opsTab: 'battle', digestTab: 'main', gmSeesSecret: true, logValues: true, roundDrawPc: 2, roundDrawPcFirst: false, roundDrawEnemy: 2, exchange: 1, handMaxPc: 10, handMaxGm: 15 },
+    settings: { jokers: 2, decks: 1, opsTab: 'battle', digestTab: 'main', gmSeesSecret: true, logValues: true, roundDrawPc: 2, roundDrawPcFirst: false, roundDrawEnemy: 2, roundDrawEnemyFirst: false, exchange: 1, handMaxPc: 10, handMaxGm: 15, dealPc: 7, dealGmBase: 3, dealGmPerPc: 3 },
     turn: { round: 1, current: null },
     chars: {},
     cards: { deck: newDeck(2), discard: [], hands: { gm: [] } },
@@ -675,6 +697,12 @@ function applyInner(room, a, by, pid) {
         // one piece per square (a giant needs all four of its squares free)
         const occ = blockerAt(room, ch, a.x, a.y);
         if (occ) throw new ActionError(n > 1 ? `${occ.data.name}と重なります` : `${coordName(a.x, a.y)}にはすでに${occ.data.name}がいます`);
+        // a giant may not pass over other pieces on the way: within its 移動値 it must get there around them
+        if (n > 1 && ch.x != null) {
+          const steps = giantSteps(room, ch, a.x, a.y), mv = Number(ch.cur['移動値']), straight = Math.abs(a.x - ch.x) + Math.abs(a.y - ch.y);
+          need(steps !== Infinity, '途中で他のコマと重なるため、そこへは移動できません');
+          need(!(Number.isFinite(mv) && straight <= mv && steps > mv), `途中で他のコマと重なるため、移動値${mv}では届きません（回り込むと${steps}マス）`);
+        }
         ch.x = a.x; ch.y = a.y;
       }
       const to = ch.x == null ? '盤外' : coordName(ch.x, ch.y);
@@ -687,13 +715,32 @@ function applyInner(room, a, by, pid) {
       const seat = a.seat || by;
       need(seat === by || by === 'gm', '他の人の手札は操作できません');
       need(seat === 'gm' || isPcSeat(room, seat), 'この席は手札を持てません');
-      const n = Math.max(1, Math.min(20, a.n | 0));
+      const want = Math.max(1, Math.min(20, a.n | 0)), left = handRoom(room, seat);
+      need(left > 0, `手札が上限（${handLimit(room, seat)}枚）なので引けません`);
+      const n = Math.min(want, left);
       need(room.cards.deck.length >= n, `山札が足りません（残り${room.cards.deck.length}枚）`);
       const got = room.cards.deck.splice(0, n);
       (room.cards.hands[seat] = room.cards.hands[seat] || []).push(...got);
       // a GM draw only shows how many; PC draws are open to the PC side
       // the count is 'count': 'n' is the server's log sequence number
-      log(room, { tab: opsTab(room), type: 'draw', by, seat, count: n, cards: got, secretCards: seat === 'gm' });
+      log(room, { tab: opsTab(room), type: 'draw', by, seat, count: n, cards: got, secretCards: seat === 'gm', capped: n < want ? want : undefined });
+      return;
+    }
+    case 'deal': { // ゲーム開始 / 初期手札: the GM's hand first, jokers left in the deck, then every PC
+      need(by === 'gm', '初期手札を配るのはGMだけです');
+      const seats = ['gm', ...pcSeats(room).map(c => c.id)];
+      need(seats.length > 1, 'PCがいません。PCを追加してから配ってください');
+      // fresh: every card back into a newly shuffled deck first (ゲーム開始)
+      if (a.fresh) { room.cards.deck = newDeck(room.settings.jokers, room.settings.decks || 1); room.cards.discard = []; for (const k of Object.keys(room.cards.hands)) room.cards.hands[k] = []; }
+      need(seats.every(s => !(room.cards.hands[s] || []).length), '手札が残っています。「山札を作り直す」で集めてから配ってください');
+      const c = dealCounts(room), gmN = Math.min(c.gm, handLimit(room, 'gm'));
+      const deck = room.cards.deck, isJoker = k => k[0] === 'X';
+      need(deck.filter(k => !isJoker(k)).length >= gmN && deck.length - gmN >= c.pc * (seats.length - 1), `山札が足りません（残り${deck.length}枚）`);
+      const gmCards = [];
+      for (let i = 0; i < deck.length && gmCards.length < gmN; ) { if (isJoker(deck[i])) i++; else gmCards.push(deck.splice(i, 1)[0]); }
+      room.cards.hands.gm = gmCards;
+      for (const s of seats.slice(1)) room.cards.hands[s] = deck.splice(0, Math.min(c.pc, handLimit(room, s)));
+      log(room, { tab: opsTab(room), type: 'sys', by, text: `${a.fresh ? 'ゲーム開始：山札をシャッフルして' : ''}初期手札を配りました：GM ${gmN}枚（ジョーカーなし）、PC ${c.pc}枚ずつ（${seats.length - 1}人）` });
       return;
     }
     case 'roundDraw': { // this round's draw, once per seat
@@ -703,11 +750,12 @@ function applyInner(room, a, by, pid) {
       const n = roundDrawCount(room, seat);
       need(n > 0, 'このラウンドに引く枚数はありません');
       need(!(room.turn.drew || []).includes(seat), 'このラウンドのドローは済んでいます');
-      need(room.cards.deck.length >= n, `山札が足りません（残り${room.cards.deck.length}枚）。捨て札を山札に戻してください`);
-      const got = room.cards.deck.splice(0, n);
+      const k = Math.max(0, Math.min(n, handRoom(room, seat)));   // up to the hand limit (a full hand draws nothing)
+      need(room.cards.deck.length >= k, `山札が足りません（残り${room.cards.deck.length}枚）。捨て札を山札に戻してください`);
+      const got = room.cards.deck.splice(0, k);
       (room.cards.hands[seat] = room.cards.hands[seat] || []).push(...got);
       room.turn.drew = [...(room.turn.drew || []), seat];
-      log(room, { tab: opsTab(room), type: 'draw', by, seat, count: n, cards: got, secretCards: seat === 'gm', round: room.turn.round });
+      log(room, { tab: opsTab(room), type: 'draw', by, seat, count: k, cards: got, secretCards: seat === 'gm', round: room.turn.round, capped: k < n ? n : undefined });
       return;
     }
     case 'trade': { // the round-end exchange: cards to an ally, once per PC
@@ -752,6 +800,7 @@ function applyInner(room, a, by, pid) {
       need(seat === 'gm' || isPcSeat(room, seat), 'この席は手札を持てません');
       const i = room.cards.discard.lastIndexOf(a.card);
       need(i >= 0, 'そのカードは捨て札にありません');
+      need(handRoom(room, seat) > 0, `手札が上限（${handLimit(room, seat)}枚）なので手札に加えられません`);
       room.cards.discard.splice(i, 1);
       (room.cards.hands[seat] = room.cards.hands[seat] || []).push(a.card);
       log(room, { tab: opsTab(room), type: 'pick', by, seat, cards: [a.card], memo: (a.memo || '').trim() });
@@ -959,7 +1008,7 @@ function migrateRoom(room) {
   room.players = room.players || {};
   room.settings.decks = room.settings.decks || 1;
   if (!('digestTab' in room.settings)) room.settings.digestTab = 'main';
-  for (const [k, v] of Object.entries({ roundDrawPc: 2, roundDrawPcFirst: false, roundDrawEnemy: 2, exchange: 1, handMaxPc: 10, handMaxGm: 15 })) if (!(k in room.settings)) room.settings[k] = v;
+  for (const [k, v] of Object.entries({ roundDrawPc: 2, roundDrawPcFirst: false, roundDrawEnemy: 2, roundDrawEnemyFirst: false, exchange: 1, handMaxPc: 10, handMaxGm: 15, dealPc: 7, dealGmBase: 3, dealGmPerPc: 3 })) if (!(k in room.settings)) room.settings[k] = v;
   for (const ch of Object.values(room.chars)) {
     if (!ch.data.stats || ch.data.skills.some(s => !('tp' in s))) { try { ch.data = normalizeChar({ ...ch.data, values: ch.data.stats ? Object.fromEntries(Object.entries(ch.data.stats)) : ch.data.values }); } catch (e) {} }
     if (ch.variation == null) ch.variation = -1;
@@ -1078,5 +1127,5 @@ function viewRoom(room, seat, pid) {
   return r;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { handLimit, handOver, rangeProblems, effectTarget, rangeIssue, nextActors, isDown, roundDrawCount, drawPending, tradePending, inCombat, formWord, isJokerWeapon, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
+  module.exports = { giantReach, giantSteps, handLimit, handOver, handRoom, dealCounts, rangeProblems, effectTarget, rangeIssue, nextActors, isDown, roundDrawCount, drawPending, tradePending, inCombat, formWord, isJokerWeapon, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
 }
