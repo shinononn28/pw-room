@@ -378,7 +378,7 @@ const currentSlots = ch => ch.variation >= 0 && ch.data.variations[ch.variation]
 const ssOf = ch => Number.isFinite(ch.cur['SS値']) ? ch.cur['SS値'] : (ch.data.stats['SS値'] ? statStart(ch.data.stats['SS値']) : -Infinity);
 // turn order: SS値 high -> low; ties: PC before enemy, then join order
 function turnOrder(room) {
-  return Object.values(room.chars).filter(c => c.side !== 'npc')
+  return Object.values(room.chars).filter(c => c.side !== 'npc' && c.side !== 'rp')
     .map((c, i) => ({ c, i }))
     .sort((a, b) => ssOf(b.c) - ssOf(a.c) || (a.c.side === 'pc' ? 0 : 1) - (b.c.side === 'pc' ? 0 : 1) || a.i - b.i)
     .map(x => x.c);
@@ -444,6 +444,7 @@ function newRoom(name) {
 
 // seats: 'gm', each PC character id, 'obs'
 // a character seat (PC or NPC): it has its own hand and can be sat in
+const isRp = c => !!c && c.side === 'rp';
 const isPcSeat = (room, seat) => !!(room.chars[seat] && (room.chars[seat].side === 'pc' || room.chars[seat].side === 'npc'));
 // characters the GM added and has not handed to a player yet
 const gmOwned = ch => !!ch && ch.owner === 'gm';
@@ -452,7 +453,16 @@ function seatName(room, seat) {
   if (seat === 'obs') return '観戦';
   return room.chars[seat]?.data.name || '（不明）';
 }
-function canControlChar(room, seat, cid) { return seat === 'gm' || seat === cid; }
+function canControlChar(room, seat, cid) {
+  if (seat === 'gm' || seat === cid) return true;
+  const c = room.chars[cid];
+  return !!c && c.side === 'rp' && ownsRp(room, seat, c);
+}
+// RP用のキャラ（立ち絵と名前だけ。盤面・手番・手札なし）: the player who added it (by player id online, by seat in the local version)
+function ownsRp(room, seat, c) {
+  const pid = room._pid != null ? room._pid : (typeof myPid === 'function' ? myPid() : undefined);
+  return c.side === 'rp' && (seat === 'gm' ? c.owner === 'gm' : c.owner === seat || (pid != null && c.owner === pid));
+}
 
 class ActionError extends Error {}
 function need(cond, msg) { if (!cond) throw new ActionError(msg); }
@@ -490,16 +500,18 @@ function applyInner(room, a, by, pid) {
   switch (a.type) {
     // ----- characters -----
     case 'addChar': {
-      need(by === 'gm' || a.side === 'pc', '敵やNPCを追加できるのはGMだけです');
-      const data = normalizeChar(a.data);
+      need(['pc', 'enemy', 'npc', 'rp'].includes(a.side), 'キャラクターの種類を選んでください');
+      need(by === 'gm' || a.side === 'pc' || (a.side === 'rp' && isPcSeat(room, by)), a.side === 'rp' ? 'RP用のキャラは、GMか自分のPCの席から追加できます' : '敵やNPCを追加できるのはGMだけです');
+      // RP用: only the name and the 立ち絵 matter
+      const data = normalizeChar(a.side === 'rp' ? { name: a.data && a.data.name, portraits: a.data && a.data.portraits } : a.data);
       const id = typeof a.id === 'string' && /^c[0-9a-z]{6,30}$/.test(a.id) && !room.chars[a.id] ? a.id : uid('c');
       const cur = {}; for (const [k, s] of Object.entries(data.stats)) cur[k] = statStart(s);
       const colors = NAME_COLORS.slice(0, 8);
       room.chars[id] = { id, side: a.side, data, dv: 1, cur, used: {}, variation: -1, x: null, y: null, portrait: data.portraits[0]?.label || null,
         color: a.side === 'enemy' ? '#FF7A7A' : colors[Object.keys(room.chars).filter(k => room.chars[k].side !== 'enemy').length % colors.length],
-        owner: by === 'gm' ? 'gm' : (pid && pid !== by ? pid : id), autoFx: cleanAutoFx(a.autoFx) || [] };
+        owner: by === 'gm' ? 'gm' : a.side === 'rp' ? (pid && pid !== by ? pid : by) : (pid && pid !== by ? pid : id), autoFx: a.side === 'rp' ? [] : cleanAutoFx(a.autoFx) || [] };
       if (a.side === 'pc' || a.side === 'npc') room.cards.hands[id] = room.cards.hands[id] || [];
-      log(room, { tab: opsTab(room), type: 'sys', by, text: `${data.name}（${{ pc: 'PC', enemy: '敵', npc: 'NPC' }[a.side]}）が参加しました` });
+      log(room, { tab: opsTab(room), type: 'sys', by, text: `${data.name}（${{ pc: 'PC', enemy: '敵', npc: 'NPC', rp: 'RP用' }[a.side]}）が参加しました` });
       return id;
     }
     case 'updateCharData': {
@@ -517,6 +529,14 @@ function applyInner(room, a, by, pid) {
       if (ch.portrait && !data.portraits.some(p => p.label === ch.portrait)) ch.portrait = data.portraits[0]?.label || null;
       const off = refit(room, ch);
       log(room, { tab: opsTab(room), type: 'sys', by, text: `${data.name}のデータを更新しました${off}` });
+      return;
+    }
+    case 'renameChar': {
+      need(ch && canControlChar(room, by, a.cid), 'このキャラクターは編集できません');
+      const nm = String(a.name || '').trim().slice(0, 40);
+      need(nm, '名前を入れてください');
+      const old = ch.data.name; ch.data = { ...ch.data, name: nm }; ch.dv = (ch.dv || 1) + 1;
+      log(room, { tab: opsTab(room), type: 'sys', by, text: `${old}の名前を${nm}に変えました` });
       return;
     }
     case 'setAutoFx': {
@@ -553,7 +573,7 @@ function applyInner(room, a, by, pid) {
       return;
     }
     case 'removeChar': {
-      need(ch && (by === 'gm' || by === a.cid), 'このキャラクターは削除できません');
+      need(ch && (by === 'gm' || by === a.cid || (isRp(ch) && ownsRp(room, by, ch))), 'このキャラクターは削除できません');
       const hand = room.cards.hands[a.cid] || [];
       room.cards.discard.push(...hand);
       delete room.cards.hands[a.cid];
@@ -689,6 +709,7 @@ function applyInner(room, a, by, pid) {
     // ----- map -----
     case 'move': {
       need(ch && canControlChar(room, by, a.cid), 'このコマは動かせません');
+      need(!isRp(ch) || a.x == null, 'RP用のキャラは盤面に出せません');
       const from = ch.x == null ? '盤外' : coordName(ch.x, ch.y);
       if (a.x == null) { ch.x = ch.y = null; }
       else {
@@ -901,7 +922,8 @@ function applyInner(room, a, by, pid) {
       if (a.as) {
         const sc = room.chars[a.as];
         need(sc, 'そのキャラクターはいません');
-        if (by === 'gm') need(sc.side !== 'pc' || gmOwned(sc), 'GMはPLのキャラとして発言できません');
+        if (isRp(sc)) need(ownsRp(room, by, sc), '自分が追加したRP用のキャラとしてだけ発言できます');
+        else if (by === 'gm') need(sc.side !== 'pc' || gmOwned(sc), 'GMはPLのキャラとして発言できません');
         else need(by === a.as, '自分のキャラクターとしてだけ発言できます');
       }
       const freeName = speakerName(room, by, a.name, pid);
@@ -1127,5 +1149,5 @@ function viewRoom(room, seat, pid) {
   return r;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { giantReach, giantSteps, handLimit, handOver, handRoom, dealCounts, rangeProblems, effectTarget, rangeIssue, nextActors, isDown, roundDrawCount, drawPending, tradePending, inCombat, formWord, isJokerWeapon, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
+  module.exports = { isRp, ownsRp, giantReach, giantSteps, handLimit, handOver, handRoom, dealCounts, rangeProblems, effectTarget, rangeIssue, nextActors, isDown, roundDrawCount, drawPending, tradePending, inCombat, formWord, isJokerWeapon, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
 }
