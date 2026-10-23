@@ -357,6 +357,15 @@ details.sheet summary{cursor:pointer;font-weight:700;font-size:.82rem;color:var(
 .attr{font-size:.72rem;font-weight:700;background:var(--cloud);border-radius:999px;padding:0 8px;color:var(--ink-2)}
 .itext{white-space:pre-wrap;color:var(--ink)}
 .grp{font-size:.74rem;font-weight:800;color:var(--ink-2);margin-top:10px}
+/* 隠しているキャラ: folded at the bottom of the turn-order list */
+.hidFold{display:block;width:100%;text-align:left;margin-top:12px;padding:6px 4px;background:none;border:none;border-top:1px dashed var(--line);color:var(--ink-2);font-size:.74rem;font-weight:800;cursor:pointer}
+.hidFold:hover{color:var(--ink)}
+.hidList{display:flex;flex-direction:column;gap:4px;margin-top:2px}
+.hidRow{display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:8px;background:var(--cloud);border:1px dashed var(--line);opacity:.85;cursor:pointer;min-width:0}
+.hidRow:hover{opacity:1}
+.hidRow .pt{width:28px;height:28px;flex:none;border-radius:50%;filter:grayscale(.5)}
+.hidRow .oname{font-size:.82rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.hidRow .muted{font-size:.7rem;flex:none}
 .suit{font-family:var(--num);font-weight:700;font-size:1.05rem;color:var(--ink)} .suit.red{color:var(--red)}
 
 /* dialogs */
@@ -1745,7 +1754,7 @@ const pcSeats = room => Object.values(room.chars).filter(c => c.side === 'pc');
 // otherwise, since the opening hands stand for round 1
 function roundDrawCount(room, seat) {
   const st = room.settings;
-  if (seat === 'gm') return Object.values(room.chars).some(c => c.side === 'enemy' && !isDown(c)) && !(room.turn.round === 1 && !st.roundDrawEnemyFirst) ? (st.roundDrawEnemy ?? 2) * pcSeats(room).length : 0;
+  if (seat === 'gm') return Object.values(room.chars).some(c => c.side === 'enemy' && !isDown(c) && !c.hidden) && !(room.turn.round === 1 && !st.roundDrawEnemyFirst) ? (st.roundDrawEnemy ?? 2) * pcSeats(room).length : 0;
   const c = room.chars[seat];
   if (!c || c.side !== 'pc' || isDown(c)) return 0;
   return room.turn.round === 1 && !st.roundDrawPcFirst ? 0 : (st.roundDrawPc ?? 2);
@@ -1811,7 +1820,7 @@ const currentSlots = ch => ch.variation >= 0 && ch.data.variations[ch.variation]
 const ssOf = ch => Number.isFinite(ch.cur['SS値']) ? ch.cur['SS値'] : (ch.data.stats['SS値'] ? statStart(ch.data.stats['SS値']) : -Infinity);
 // turn order: SS値 high -> low; ties: PC before enemy, then join order
 function turnOrder(room) {
-  return Object.values(room.chars).filter(c => c.side !== 'npc' && c.side !== 'rp')
+  return Object.values(room.chars).filter(c => c.side !== 'npc' && c.side !== 'rp' && !c.hidden)
     .map((c, i) => ({ c, i }))
     .sort((a, b) => ssOf(b.c) - ssOf(a.c) || (a.c.side === 'pc' ? 0 : 1) - (b.c.side === 'pc' ? 0 : 1) || a.i - b.i)
     .map(x => x.c);
@@ -1878,6 +1887,9 @@ function newRoom(name) {
 // seats: 'gm', each PC character id, 'obs'
 // a character seat (PC or NPC): it has its own hand and can be sat in
 const isRp = c => !!c && c.side === 'rp';
+// 隠す: a character kept in the room but out of sight (off the board, out of the turn order); the GM and, for an RP character, its owner see it
+const canHide = (room, seat, c) => !!c && (seat === 'gm' ? c.side !== 'pc' || gmOwned(c) : isRp(c) && ownsRp(room, seat, c));
+const seesHidden = (seat, pid, c) => seat === 'gm' || (isRp(c) && (c.owner === seat || (pid != null && c.owner === pid)));
 const isPcSeat = (room, seat) => !!(room.chars[seat] && (room.chars[seat].side === 'pc' || room.chars[seat].side === 'npc'));
 // characters the GM added and has not handed to a player yet
 const gmOwned = ch => !!ch && ch.owner === 'gm';
@@ -1943,8 +1955,11 @@ function applyInner(room, a, by, pid) {
       room.chars[id] = { id, side: a.side, data, dv: 1, cur, used: {}, variation: -1, x: null, y: null, portrait: data.portraits[0]?.label || null,
         color: a.side === 'enemy' ? '#FF7A7A' : colors[Object.keys(room.chars).filter(k => room.chars[k].side !== 'enemy').length % colors.length],
         owner: by === 'gm' ? 'gm' : a.side === 'rp' ? (pid && pid !== by ? pid : by) : (pid && pid !== by ? pid : id), autoFx: a.side === 'rp' ? [] : cleanAutoFx(a.autoFx) || [] };
+      if (a.hidden && canHide(room, by, room.chars[id])) room.chars[id].hidden = true;
       if (a.side === 'pc' || a.side === 'npc') room.cards.hands[id] = room.cards.hands[id] || [];
-      log(room, { tab: opsTab(room), type: 'sys', by, text: `${data.name}（${{ pc: 'PC', enemy: '敵', npc: 'NPC', rp: 'RP用' }[a.side]}）が参加しました` });
+      const kind = { pc: 'PC', enemy: '敵', npc: 'NPC', rp: 'RP用' }[a.side];
+      if (room.chars[id].hidden) log(room, { tab: opsTab(room), type: 'sys', by, gmOnly: true, text: `${data.name}（${kind}）を隠して追加しました` });
+      else log(room, { tab: opsTab(room), type: 'sys', by, text: `${data.name}（${kind}）が参加しました` });
       return id;
     }
     case 'updateCharData': {
@@ -1962,6 +1977,20 @@ function applyInner(room, a, by, pid) {
       if (ch.portrait && !data.portraits.some(p => p.label === ch.portrait)) ch.portrait = data.portraits[0]?.label || null;
       const off = refit(room, ch);
       log(room, { tab: opsTab(room), type: 'sys', by, text: `${data.name}のデータを更新しました${off}` });
+      return;
+    }
+    case 'hideChar': { // 隠す / 出す
+      need(ch && canHide(room, by, ch), 'このキャラクターは隠せません');
+      const hide = !!a.hidden;
+      if (hide === !!ch.hidden) return;
+      if (hide) {
+        need(room.turn.current !== ch.id && !(room.turn.pick || []).includes(ch.id), '手番中のキャラクターは隠せません');
+        const was = ch.x != null; ch.x = ch.y = null; ch.hidden = true;
+        log(room, { tab: opsTab(room), type: 'sys', by, gmOnly: true, text: `${ch.data.name}を隠しました${was ? '（盤面から外しました）' : ''}` });
+      } else {
+        delete ch.hidden;
+        log(room, { tab: opsTab(room), type: 'sys', by, text: `${ch.data.name}が登場しました` });
+      }
       return;
     }
     case 'renameChar': {
@@ -2143,6 +2172,7 @@ function applyInner(room, a, by, pid) {
     case 'move': {
       need(ch && canControlChar(room, by, a.cid), 'このコマは動かせません');
       need(!isRp(ch) || a.x == null, 'RP用のキャラは盤面に出せません');
+      need(!ch.hidden || a.x == null, '隠しているキャラクターは盤面に置けません。先に「出す」を押してください');
       const from = ch.x == null ? '盤外' : coordName(ch.x, ch.y);
       if (a.x == null) { ch.x = ch.y = null; }
       else {
@@ -2558,6 +2588,7 @@ function viewHand(room, owner, viewer) {
 function viewLog(room, l, viewer, pid) {
   const tab = room.tabs.find(t => t.id === l.tab);
   if (!tab || !canSeeTab(room, tab, viewer, pid)) return null;
+  if (l.gmOnly && viewer !== 'gm' && !(pid != null && l.pid === pid)) return null;
   if (l.type === 'draw' && l.secretCards && viewer !== 'gm') return { ...l, cards: null };
   if (l.type === 'say' && l.dice && l.dice.secret && viewer !== 'gm' && viewer !== l.by && (!pid || pid !== l.pid)) return { ...l, text: '', dice: { secret: true, hidden: true } };
   return l;
@@ -2570,6 +2601,7 @@ function viewRoom(room, seat, pid) {
   r.cards.deck = Array(room.cards.deck.length).fill('?');
   if (seat !== 'gm') r.cards.hands.gm = Array((room.cards.hands.gm || []).length).fill('?');
   r.tabs = r.tabs.filter(t => canSeeTab(room, t, seat, pid));
+  for (const c of Object.values(room.chars)) if (c.hidden && !seesHidden(seat, pid, c)) { delete r.chars[c.id]; delete r.cards.hands[c.id]; }
   // enemies are open to the players except their ダークドライブ: each one shows only once it has been used
   // (it keeps its own index in idx, which the used marks go by); its name stays out of the auto-effect list until then
   if (seat !== 'gm') for (const c of Object.values(r.chars)) {
@@ -2582,7 +2614,7 @@ function viewRoom(room, seat, pid) {
   return r;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { isRp, ownsRp, giantReach, giantSteps, handLimit, handOver, handRoom, dealCounts, rangeProblems, effectTarget, rangeIssue, nextActors, isDown, roundDrawCount, drawPending, tradePending, inCombat, formWord, isJokerWeapon, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
+  module.exports = { isRp, ownsRp, canHide, seesHidden, giantReach, giantSteps, handLimit, handOver, handRoom, dealCounts, rangeProblems, effectTarget, rangeIssue, nextActors, isDown, roundDrawCount, drawPending, tradePending, inCombat, formWord, isJokerWeapon, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
 }
 // =====================================================================
 // local storage + UI
@@ -3261,7 +3293,8 @@ function statLine(room, ru, c, k) {
 function renderMap(room, ru) {
   const sel = ui.selTok && room.chars[ui.selTok];
   const cells = boardCells(room);
-  const order = turnOrder(room), npcs = Object.values(room.chars).filter(c => c.side === 'npc'), rps = Object.values(room.chars).filter(isRp);
+  const order = turnOrder(room), npcs = Object.values(room.chars).filter(c => c.side === 'npc' && !c.hidden), rps = Object.values(room.chars).filter(c => isRp(c) && !c.hidden);
+  const hiddenChars = Object.values(room.chars).filter(c => c.hidden);   // (a player receives only their own hidden RP characters)
   const v = ru.viewer, cur = room.turn.current, phone = isPhone();
   const done = new Set(room.turn.done || []), pick = room.turn.pick || [];
   const canPick = c => pick.includes(c.id) && canControlChar(room, v, c.id);
@@ -3308,7 +3341,9 @@ function renderMap(room, ru) {
         ${phone ? `<button class="ordToggle" data-ordtoggle aria-expanded="${open}" title="${open ? '行動順を閉じる' : '行動順を開く'}">${open ? '◀' : '▶'}</button>` : `${roundBar}<div class="ohd">${tools}</div>`}
         ${order.map(item).join('') || (phone ? '' : '<p class="muted">「＋ キャラ」から読み込むと、SS値の順に並びます</p>')}
         ${npcs.length ? `<div class="grp">NPC</div>${npcs.map(c => item(c)).join('')}` : ''}
-        ${rps.length ? `<div class="grp">RP用</div>${rps.map(c => item(c)).join('')}` : ''}</div>
+        ${rps.length ? `<div class="grp">RP用</div>${rps.map(c => item(c)).join('')}` : ''}
+        ${hiddenChars.length ? `<button class="hidFold" data-hidfold aria-expanded="${!!ui.hidOpen}">${ui.hidOpen ? '▾' : '▸'} 隠しているキャラ（${hiddenChars.length}）</button>
+          ${ui.hidOpen ? `<div class="hidList">${hiddenChars.map(c => `<div class="hidRow" data-charopen="${c.id}" role="button" tabindex="0" title="${esc(c.data.name)}の詳細を開く">${ptImg(c, null, 'pt')}<span class="oname" style="${nameCss(c.color)}">${esc(c.data.name)}</span><span class="muted">${{ pc: 'PC', enemy: '敵', npc: 'NPC', rp: 'RP用' }[c.side]}</span><span style="flex:1"></span>${canHide(room, v, c) ? `<button class="btn small" data-hidechar="${c.id}" data-show="1">出す</button>` : ''}</div>`).join('')}</div>` : ''}` : ''}</div>
       <div class="boardCol">
         <div class="boardBox"><div class="board" id="board" style="--z:${phone ? 1 : zoomOf()}">${cells}</div>
           ${!phone && sel ? `<div class="selbar">${moving}</div>` : ''}
@@ -3494,6 +3529,7 @@ function rpDialog(room, ru) {
     <div class="field">名前<input type="text" id="rpName" maxlength="40" placeholder="例：酒場の店主"></div>
     <div class="field">立ち絵の差分名<input type="text" id="rpLabel" placeholder="例：通常（空欄なら「通常」）"></div>
     <div class="field">立ち絵の共有リンク（なくても追加できます）<input type="text" id="rpUrl" placeholder="https://www.dropbox.com/scl/fi/…&dl=0"></div>
+    <label class="row" style="margin-bottom:8px"><input type="checkbox" id="rpHidden"> 隠して追加する（${ru.viewer === 'gm' ? 'PLには見えません' : '自分とGMにだけ見えます'}）</label>
     <div class="row"><img id="rpPrev" alt="" style="width:64px;height:84px;object-fit:cover;border-radius:8px;background:var(--bg)" referrerpolicy="no-referrer"><span id="rpMsg" class="muted"></span>
       <span style="flex:1"></span><button class="btn" data-close>やめる</button><button class="btn primary" id="rpOk">追加する</button></div>`, () => {
     $('rpUrl').oninput = () => {
@@ -3507,7 +3543,7 @@ function rpDialog(room, ru) {
     $('rpOk').onclick = () => {
       const name = $('rpName').value.trim(); if (!name) { toast('名前を入れてください'); $('rpName').focus(); return; }
       const url = toDirectImage($('rpUrl').value);
-      const r = act({ type: 'addChar', side: 'rp', data: { name, portraits: url ? [{ label: $('rpLabel').value.trim() || '通常', url }] : [] } });
+      const r = act({ type: 'addChar', side: 'rp', hidden: $('rpHidden').checked, data: { name, portraits: url ? [{ label: $('rpLabel').value.trim() || '通常', url }] : [] } });
       if (r === FAIL) return;
       closeDlg(); toast(`${name}（RP用）を追加しました`);
     };
@@ -3529,11 +3565,11 @@ function speakerOptions(room, v) {
   const opts = [];
   if (v === 'gm') {
     opts.push(['', 'GM・NPC（名前を入力）']);
-    Object.values(room.chars).filter(c => isRp(c) ? ownsRp(room, 'gm', c) : c.side !== 'pc' || gmOwned(c)).forEach(c => opts.push([c.id, c.data.name + (isRp(c) ? '（RP）' : '')]));
+    Object.values(room.chars).filter(c => isRp(c) ? ownsRp(room, 'gm', c) : c.side !== 'pc' || gmOwned(c)).forEach(c => opts.push([c.id, c.data.name + (isRp(c) ? '（RP）' : '') + (c.hidden ? '（隠）' : '')]));
   } else if (isPcSeat(room, v)) {
     const d = room.chars[v].data;
     opts.push([v, d.name]);
-    Object.values(room.chars).filter(c => isRp(c) && ownsRp(room, v, c)).forEach(c => opts.push([c.id, c.data.name + '（RP）']));
+    Object.values(room.chars).filter(c => isRp(c) && ownsRp(room, v, c)).forEach(c => opts.push([c.id, c.data.name + '（RP）' + (c.hidden ? '（隠）' : '')]));
     opts.push(['', `PL：${(ONLINE && me().name) || d.player || d.name}`]);
   } else opts.push(['', '観戦者']);
   return opts;
@@ -4120,6 +4156,7 @@ function charModalHtml(room, ru, cid) {
         <div class="mtitle"><h1 style="${nameCss(c.color)}">${esc(c.data.name)}</h1><span class="muted">RP用・${esc(rpOwnerName(room, c))}</span></div>
         <button class="btn mclose" data-close aria-label="閉じる" title="閉じる">✕</button></div>
       <div class="mactions">${can ? `<button class="btn small" data-portraits="${c.id}">立ち絵</button><button class="btn small" data-renamechar="${c.id}">名前を変える</button>` : ''}
+        ${canHide(room, v, c) ? `<button class="btn small" data-hidechar="${c.id}" ${c.hidden ? 'data-show="1"' : ''}>${c.hidden ? '出す' : '隠す'}</button>` : ''}
         ${v === 'gm' || ownsRp(room, v, c) ? `<button class="btn small danger" data-delchar="${c.id}">外す</button>` : ''}</div>
       <p class="muted">名前と立ち絵だけのキャラです。盤面・手番・手札には出ません。台詞では${v === 'gm' || ownsRp(room, v, c) ? '発言者の欄から選べます' : '追加した人が使えます'}。</p>
       ${c.data.portraits.length > 1 ? `<div class="pgrid">${c.data.portraits.map(p => `<figure><img src="${esc(p.url)}" alt="" referrerpolicy="no-referrer"><figcaption>${esc(p.label)}</figcaption>${can ? `<button class="btn small ${p.label === (big && big.label) ? 'on' : ''}" data-rpface="${c.id}" data-label="${esc(p.label)}">${p.label === (big && big.label) ? '表示中' : 'この立ち絵に'}</button>` : ''}</figure>`).join('')}</div>` : ''}
@@ -4134,9 +4171,11 @@ function charModalHtml(room, ru, cid) {
       <button class="btn mclose" data-close aria-label="閉じる" title="閉じる">✕</button></div>
     <div class="mactions">
       ${v === 'gm' && c.side !== 'npc' ? `<button class="btn small" data-setturn="${c.id}">${room.turn.current === c.id ? '手番を外す' : '手番にする'}</button>` : ''}
-      ${can ? `<button class="btn small" data-movechar="${c.id}">${c.x == null ? 'マップに置く' : '移動する'}</button><button class="btn small" data-portraits="${c.id}">立ち絵</button><button class="btn small" data-editchar="${c.id}">更新</button>` : ''}
+      ${c.hidden ? '<span class="pendTag">隠しています（PLには見えません）</span>' : ''}
+      ${can && !c.hidden ? `<button class="btn small" data-movechar="${c.id}">${c.x == null ? 'マップに置く' : '移動する'}</button>` : ''}${can ? `<button class="btn small" data-portraits="${c.id}">立ち絵</button><button class="btn small" data-editchar="${c.id}">更新</button>` : ''}
  ${v === 'gm' && c.side !== 'pc' ? `<button class="btn small ${sizeOf(c) > 1 ? 'on' : ''}" data-setsize="${c.id}" aria-pressed="${sizeOf(c) > 1}" title="巨大キャラクター：2×2の4マスを占める">${sizeOf(c) > 1 ? '巨大 2×2' : '巨大にする'}</button>` : ''}
       ${v === 'gm' && (c.side !== 'pc' || gmOwned(c)) ? `<button class="btn small" data-clonechar="${c.id}" title="同じキャラを連番の名前でもう1体（HP満タン・盤外）">複製</button>` : ''}
+      ${canHide(room, v, c) ? `<button class="btn small" data-hidechar="${c.id}" ${c.hidden ? 'data-show="1"' : ''} title="${c.hidden ? 'PLにも見えるようにして、手番に戻す' : '部屋に置いたまま、PLから見えなくする（盤面と手番から外れます）'}">${c.hidden ? '出す' : '隠す'}</button>` : ''}
       ${v === 'gm' || v === c.id ? `<button class="btn small danger" data-delchar="${c.id}">外す</button>` : ''}</div>
     ${ONLINE && isPcSeat(room, c.id) ? (() => {
       const ownerName = gmOwned(c) ? 'GM' : (room.players[c.owner] || {}).name || '（未設定）';
@@ -4359,6 +4398,7 @@ function importDialog(room, ru, editCid) {
     <p class="muted">キャラシ作成ツールが書き出したJSON（形式：pw-character）を読み込みます。HPなどの数値はキャラシの値をそのまま使います。</p>
     ${editing ? '' : `<div class="field">種類<select id="impSide">
       ${v === 'gm' ? '<option value="pc">PC</option><option value="enemy" selected>敵</option><option value="npc">NPC</option>' : '<option value="pc">PC</option>'}${v === 'gm' || isPcSeat(room, v) ? '<option value="rp">RP用（立ち絵と名前だけ）</option>' : ''}</select></div>`}
+    ${!editing && v === 'gm' ? '<label class="row" style="margin-bottom:8px"><input type="checkbox" id="impHidden"> 隠して追加する（PLには見えません。あとで「出す」で登場させます）</label>' : ''}
     <div class="field">JSONファイル<input type="file" id="impFile" accept=".json,application/json"></div>
     <div class="field">または貼り付け<textarea id="impText" rows="8" placeholder='{"format":"pw-character", ...}'>${editing ? esc(JSON.stringify(editing.data, null, 2)) : ''}</textarea></div>
     <div class="row"><span id="impSamples" class="row" style="gap:6px;flex-wrap:wrap"></span><span style="flex:1"></span>
@@ -4382,8 +4422,9 @@ function importDialog(room, ru, editCid) {
       let data; try { data = JSON.parse($('impText').value); } catch (e) { toast('JSONとして読めませんでした'); return; }
       let nd; try { nd = normalizeChar(data); } catch (e) { toast(e.message || '読み込めませんでした'); return; }
       const side = editing ? null : $('impSide').value;
+      const hidden = !!($('impHidden') && $('impHidden').checked);   // (read now: the effect check below replaces this dialog)
       const go = autoFx => {
-        const r = editing ? act({ type: 'updateCharData', cid: editCid, data, autoFx }) : act({ type: 'addChar', side, data, autoFx });
+        const r = editing ? act({ type: 'updateCharData', cid: editCid, data, autoFx }) : act({ type: 'addChar', side, data, autoFx, hidden });
         if (r === FAIL) return;
         closeDlg();
         // online: the server gives this browser the PC's seat key and seats a spectator in it
@@ -4769,6 +4810,8 @@ function commonClick(t, room, ru) {
 
   // characters
   if (q('[data-import]')) { importDialog(room, ru); return true; }
+  if (q('[data-hidfold]')) { ui.hidOpen = !ui.hidOpen; renderRoom(); return true; }
+  if ((el = q('[data-hidechar]'))) { const show = !!el.dataset.show; if (act({ type: 'hideChar', cid: el.dataset.hidechar, hidden: !show }) !== FAIL) { toast(show ? '登場させました' : '隠しました（PLには見えません）'); if (ui.modal && $('dlg').open) refreshModal(); } return true; }
   if ((el = q('[data-renamechar]'))) { closeDlg(); renameDialog(room, el.dataset.renamechar); return true; }
   if ((el = q('[data-rpface]'))) { act({ type: 'setPortrait', cid: el.dataset.rpface, label: el.dataset.label }); if (ui.modal && $('dlg').open) refreshModal(); return true; }
   if ((el = q('[data-editchar]'))) { importDialog(room, ru, el.dataset.editchar); return true; }
@@ -4920,7 +4963,7 @@ document.addEventListener('click', e => {
 
   if ((el = q('[data-pickturn]'))) { act({ type: 'pickTurn', cid: el.dataset.pickturn }); return; }
   if (q('[data-pickmenu]')) { pickMenu(room, ru); return; }
-  if (t.closest('[data-vstep],[data-setturn]') && t.closest('[data-charopen]')) { /* buttons inside the list row act, the row does not open */ }
+  if (t.closest('[data-vstep],[data-setturn],[data-hidechar]') && t.closest('[data-charopen]')) { /* buttons inside the list row act, the row does not open */ }
   else if ((el = q('[data-charopen]'))) { openModal('char', el.dataset.charopen); return; }
   if (q('[data-weapon]')) { const hs = handSeat(room, ru); ui.w = { cid: isPcSeat(room, hs) ? hs : (room.turn.current && room.chars[room.turn.current]?.side === 'enemy' ? room.turn.current : null), weapons: [], cards: [...ui.sel], targets: [], memo: ui.memo }; openModal('weapon'); return; }
   if (q('[data-handsall]')) { openModal('hands'); return; }

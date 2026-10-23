@@ -187,6 +187,8 @@ function sendState(conn) {
   const { room } = conn.entry;
   const v = core.viewRoom(room, conn.seat, conn.pid);
   conn.sentDv = conn.sentDv || {};
+  // a character out of this seat's view (隠す) is forgotten, so its sheet goes again when it comes back
+  for (const cid of Object.keys(conn.sentDv)) if (!v.chars[cid]) delete conn.sentDv[cid];
   for (const [cid, ch] of Object.entries(v.chars)) {
     const dv = ch.dvView ?? ch.dv;                         // (a player's view of an enemy changes when a ダークドライブ opens)
     if (conn.sentDv[cid] === dv) delete ch.data;          // the browser keeps the sheet it already has
@@ -197,9 +199,10 @@ function sendState(conn) {
 const JOIN_LOGS = 1000;   // older lines stay in the store; the room opens with the most recent ones
 function sendJoined(conn) {
   const { room } = conn.entry;
-  conn.sentDv = Object.fromEntries(Object.values(room.chars).map(c => [c.id, c.dv]));
+  const view = core.viewRoom(room, conn.seat, conn.pid);
+  conn.sentDv = Object.fromEntries(Object.values(view.chars).map(c => [c.id, c.dvView ?? c.dv]));
   const logs = room.logs.map(l => core.viewLog(room, l, conn.seat, conn.pid)).filter(Boolean);
-  send(conn.ws, { t: 'joined', seat: conn.seat, pid: conn.pid, room: core.viewRoom(room, conn.seat, conn.pid), locked: Object.keys(conn.entry.seatKeyHashes),
+  send(conn.ws, { t: 'joined', seat: conn.seat, pid: conn.pid, room: view, locked: Object.keys(conn.entry.seatKeyHashes),
     logs: logs.slice(-JOIN_LOGS), olderLogs: Math.max(0, logs.length - JOIN_LOGS) });
   if (conn.entry.bgm) send(conn.ws, { t: 'bgm', bgm: bgmInfo(conn.entry) });
 }

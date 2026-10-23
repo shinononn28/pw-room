@@ -312,7 +312,7 @@ const pcSeats = room => Object.values(room.chars).filter(c => c.side === 'pc');
 // otherwise, since the opening hands stand for round 1
 function roundDrawCount(room, seat) {
   const st = room.settings;
-  if (seat === 'gm') return Object.values(room.chars).some(c => c.side === 'enemy' && !isDown(c)) && !(room.turn.round === 1 && !st.roundDrawEnemyFirst) ? (st.roundDrawEnemy ?? 2) * pcSeats(room).length : 0;
+  if (seat === 'gm') return Object.values(room.chars).some(c => c.side === 'enemy' && !isDown(c) && !c.hidden) && !(room.turn.round === 1 && !st.roundDrawEnemyFirst) ? (st.roundDrawEnemy ?? 2) * pcSeats(room).length : 0;
   const c = room.chars[seat];
   if (!c || c.side !== 'pc' || isDown(c)) return 0;
   return room.turn.round === 1 && !st.roundDrawPcFirst ? 0 : (st.roundDrawPc ?? 2);
@@ -378,7 +378,7 @@ const currentSlots = ch => ch.variation >= 0 && ch.data.variations[ch.variation]
 const ssOf = ch => Number.isFinite(ch.cur['SS値']) ? ch.cur['SS値'] : (ch.data.stats['SS値'] ? statStart(ch.data.stats['SS値']) : -Infinity);
 // turn order: SS値 high -> low; ties: PC before enemy, then join order
 function turnOrder(room) {
-  return Object.values(room.chars).filter(c => c.side !== 'npc' && c.side !== 'rp')
+  return Object.values(room.chars).filter(c => c.side !== 'npc' && c.side !== 'rp' && !c.hidden)
     .map((c, i) => ({ c, i }))
     .sort((a, b) => ssOf(b.c) - ssOf(a.c) || (a.c.side === 'pc' ? 0 : 1) - (b.c.side === 'pc' ? 0 : 1) || a.i - b.i)
     .map(x => x.c);
@@ -445,6 +445,9 @@ function newRoom(name) {
 // seats: 'gm', each PC character id, 'obs'
 // a character seat (PC or NPC): it has its own hand and can be sat in
 const isRp = c => !!c && c.side === 'rp';
+// 隠す: a character kept in the room but out of sight (off the board, out of the turn order); the GM and, for an RP character, its owner see it
+const canHide = (room, seat, c) => !!c && (seat === 'gm' ? c.side !== 'pc' || gmOwned(c) : isRp(c) && ownsRp(room, seat, c));
+const seesHidden = (seat, pid, c) => seat === 'gm' || (isRp(c) && (c.owner === seat || (pid != null && c.owner === pid)));
 const isPcSeat = (room, seat) => !!(room.chars[seat] && (room.chars[seat].side === 'pc' || room.chars[seat].side === 'npc'));
 // characters the GM added and has not handed to a player yet
 const gmOwned = ch => !!ch && ch.owner === 'gm';
@@ -510,8 +513,11 @@ function applyInner(room, a, by, pid) {
       room.chars[id] = { id, side: a.side, data, dv: 1, cur, used: {}, variation: -1, x: null, y: null, portrait: data.portraits[0]?.label || null,
         color: a.side === 'enemy' ? '#FF7A7A' : colors[Object.keys(room.chars).filter(k => room.chars[k].side !== 'enemy').length % colors.length],
         owner: by === 'gm' ? 'gm' : a.side === 'rp' ? (pid && pid !== by ? pid : by) : (pid && pid !== by ? pid : id), autoFx: a.side === 'rp' ? [] : cleanAutoFx(a.autoFx) || [] };
+      if (a.hidden && canHide(room, by, room.chars[id])) room.chars[id].hidden = true;
       if (a.side === 'pc' || a.side === 'npc') room.cards.hands[id] = room.cards.hands[id] || [];
-      log(room, { tab: opsTab(room), type: 'sys', by, text: `${data.name}（${{ pc: 'PC', enemy: '敵', npc: 'NPC', rp: 'RP用' }[a.side]}）が参加しました` });
+      const kind = { pc: 'PC', enemy: '敵', npc: 'NPC', rp: 'RP用' }[a.side];
+      if (room.chars[id].hidden) log(room, { tab: opsTab(room), type: 'sys', by, gmOnly: true, text: `${data.name}（${kind}）を隠して追加しました` });
+      else log(room, { tab: opsTab(room), type: 'sys', by, text: `${data.name}（${kind}）が参加しました` });
       return id;
     }
     case 'updateCharData': {
@@ -529,6 +535,20 @@ function applyInner(room, a, by, pid) {
       if (ch.portrait && !data.portraits.some(p => p.label === ch.portrait)) ch.portrait = data.portraits[0]?.label || null;
       const off = refit(room, ch);
       log(room, { tab: opsTab(room), type: 'sys', by, text: `${data.name}のデータを更新しました${off}` });
+      return;
+    }
+    case 'hideChar': { // 隠す / 出す
+      need(ch && canHide(room, by, ch), 'このキャラクターは隠せません');
+      const hide = !!a.hidden;
+      if (hide === !!ch.hidden) return;
+      if (hide) {
+        need(room.turn.current !== ch.id && !(room.turn.pick || []).includes(ch.id), '手番中のキャラクターは隠せません');
+        const was = ch.x != null; ch.x = ch.y = null; ch.hidden = true;
+        log(room, { tab: opsTab(room), type: 'sys', by, gmOnly: true, text: `${ch.data.name}を隠しました${was ? '（盤面から外しました）' : ''}` });
+      } else {
+        delete ch.hidden;
+        log(room, { tab: opsTab(room), type: 'sys', by, text: `${ch.data.name}が登場しました` });
+      }
       return;
     }
     case 'renameChar': {
@@ -710,6 +730,7 @@ function applyInner(room, a, by, pid) {
     case 'move': {
       need(ch && canControlChar(room, by, a.cid), 'このコマは動かせません');
       need(!isRp(ch) || a.x == null, 'RP用のキャラは盤面に出せません');
+      need(!ch.hidden || a.x == null, '隠しているキャラクターは盤面に置けません。先に「出す」を押してください');
       const from = ch.x == null ? '盤外' : coordName(ch.x, ch.y);
       if (a.x == null) { ch.x = ch.y = null; }
       else {
@@ -1125,6 +1146,7 @@ function viewHand(room, owner, viewer) {
 function viewLog(room, l, viewer, pid) {
   const tab = room.tabs.find(t => t.id === l.tab);
   if (!tab || !canSeeTab(room, tab, viewer, pid)) return null;
+  if (l.gmOnly && viewer !== 'gm' && !(pid != null && l.pid === pid)) return null;
   if (l.type === 'draw' && l.secretCards && viewer !== 'gm') return { ...l, cards: null };
   if (l.type === 'say' && l.dice && l.dice.secret && viewer !== 'gm' && viewer !== l.by && (!pid || pid !== l.pid)) return { ...l, text: '', dice: { secret: true, hidden: true } };
   return l;
@@ -1137,6 +1159,7 @@ function viewRoom(room, seat, pid) {
   r.cards.deck = Array(room.cards.deck.length).fill('?');
   if (seat !== 'gm') r.cards.hands.gm = Array((room.cards.hands.gm || []).length).fill('?');
   r.tabs = r.tabs.filter(t => canSeeTab(room, t, seat, pid));
+  for (const c of Object.values(room.chars)) if (c.hidden && !seesHidden(seat, pid, c)) { delete r.chars[c.id]; delete r.cards.hands[c.id]; }
   // enemies are open to the players except their ダークドライブ: each one shows only once it has been used
   // (it keeps its own index in idx, which the used marks go by); its name stays out of the auto-effect list until then
   if (seat !== 'gm') for (const c of Object.values(r.chars)) {
@@ -1149,5 +1172,5 @@ function viewRoom(room, seat, pid) {
   return r;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { isRp, ownsRp, giantReach, giantSteps, handLimit, handOver, handRoom, dealCounts, rangeProblems, effectTarget, rangeIssue, nextActors, isDown, roundDrawCount, drawPending, tradePending, inCombat, formWord, isJokerWeapon, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
+  module.exports = { isRp, ownsRp, canHide, seesHidden, giantReach, giantSteps, handLimit, handOver, handRoom, dealCounts, rangeProblems, effectTarget, rangeIssue, nextActors, isDown, roundDrawCount, drawPending, tradePending, inCombat, formWord, isJokerWeapon, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
 }
