@@ -55,6 +55,10 @@ const SLOT_SUITS = ['S', 'C', 'H', 'D'];
 const NAME_COLORS = ['#5DADEC', '#FF6B9A', '#4FD1A5', '#FFB547', '#B48CFF', '#7C8CFF', '#FF8A5C', '#E6E66A', '#FF7A7A', '#FFFFFF', '#9BE15D', '#F28CD8'];
 const isHex = s => typeof s === 'string' && /^#[0-9a-f]{6}$/i.test(s);
 const STAT_KEYS = ['HP', 'TP', 'SS値', '移動値'];
+// ルビ：｜白鏡の魔女《グリムヒルデ・ヴォイド》 / 魔女《まじょ》（漢字の直後）。名前は読みのない形で持ち、ルビ付きの書き方は nameRb に残す
+const RUBY_RE = [/[|｜]([^|｜《》\n]{1,40}?)《([^《》\n]{1,40})》/g, /([\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF々〆ヵヶ]{1,20})《([^《》\n]{1,40})》/g];
+const stripRuby = t => RUBY_RE.reduce((s, re) => s.replace(re, '$1'), String(t || ''));
+const nameParts = n => { const raw = String(n || '').trim(), plain = stripRuby(raw).trim(); return plain !== raw ? { name: plain, nameRb: raw } : { name: raw }; };
 function normalizeChar(raw) {
   if (!raw || typeof raw !== 'object') throw new Error('JSONの形になっていません');
   if (raw.format && raw.format !== 'pw-character') throw new Error(`形式が違います（${raw.format}）`);
@@ -87,7 +91,7 @@ function normalizeChar(raw) {
   const core = raw.core || fnSrc.length ? { ...item(raw.core || { name: '' }), functions: fnSrc.map(item) } : null;
   const data = {
     format: 'pw-character', version: 2,
-    name: raw.name, player: String(raw.player || ''),
+    ...nameParts(raw.nameRb || raw.name), player: String(raw.player || ''),
     core, stats,
     // tp: TP consumed when the 特技 is used (cost is accepted as an older name)
     skills: Array.isArray(raw.skills) ? raw.skills.map(x => { const t = x?.tp ?? x?.cost; return { ...item(x), tp: t != null && Number.isFinite(Number(t)) ? Number(t) : null }; }) : [],
@@ -306,16 +310,16 @@ function rangeProblems(d) {
 const cleanAutoFx = list => Array.isArray(list) ? [...new Set(list.map(String))].slice(0, 60) : null;
 // end of a round: hand exchange, the round number goes up, the top of the order acts, round-long effects end
 // ----- round draws and the round-end exchange: each player does it, the room keeps track of who has -----
-const inCombat = room => !!(room.turn.current || (room.turn.pick || []).length || room.turn.ending || (room.turn.done || []).length);
+const inCombat = room => !!(room.turn.current || (room.turn.pick || []).length || room.turn.closing || (room.turn.done || []).length);
 const pcSeats = room => Object.values(room.chars).filter(c => c.side === 'pc');
 // cards a seat draws at the start of this round: a PC its share, the GM (enemies) per PC — both from round 2 unless set
 // otherwise, since the opening hands stand for round 1
 function roundDrawCount(room, seat) {
-  const st = room.settings;
-  if (seat === 'gm') return Object.values(room.chars).some(c => c.side === 'enemy' && !isDown(c) && !c.hidden) && !(room.turn.round === 1 && !st.roundDrawEnemyFirst) ? (st.roundDrawEnemy ?? 2) * pcSeats(room).length : 0;
+  const st = room.settings, r = room.turn.closing ? room.turn.round + 1 : room.turn.round;
+  if (seat === 'gm') return Object.values(room.chars).some(c => c.side === 'enemy' && !isDown(c) && !c.hidden) && !(r === 1 && !st.roundDrawEnemyFirst) ? (st.roundDrawEnemy ?? 2) * pcSeats(room).length : 0;
   const c = room.chars[seat];
   if (!c || c.side !== 'pc' || isDown(c)) return 0;
-  return room.turn.round === 1 && !st.roundDrawPcFirst ? 0 : (st.roundDrawPc ?? 2);
+  return r === 1 && !st.roundDrawPcFirst ? 0 : (st.roundDrawPc ?? 2);
 }
 // 手札の上限 (PL 10 / GM 15 by default; 0 = none; none with two or more decks): a hand at its limit draws no more
 const handLimit = (room, seat) => { if ((room.settings.decks || 1) >= 2) return Infinity; const n = seat === 'gm' ? room.settings.handMaxGm : room.settings.handMaxPc; return Number.isFinite(n) && n > 0 ? n : Infinity; };
@@ -323,15 +327,24 @@ const handRoom = (room, seat) => handLimit(room, seat) - (room.cards.hands[seat]
 // 初期手札: the GM first (3 + PL数×3, never a joker), then every PC (7)
 const dealCounts = room => { const st = room.settings, pcs = pcSeats(room).length; return { gm: (st.dealGmBase ?? 3) + pcs * (st.dealGmPerPc ?? 3), pc: st.dealPc ?? 7 }; };
 const handOver = (room, seat) => Math.max(0, (room.cards.hands[seat] || []).length - handLimit(room, seat));
-const drawPending = room => !inCombat(room) || room.turn.ending ? [] : ['gm', ...pcSeats(room).map(c => c.id)].filter(s => roundDrawCount(room, s) > 0 && !(room.turn.drew || []).includes(s));
-const tradePending = room => room.turn.ending && (room.settings.exchange ?? 1) > 0 ? pcSeats(room).filter(c => !isDown(c) && !(room.turn.traded || []).includes(c.id)).map(c => c.id) : [];
-// the last actor is done: with an exchange set, the round pauses for it (the GM then starts the next round)
+// ラウンドの終わり：ドロー（次のラウンドの分）→ 手札交換（PCは味方と）→ 次のラウンド。交換はPCのドローが済んでから。
+// （第1ラウンドは初期手札で始まる。設定で「第1ラウンドも引く」なら、第1ラウンドの間に引く）
+const drawPending = room => !inCombat(room) || !(room.turn.closing || room.turn.round === 1) ? [] : ['gm', ...pcSeats(room).map(c => c.id)].filter(s => roundDrawCount(room, s) > 0 && !(room.turn.drew || []).includes(s));
+const canExchange = room => (room.settings.exchange ?? 1) > 0 && pcSeats(room).filter(c => !isDown(c)).length >= 2;
+const tradePending = room => room.turn.closing && canExchange(room) && !drawPending(room).some(s => s !== 'gm')
+  ? pcSeats(room).filter(c => !isDown(c) && !(room.turn.traded || []).includes(c.id)).map(c => c.id) : [];
+// the last actor is done: the round's end (its draws, then the exchange)
 function endOfRound(room, by) {
-  if ((room.settings.exchange ?? 1) > 0 && !room.turn.ending && pcSeats(room).filter(c => !isDown(c)).length >= 2) {
-    room.turn.ending = true; room.turn.current = null; room.turn.pick = null; room.turn.traded = [];
-    log(room, { tab: opsTab(room), type: 'round', by, text: `第${room.turn.round}ラウンド終了：手札交換（PCは味方と${room.settings.exchange}枚ずつ）` });
-    return;
-  }
+  room.turn.closing = true; room.turn.current = null; room.turn.pick = null; room.turn.drew = []; room.turn.traded = [];
+  log(room, { tab: opsTab(room), type: 'round', by, text: `第${room.turn.round}ラウンド終了：${closingText(room)}` });
+  expireEffects(room, by, true);   // 「ラウンド終了まで」 ends here, before the draws and the exchange
+  maybeNextRound(room, by);
+}
+const closingText = room => [drawPending(room).length ? 'ラウンドのドロー' : '', canExchange(room) ? `手札交換（PCは味方と${room.settings.exchange ?? 1}枚ずつ）` : ''].filter(Boolean).join('→') || '次のラウンドへ';
+// the round's end is over once nobody has anything left to do: the next round starts
+function maybeNextRound(room, by) {
+  if (!room.turn.closing || drawPending(room).length) return;
+  if (canExchange(room) && pcSeats(room).some(c => !isDown(c) && !(room.turn.traded || []).includes(c.id))) return;
   nextRound(room, by);
 }
 // HP loss from outside the value box (collisions): crossing 0 tells 戦闘不能 like setValue does
@@ -342,13 +355,12 @@ function hurt(room, ch, n, by) {
   if (isDown(ch) !== wasDown) log(room, { tab: opsTab(room), type: 'sys', by, cid: ch.id, fx: isDown(ch) ? 'ko' : undefined, text: isDown(ch) ? `${ch.data.name}は戦闘不能になりました` : `${ch.data.name}が戦闘不能から復帰しました` });
 }
 function nextRound(room, by) {
-  if (!room.turn.ending) log(room, { tab: opsTab(room), type: 'round', by, text: `第${room.turn.round}ラウンド終了（手札交換のタイミングです）` });
-  room.turn.ending = false; room.turn.traded = []; room.turn.drew = [];
+  room.turn.closing = false; room.turn.traded = []; room.turn.drew = [];
   room.turn.round += 1;
   room.turn.done = [];
   const next = seatNext(room);
-  expireEffects(room, by, true);
   log(room, { tab: opsTab(room), type: 'round', by, start: room.turn.round, cid: room.turn.current || undefined, text: `第${room.turn.round}ラウンド開始${next ? `：${next}` : ''}` });
+  expireEffects(room, by, false);
 }
 // 機械兵A → 機械兵B, 機械兵1 → 機械兵2, 機械兵 → 機械兵2 (the first name not in use)
 function nextCopyName(room, name) {
@@ -527,6 +539,7 @@ function applyInner(room, a, by, pid) {
       if (!('basePortrait' in a.data)) data.basePortrait = ch.data.basePortrait || null;
       data.variations.forEach((v, i) => { const rv = (Array.isArray(a.data.variations) ? a.data.variations : [])[i]; if (!(rv && typeof rv === 'object' && 'portrait' in rv)) v.portrait = (ch.data.variations.find(o => o.name === v.name) || {}).portrait || null; });
       if (!Array.isArray(a.data.portraits)) data.portraits = ch.data.portraits;
+      if (ch.renamed) { data.name = ch.data.name; if (ch.data.nameRb) data.nameRb = ch.data.nameRb; else delete data.nameRb; }   // a name changed in the room stays
       dropStaleFormPortraits(data);
       if (cleanAutoFx(a.autoFx)) ch.autoFx = cleanAutoFx(a.autoFx);
       for (const [k, s] of Object.entries(data.stats)) if (!(k in ch.cur)) ch.cur[k] = statStart(s);
@@ -551,12 +564,17 @@ function applyInner(room, a, by, pid) {
       }
       return;
     }
-    case 'renameChar': {
+    case 'renameChar': { // the name (kept over later sheet updates) and the short label on the board piece
       need(ch && canControlChar(room, by, a.cid), 'このキャラクターは編集できません');
-      const nm = String(a.name || '').trim().slice(0, 40);
+      const parts = nameParts(String(a.name || '').slice(0, 80)), nm = parts.name.slice(0, 40);
       need(nm, '名前を入れてください');
-      const old = ch.data.name; ch.data = { ...ch.data, name: nm }; ch.dv = (ch.dv || 1) + 1;
-      log(room, { tab: opsTab(room), type: 'sys', by, text: `${old}の名前を${nm}に変えました` });
+      if ('label' in a) { const lb = [...String(a.label || '').trim()].slice(0, 3).join(''); if (lb) ch.tokLabel = lb; else delete ch.tokLabel; }
+      const old = ch.data.name;
+      if (nm !== old || (parts.nameRb || '') !== (ch.data.nameRb || '')) {
+        const data = { ...ch.data, name: nm }; if (parts.nameRb) data.nameRb = parts.nameRb; else delete data.nameRb;
+        ch.data = data; ch.dv = (ch.dv || 1) + 1; ch.renamed = true;
+        log(room, { tab: opsTab(room), type: 'sys', by, text: nm !== old ? `${old}の名前を${nm}に変えました` : `${nm}のルビを変えました` });
+      }
       return;
     }
     case 'setAutoFx': {
@@ -685,11 +703,11 @@ function applyInner(room, a, by, pid) {
       return;
     }
     case 'nextTurn': {
-      need(by === 'gm' || by === room.turn.current, '手番を進められるのは、GMか手番のキャラだけです');
+      need(by === 'gm' || (room.turn.current && by === room.turn.current), '手番を進められるのは、GMか手番のキャラだけです');
       need(turnOrder(room).length, 'キャラクターがいません');
       need(!(room.turn.pick || []).length, '同値のキャラから、次に動くキャラを選んでください');
       if (room.turn.current) room.turn.done = [...new Set([...(room.turn.done || []), room.turn.current])];
-      if (room.turn.ending) { nextRound(room, by); return; }              // after the exchange: the next round
+      if (room.turn.closing) { need(by === 'gm', 'ドローと手札交換が終わると、次のラウンドになります'); nextRound(room, by); return; }   // the GM moves on without waiting
       if (!nextActors(room).length) { endOfRound(room, by); return; }      // everyone has acted: the round ends
       const text = seatNext(room);
       log(room, { tab: opsTab(room), type: 'turn', by, cid: room.turn.current || undefined, text });
@@ -706,12 +724,12 @@ function applyInner(room, a, by, pid) {
     }
     case 'endRound': {
       need(by === 'gm', 'ラウンドを進められるのはGMだけです');
-      if (room.turn.ending) nextRound(room, by); else endOfRound(room, by);
+      if (room.turn.closing) nextRound(room, by); else endOfRound(room, by);
       return;
     }
     case 'endCombat': {
       need(by === 'gm', '戦闘を終えられるのはGMだけです');
-      room.turn.current = null; room.turn.pick = null; room.turn.done = []; room.turn.ending = false; room.turn.drew = []; room.turn.traded = [];
+      room.turn.current = null; room.turn.pick = null; room.turn.done = []; room.turn.closing = false; room.turn.drew = []; room.turn.traded = [];
       room.turn.seq = (room.turn.seq || 0) + 1;
       for (const c of Object.values(room.chars)) c.effects = (c.effects || []).filter(e => e.dur === 'manual');
       log(room, { tab: opsTab(room), type: 'round', by, text: `戦闘終了（第${room.turn.round}ラウンド）` });
@@ -719,7 +737,7 @@ function applyInner(room, a, by, pid) {
     }
     case 'resetRound': {
       need(by === 'gm', 'ラウンドを戻せるのはGMだけです');
-      room.turn = { round: 1, current: null, seq: (room.turn.seq || 0), done: [], pick: null, drew: [], traded: [], ending: false };
+      room.turn = { round: 1, current: null, seq: (room.turn.seq || 0), done: [], pick: null, drew: [], traded: [], closing: false };
       const first = seatNext(room);
       for (const c of Object.values(room.chars)) c.effects = (c.effects || []).filter(e => e.dur === 'manual');
       log(room, { tab: opsTab(room), type: 'round', by, start: 1, cid: room.turn.current || undefined, text: `戦闘開始：第1ラウンド${first ? `、${first}` : ''}` });
@@ -788,7 +806,7 @@ function applyInner(room, a, by, pid) {
     case 'roundDraw': { // this round's draw, once per seat
       const seat = a.seat || by;
       need(seat === by || by === 'gm', '他の人の手札は操作できません');
-      need(inCombat(room) && !room.turn.ending, '戦闘中のラウンドの始めに引きます');
+      need(inCombat(room), 'ラウンドのドローは戦闘中（ラウンドの終わり）に引きます');
       const n = roundDrawCount(room, seat);
       need(n > 0, 'このラウンドに引く枚数はありません');
       need(!(room.turn.drew || []).includes(seat), 'このラウンドのドローは済んでいます');
@@ -798,12 +816,14 @@ function applyInner(room, a, by, pid) {
       (room.cards.hands[seat] = room.cards.hands[seat] || []).push(...got);
       room.turn.drew = [...(room.turn.drew || []), seat];
       log(room, { tab: opsTab(room), type: 'draw', by, seat, count: k, cards: got, secretCards: seat === 'gm', round: room.turn.round, capped: k < n ? n : undefined });
+      maybeNextRound(room, by);
       return;
     }
-    case 'trade': { // the round-end exchange: cards to an ally, once per PC
+    case 'trade': { // the exchange at the end of a round (after its draws): cards to an ally, once per PC
       const seat = a.seat || by;
       need(seat === by || by === 'gm', '他の人の手札は渡せません');
-      need(room.turn.ending, '手札の交換はラウンドの終わりに行ないます');
+      need(room.turn.closing, '手札の交換はラウンドの終わり（ドローの後）に行ないます');
+      need(!drawPending(room).some(s => s !== 'gm'), 'ラウンドのドローがまだのPCがいます。全員が引いてから交換します');
       need(room.chars[seat] && room.chars[seat].side === 'pc' && room.chars[a.to] && room.chars[a.to].side === 'pc' && seat !== a.to, '交換できるのは味方のPC同士です');
       need(!(room.turn.traded || []).includes(seat), 'このラウンドの交換は済んでいます');
       const k = room.settings.exchange ?? 1;
@@ -813,6 +833,7 @@ function applyInner(room, a, by, pid) {
       (room.cards.hands[a.to] = room.cards.hands[a.to] || []).push(...a.cards);
       room.turn.traded = [...(room.turn.traded || []), seat];
       log(room, { tab: opsTab(room), type: 'give', by, seat, to: a.to, toName: seatName(room, a.to), cards: a.cards, trade: true });
+      maybeNextRound(room, by);
       return;
     }
     case 'collide': { // 衝突: moving into an occupied square — the amounts are the player's to set (buffs, immunity)
@@ -1048,6 +1069,9 @@ function applyInner(room, a, by, pid) {
 // upgrade rooms saved by an older version
 function migrateRoom(room) {
   room.turn = room.turn || { round: 1, current: null };
+  // older rooms: the round-end pause and the round opening of earlier versions
+  if (room.turn.ending) { delete room.turn.ending; room.turn.closing = true; room.turn.drew = []; room.turn.traded = []; }   // the old round-end pause (exchange only)
+  if (room.turn.opening) { delete room.turn.opening; if (!room.turn.current && !(room.turn.pick || []).length) seatNext(room); }   // a round that was waiting at its start just goes
   room.players = room.players || {};
   room.settings.decks = room.settings.decks || 1;
   if (!('digestTab' in room.settings)) room.settings.digestTab = 'main';
@@ -1066,7 +1090,12 @@ function migrateRoom(room) {
 function rand(n) { return crypto.getRandomValues(new Uint32Array(1))[0] % n; }
 function parseDice(raw) {
   const text = raw.trim();
-  const sp = text.search(/\s/);
+  let sp = text.search(/\s/);
+  // choice[…] / choice(…) runs to its closing bracket, so the items may hold spaces (names like 「山田 太郎」)
+  if (/^s?choice[\[(]/i.test(text.normalize('NFKC'))) {
+    const open = text.search(/[\[(［（]/), close = text.slice(open).search(/[\])］）]/);
+    if (close > 0) sp = text.slice(open + close + 1).search(/\S/) < 0 ? -1 : open + close + 1;
+  }
   let head = (sp < 0 ? text : text.slice(0, sp)).normalize('NFKC');
   let rest = sp < 0 ? '' : text.slice(sp).trim();
   let secret = false;
@@ -1172,5 +1201,5 @@ function viewRoom(room, seat, pid) {
   return r;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { isRp, ownsRp, canHide, seesHidden, giantReach, giantSteps, handLimit, handOver, handRoom, dealCounts, rangeProblems, effectTarget, rangeIssue, nextActors, isDown, roundDrawCount, drawPending, tradePending, inCombat, formWord, isJokerWeapon, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
+  module.exports = { stripRuby, nameParts, isRp, ownsRp, canHide, seesHidden, giantReach, giantSteps, handLimit, handOver, handRoom, dealCounts, rangeProblems, effectTarget, rangeIssue, nextActors, isDown, roundDrawCount, drawPending, tradePending, inCombat, formWord, isJokerWeapon, gap, sizeOf, cellsOf, detectEffects, apply, newRoom, migrateRoom, viewRoom, viewLog, canSeeTab, isPcSeat, gmOwned, ActionError, normalizeChar, turnOrder };
 }
