@@ -525,6 +525,8 @@ input[type=color]{width:44px;height:30px;padding:0;border:1.5px solid var(--line
 .netdot{width:10px;height:10px;border-radius:50%;background:var(--gold);flex:none}
 .netdot[data-s="open"]{background:var(--ok)}
 .netdot[data-s="closed"]{background:var(--red);animation:blink 1s infinite}
+.netdot[data-s="slow"]{background:var(--gold)}
+.netWait{font-size:.7rem;font-weight:800;color:#2A1C00;background:var(--gold);border-radius:999px;padding:1px 8px;white-space:nowrap}
 @keyframes blink{50%{opacity:.3}}
 @media (prefers-reduced-motion:reduce){.netdot{animation:none !important}}
 @media (max-width:959px){ #inviteBtn{display:none} }
@@ -2716,6 +2718,7 @@ function act(a, opts = {}) {
     catch (e) { toast(e && e.message ? e.message : '操作できませんでした'); return FAIL; }
     const seq = ++NET.seq;
     if (!netSend({ t: 'act', a, seq })) return FAIL;
+    NET.sent.set(seq, Date.now());
     if (OPTIMISTIC.has(a.type)) {
       NET.pending.push({ seq, a: JSON.parse(JSON.stringify(a)), viewer: ru.viewer });
       copy.logs = room.logs;                      // lines still come from the server
@@ -3195,7 +3198,7 @@ function renderRoom() {
   if (!$('roomShell') || $('roomShell').dataset.id !== room.id) {
     $('app').innerHTML = `
       <div id="roomShell" data-id="${room.id}">
-        <header class="top"><a class="back" href="#/">部屋一覧</a><h1 id="roomTitle"></h1>${ONLINE ? '<span class="netdot" id="netDot" data-s="connecting"></span><button class="btn small ghost" data-links>リンク</button>' : ''}
+        <header class="top"><a class="back" href="#/">部屋一覧</a><h1 id="roomTitle"></h1>${ONLINE ? '<span class="netdot" id="netDot" data-s="connecting"></span><span class="netWait" id="netWait" hidden></span><button class="btn small ghost" data-links>リンク</button>' : ''}
           <button class="btn small ghost bgmBtn" data-bgm id="bgmBtn">♪ BGM</button><span class="grow"></span>
           <label class="viewsel" title="${ONLINE ? '自分が座る席' : 'ローカル版の確認用です。選んだ人から見える情報だけが表示されます'}">視点<select id="viewer"></select></label>
           <button class="btn small ghost" data-menu>メニュー</button>
@@ -3429,6 +3432,8 @@ function renderMap(room, ru) {
   const rangePick = ranged.length ? `<label class="rangePick ${rkW ? 'on' : ''}" title="${rkW ? `射程：${esc(rkW.w.name)}（${rangeText(rkW.r)}）` : '射程を表示する武装を選ぶ'}"><span>射程</span><select data-rangew="${sel.id}" aria-label="射程を表示する武装"><option value="">表示しない</option>${ranged.map(x => `<option value="${x.k}" ${x.k === rk ? 'selected' : ''}>${x.w.suit ? SUIT[x.w.suit] : ''}${esc(x.w.name)}（${rangeText(x.r)}）</option>`).join('')}</select></label>` : '';
   const moving = sel ? `<span class="mvname"><span class="mvn">${esc(sel.data.name)}を移動中</span>${Number.isFinite(sel.cur['移動値']) ? `<span class="mvtag">移動値${sel.cur['移動値']}</span>` : ''}</span>${rangePick}<button class="btn small" data-offboard>盤外へ</button><button class="btn small" data-unsel>やめる</button>` : '';
   const open = !!U.ordOpen;
+  // the panel is rebuilt as a whole: keep where its scrolling parts were (the character list, the board)
+  const keepScroll = ['.order', '.boardBox'].map(sel => { const el = document.querySelector(`#mapP ${sel}`); return el && [sel, el.scrollTop, el.scrollLeft]; }).filter(Boolean);
   setHtml($('mapP'), `
     <div class="mapwrap ${open ? 'ordOpen' : ''}">
       ${phone ? `<div class="phoneTool ${sel ? 'moving' : ''}">${sel ? moving : roundChip + tools}</div>` : ''}
@@ -3446,6 +3451,7 @@ function renderMap(room, ru) {
         ${phone ? '' : zoomCtl(true)}
       </div>
     </div>`);
+  for (const [sel, top, left] of keepScroll) { const el = document.querySelector(`#mapP ${sel}`); if (el && (el.scrollTop !== top || el.scrollLeft !== left)) { el.scrollTop = top; el.scrollLeft = left; } }
 }
 
 // ---------------- cards ----------------
@@ -3899,7 +3905,7 @@ function renderPalette(room, c) {
 // The browser validates an action on a copy of its own (filtered) state first, so mistakes are
 // reported instantly; the server then applies it for real and sends everyone their view.
 // =====================================================================
-const NET = { ws: null, roomId: null, wantSeat: null, backoff: 500, status: 'idle', renderQueued: false, seq: 0, pending: [], base: null };
+const NET = { ws: null, roomId: null, wantSeat: null, backoff: 500, status: 'idle', renderQueued: false, seq: 0, pending: [], base: null, sent: new Map(), rtt: null, pingId: 0, pingAt: 0 };
 // the server's latest room with our not-yet-confirmed actions applied on top (dropped if they no longer apply)
 function withPending(base, logs) {
   const drafts = Object.values(ui.valDraft);
@@ -3966,15 +3972,34 @@ function forgetRoom(id) { try { localStorage.setItem('pw-recent', JSON.stringify
 
 function netStatus(s) {
   NET.status = s;
-  const el = document.getElementById('netDot');
-  if (el) { el.dataset.s = s; el.title = { open: '接続中', connecting: '接続しています…', closed: '再接続を待っています…' }[s] || ''; }
+  netShow();
 }
+// the dot shows only when something is wrong: reconnecting, a very long round trip, or an action the server has not
+// answered for a while (normally it stays out of sight)
+const NET_SLOW_RTT = 1500, NET_SLOW_WAIT = 3000;
+function netShow() {
+  const el = document.getElementById('netDot'), w = document.getElementById('netWait'); if (!el) return;
+  const s = NET.status, now = Date.now();
+  const oldest = NET.sent.size ? now - Math.min(...NET.sent.values()) : 0;
+  const waiting = s === 'open' && oldest > NET_SLOW_WAIT, slow = s === 'open' && NET.rtt > NET_SLOW_RTT;
+  el.dataset.s = waiting || slow ? 'slow' : s;
+  el.hidden = s === 'open' && !waiting && !slow;
+  el.title = s !== 'open' ? ({ connecting: '接続しています…', closed: '再接続を待っています…' }[s] || '')
+    : waiting ? `送った操作の返事を${Math.round(oldest / 1000)}秒待っています（通信が遅れています）`
+    : slow ? `通信がとても遅れています（往復 ${Math.round(NET.rtt)}ms）` : '';
+  if (w) { w.hidden = !waiting && !slow; if (waiting) w.textContent = `通信が遅れています…${Math.round(oldest / 1000)}秒`; else if (slow) w.textContent = '通信が重いです'; }
+}
+// round trip every 10 s; the indicator refreshes twice a second while something is waiting
+setInterval(() => {
+  if (NET.ws && NET.ws.readyState === 1 && !document.hidden) { NET.pingAt = performance.now(); try { NET.ws.send(JSON.stringify({ t: 'ping', id: ++NET.pingId })); } catch (e) {} }
+}, 10000);
+setInterval(() => { if (NET.sent.size || document.getElementById('netWait')?.hidden === false) netShow(); }, 500);
 function netConnect() {
   if (NET.ws && NET.ws.readyState <= 1) return;
   netStatus('connecting');
   const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
   NET.ws = ws;
-  ws.onopen = () => { NET.backoff = 500; netStatus('open'); if (NET.roomId) netJoin(NET.roomId, NET.wantSeat); };
+  ws.onopen = () => { NET.backoff = 500; netStatus('open'); if (NET.roomId) netJoin(NET.roomId, NET.wantSeat); NET.pingAt = performance.now(); try { ws.send(JSON.stringify({ t: 'ping', id: ++NET.pingId })); } catch (e) {} };
   ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (err) { return; } onNet(m); };
   ws.onclose = () => { netStatus('closed'); setTimeout(netConnect, NET.backoff); NET.backoff = Math.min(NET.backoff * 2, 10000); };
 }
@@ -3993,7 +4018,11 @@ function queueRender() {
   requestAnimationFrame(() => { NET.renderQueued = false; const r = route(); if (r.view === 'room') renderRoom(); });
 }
 function onNet(m) {
+  if (m.t === 'pong') { if (m.id === NET.pingId) { NET.rtt = performance.now() - NET.pingAt; netShow(); } return; }
+  if (m.ack != null) { for (const k of NET.sent.keys()) if (k <= m.ack) NET.sent.delete(k); }
   if (m.t === 'joined') {
+    // actions sent before a reconnect that the server never answered did not arrive: say so
+    if (NET.sent.size) { toast(`接続が切れていたため、直前の操作（${NET.sent.size}件）が届いていない可能性があります。反映されていなければ、もう一度操作してください`); NET.sent.clear(); }
     NET.pending = []; NET.base = m.room;
     DB.rooms = { [m.room.id]: { ...m.room, logs: m.logs } };
     NET.olderLogs = m.olderLogs || 0;
@@ -4881,7 +4910,9 @@ function bindRoomStatic() {
   $('sayText').addEventListener('input', typingInput);
   $('sayText').addEventListener('input', updateSayAs);
   $('sayText').addEventListener('blur', () => typingOff());
-  $('sayText').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
+  // Enter sends with a keyboard; on a touch screen (phone) the Enter key makes a new line and 送信 sends
+  const touchOnly = () => matchMedia('(hover: none) and (pointer: coarse)').matches;
+  $('sayText').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229 && !touchOnly()) { e.preventDefault(); send(); } });
   $('copyLog').onclick = async () => {
     const room = curRoom(), ru = roomUI(room.id);
     const text = logsForTab(room, ru.tab).map(l => viewLog(room, l, ru.viewer, myPid())).filter(Boolean).map(l => logPlain(room, l)).join('\n');

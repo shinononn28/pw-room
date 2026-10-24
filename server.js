@@ -299,6 +299,7 @@ wss.on('connection', ws => {
           }
         }
       } else if (m.t === 'act') await handleAct(conn, m.a, m.seq);
+      else if (m.t === 'ping') send(ws, { t: 'pong', id: m.id });   // the browser measures the round trip
       else if (m.t === 'typing') {
         // "○○が入力中…": relayed (not stored) to people who can see that tab, at most once a second
         const entry = conn.entry; if (!entry) return;
